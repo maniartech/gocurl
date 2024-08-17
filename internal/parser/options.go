@@ -22,10 +22,13 @@ type RequestOptions struct {
 	BearerToken string
 
 	// TLS/SSL options
-	TLSClientConfig *TLSClientConfig
+	CertFile string
+	KeyFile  string
+	CAFile   string
+	Insecure bool
 
 	// Proxy settings
-	Proxy *url.URL
+	Proxy string
 
 	// Timeout settings
 	Timeout        time.Duration
@@ -59,18 +62,13 @@ type RequestOptions struct {
 	OutputFile string
 	Silent     bool
 	Verbose    bool
+
+	//
 }
 
 type BasicAuth struct {
 	Username string
 	Password string
-}
-
-type TLSClientConfig struct {
-	InsecureSkipVerify bool
-	CertFile           string
-	KeyFile            string
-	CAFile             string
 }
 
 type FileUpload struct {
