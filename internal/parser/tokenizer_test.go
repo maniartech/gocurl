@@ -1,5 +1,3 @@
-// internal/parser/tokenizer_test.go
-
 package parser
 
 import (
