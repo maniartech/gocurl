@@ -46,7 +46,6 @@ type RequestOptions struct {
 	// HTTP version specific
 	HTTP2     bool
 	HTTP2Only bool
-	// TODO: Consider adding HTTP/3 support in the future
 
 	// Cookie handling
 	Cookies   []*http.Cookie
