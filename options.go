@@ -127,9 +127,44 @@ func NewRequestOptions() *RequestOptions {
 func (ro *RequestOptions) Clone() *RequestOptions {
 	clone := *ro
 	clone.Headers = ro.Headers.Clone()
-	clone.Form = url.Values(ro.Form).Clone()
-	clone.QueryParams = url.Values(ro.QueryParams).Clone()
+
+	// Deep copy Form
+	clone.Form = make(url.Values)
+	for k, v := range ro.Form {
+		clone.Form[k] = append([]string(nil), v...)
+	}
+
+	// Deep copy QueryParams
+	clone.QueryParams = make(url.Values)
+	for k, v := range ro.QueryParams {
+		clone.QueryParams[k] = append([]string(nil), v...)
+	}
+
 	// Deep copy other pointer fields as needed
+	if ro.BasicAuth != nil {
+		clonedBasicAuth := *ro.BasicAuth
+		clone.BasicAuth = &clonedBasicAuth
+	}
+
+	if ro.FileUpload != nil {
+		clonedFileUpload := *ro.FileUpload
+		clone.FileUpload = &clonedFileUpload
+	}
+
+	if ro.RetryConfig != nil {
+		clonedRetryConfig := *ro.RetryConfig
+		clone.RetryConfig = &clonedRetryConfig
+	}
+
+	if ro.Metrics != nil {
+		clonedMetrics := *ro.Metrics
+		clone.Metrics = &clonedMetrics
+	}
+
+	// Note: We're not deep copying the Context, TLSConfig, CookieJar,
+	// Middleware, or ResponseDecoder as these are typically shared or
+	// would require more complex deep copying logic.
+
 	return &clone
 }
 
