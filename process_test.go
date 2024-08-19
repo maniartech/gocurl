@@ -1,0 +1,470 @@
+package gocurl_test
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/maniartech/gocurl"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestProcess(t *testing.T) {
+	t.Run("Basic GET request", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			fmt.Fprint(w, "Hello, World!")
+		}))
+		defer server.Close()
+
+		opts := &gocurl.RequestOptions{
+			URL: server.URL,
+		}
+
+		resp, err := gocurl.Process(context.Background(), opts)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "Hello, World!", string(body))
+	})
+
+	t.Run("POST request with body", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			body, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, "test data", string(body))
+			fmt.Fprint(w, "Received")
+		}))
+		defer server.Close()
+
+		opts := &gocurl.RequestOptions{
+			Method: "POST",
+			URL:    server.URL,
+			Body:   "test data",
+		}
+
+		resp, err := gocurl.Process(context.Background(), opts)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "Received", string(body))
+	})
+
+	t.Run("Custom headers", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "TestValue", r.Header.Get("X-Test-Header"))
+			fmt.Fprint(w, "Header received")
+		}))
+		defer server.Close()
+
+		opts := &gocurl.RequestOptions{
+			URL: server.URL,
+			Headers: http.Header{
+				"X-Test-Header": []string{"TestValue"},
+			},
+		}
+
+		resp, err := gocurl.Process(context.Background(), opts)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "Header received", string(body))
+	})
+
+	t.Run("Basic authentication", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			username, password, ok := r.BasicAuth()
+			assert.True(t, ok)
+			assert.Equal(t, "testuser", username)
+			assert.Equal(t, "testpass", password)
+			fmt.Fprint(w, "Authenticated")
+		}))
+		defer server.Close()
+
+		opts := &gocurl.RequestOptions{
+			URL: server.URL,
+			BasicAuth: &gocurl.BasicAuth{
+				Username: "testuser",
+				Password: "testpass",
+			},
+		}
+
+		resp, err := gocurl.Process(context.Background(), opts)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "Authenticated", string(body))
+	})
+
+	t.Run("Output to file", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, "File content")
+		}))
+		defer server.Close()
+
+		tempFile, err := ioutil.TempFile("", "gocurl-test-")
+		require.NoError(t, err)
+		tempFile.Close()
+		defer os.Remove(tempFile.Name())
+
+		opts := &gocurl.RequestOptions{
+			URL:        server.URL,
+			OutputFile: tempFile.Name(),
+		}
+
+		_, err = gocurl.Process(context.Background(), opts)
+		require.NoError(t, err)
+
+		content, err := ioutil.ReadFile(tempFile.Name())
+		require.NoError(t, err)
+		assert.Equal(t, "File content", string(content))
+	})
+
+	t.Run("Retry mechanism", func(t *testing.T) {
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts < 3 {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			fmt.Fprint(w, "Success after retries")
+		}))
+		defer server.Close()
+
+		opts := &gocurl.RequestOptions{
+			URL: server.URL,
+			RetryConfig: &gocurl.RetryConfig{
+				MaxRetries:  3,
+				RetryDelay:  time.Millisecond,
+				RetryOnHTTP: []int{500},
+			},
+		}
+
+		resp, err := gocurl.Process(context.Background(), opts)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "Success after retries", string(body))
+		assert.Equal(t, 3, attempts)
+	})
+
+	// Add more test cases for other features like file uploads, middleware, etc.
+}
+
+func TestValidateOptions(t *testing.T) {
+	t.Run("Valid options", func(t *testing.T) {
+		opts := &gocurl.RequestOptions{
+			URL: "https://example.com",
+		}
+		err := gocurl.ValidateOptions(opts)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Missing URL", func(t *testing.T) {
+		opts := &gocurl.RequestOptions{}
+		err := gocurl.ValidateOptions(opts)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "URL is required")
+	})
+
+	// Add more validation test cases
+}
+
+func TestCreateHTTPClient(t *testing.T) {
+	t.Run("Default client", func(t *testing.T) {
+		opts := &gocurl.RequestOptions{}
+		client, err := gocurl.CreateHTTPClient(opts)
+		assert.NoError(t, err)
+		assert.NotNil(t, client)
+	})
+
+	t.Run("Custom timeout", func(t *testing.T) {
+		opts := &gocurl.RequestOptions{
+			Timeout: 5 * time.Second,
+		}
+		client, err := gocurl.CreateHTTPClient(opts)
+		assert.NoError(t, err)
+		assert.Equal(t, 5*time.Second, client.Timeout)
+	})
+
+	// Add more client creation test cases
+}
+
+func TestCreateRequest(t *testing.T) {
+	t.Run("GET request", func(t *testing.T) {
+		opts := &gocurl.RequestOptions{
+			URL: "https://example.com",
+		}
+		req, err := gocurl.CreateRequest(context.Background(), opts)
+		assert.NoError(t, err)
+		assert.Equal(t, "GET", req.Method)
+		assert.Equal(t, "https://example.com", req.URL.String())
+	})
+
+	t.Run("POST request with body", func(t *testing.T) {
+		opts := &gocurl.RequestOptions{
+			Method: "POST",
+			URL:    "https://example.com",
+			Body:   "test data",
+		}
+		req, err := gocurl.CreateRequest(context.Background(), opts)
+		assert.NoError(t, err)
+		assert.Equal(t, "POST", req.Method)
+		body, _ := ioutil.ReadAll(req.Body)
+		assert.Equal(t, "test data", string(body))
+	})
+
+	t.Run("Request with query parameters", func(t *testing.T) {
+		opts := &gocurl.RequestOptions{
+			URL: "https://example.com",
+			QueryParams: url.Values{
+				"key1": []string{"value1"},
+				"key2": []string{"value2"},
+			},
+		}
+		req, err := gocurl.CreateRequest(context.Background(), opts)
+		assert.NoError(t, err)
+		assert.Contains(t, req.URL.String(), "key1=value1")
+		assert.Contains(t, req.URL.String(), "key2=value2")
+	})
+
+	t.Run("Request with custom headers", func(t *testing.T) {
+		opts := &gocurl.RequestOptions{
+			URL: "https://example.com",
+			Headers: http.Header{
+				"X-Custom-Header": []string{"CustomValue"},
+			},
+		}
+		req, err := gocurl.CreateRequest(context.Background(), opts)
+		assert.NoError(t, err)
+		assert.Equal(t, "CustomValue", req.Header.Get("X-Custom-Header"))
+	})
+
+	t.Run("Request with basic auth", func(t *testing.T) {
+		opts := &gocurl.RequestOptions{
+			URL: "https://example.com",
+			BasicAuth: &gocurl.BasicAuth{
+				Username: "user",
+				Password: "pass",
+			},
+		}
+		req, err := gocurl.CreateRequest(context.Background(), opts)
+		assert.NoError(t, err)
+		username, password, ok := req.BasicAuth()
+		assert.True(t, ok)
+		assert.Equal(t, "user", username)
+		assert.Equal(t, "pass", password)
+	})
+
+	t.Run("Request with bearer token", func(t *testing.T) {
+		opts := &gocurl.RequestOptions{
+			URL:         "https://example.com",
+			BearerToken: "token123",
+		}
+		req, err := gocurl.CreateRequest(context.Background(), opts)
+		assert.NoError(t, err)
+		assert.Equal(t, "Bearer token123", req.Header.Get("Authorization"))
+	})
+}
+
+func TestApplyMiddleware(t *testing.T) {
+	t.Run("Single middleware", func(t *testing.T) {
+		middleware := func(req *http.Request) (*http.Request, error) {
+			req.Header.Set("X-Middleware", "Applied")
+			return req, nil
+		}
+
+		req, _ := http.NewRequest("GET", "https://example.com", nil)
+		modifiedReq, err := gocurl.ApplyMiddleware(req, []gocurl.MiddlewareFunc{middleware})
+
+		assert.NoError(t, err)
+		assert.Equal(t, "Applied", modifiedReq.Header.Get("X-Middleware"))
+	})
+
+	t.Run("Multiple middleware", func(t *testing.T) {
+		middleware1 := func(req *http.Request) (*http.Request, error) {
+			req.Header.Set("X-Middleware-1", "Applied1")
+			return req, nil
+		}
+		middleware2 := func(req *http.Request) (*http.Request, error) {
+			req.Header.Set("X-Middleware-2", "Applied2")
+			return req, nil
+		}
+
+		req, _ := http.NewRequest("GET", "https://example.com", nil)
+		modifiedReq, err := gocurl.ApplyMiddleware(req, []gocurl.MiddlewareFunc{middleware1, middleware2})
+
+		assert.NoError(t, err)
+		assert.Equal(t, "Applied1", modifiedReq.Header.Get("X-Middleware-1"))
+		assert.Equal(t, "Applied2", modifiedReq.Header.Get("X-Middleware-2"))
+	})
+
+	t.Run("Middleware with error", func(t *testing.T) {
+		middleware := func(req *http.Request) (*http.Request, error) {
+			return nil, fmt.Errorf("middleware error")
+		}
+
+		req, _ := http.NewRequest("GET", "https://example.com", nil)
+		_, err := gocurl.ApplyMiddleware(req, []gocurl.MiddlewareFunc{middleware})
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "middleware error")
+	})
+}
+
+func TestExecuteRequestWithRetries(t *testing.T) {
+	t.Run("Successful request without retries", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		client := &http.Client{}
+		req, _ := http.NewRequest("GET", server.URL, nil)
+		opts := &gocurl.RequestOptions{}
+
+		resp, err := gocurl.ExecuteRequestWithRetries(client, req, opts)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("Successful request after retries", func(t *testing.T) {
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts < 3 {
+				w.WriteHeader(http.StatusInternalServerError)
+			} else {
+				w.WriteHeader(http.StatusOK)
+			}
+		}))
+		defer server.Close()
+
+		client := &http.Client{}
+		req, _ := http.NewRequest("GET", server.URL, nil)
+		opts := &gocurl.RequestOptions{
+			RetryConfig: &gocurl.RetryConfig{
+				MaxRetries:  3,
+				RetryDelay:  time.Millisecond,
+				RetryOnHTTP: []int{500},
+			},
+		}
+
+		resp, err := gocurl.ExecuteRequestWithRetries(client, req, opts)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, 3, attempts)
+	})
+
+	t.Run("Request fails after max retries", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+
+		client := &http.Client{}
+		req, _ := http.NewRequest("GET", server.URL, nil)
+		opts := &gocurl.RequestOptions{
+			RetryConfig: &gocurl.RetryConfig{
+				MaxRetries:  2,
+				RetryDelay:  time.Millisecond,
+				RetryOnHTTP: []int{500},
+			},
+		}
+
+		resp, err := gocurl.ExecuteRequestWithRetries(client, req, opts)
+
+		assert.NoError(t, err) // The function doesn't return an error for HTTP errors
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+}
+
+func TestHandleOutput(t *testing.T) {
+	t.Run("Output to file", func(t *testing.T) {
+		tempFile, err := ioutil.TempFile("", "gocurl-test-")
+		require.NoError(t, err)
+		tempFile.Close()
+		defer os.Remove(tempFile.Name())
+
+		resp := &http.Response{
+			Body: ioutil.NopCloser(strings.NewReader("Test output")),
+		}
+		opts := &gocurl.RequestOptions{
+			OutputFile: tempFile.Name(),
+		}
+
+		err = gocurl.HandleOutput(resp, opts)
+		assert.NoError(t, err)
+
+		content, err := ioutil.ReadFile(tempFile.Name())
+		assert.NoError(t, err)
+		assert.Equal(t, "Test output", string(content))
+	})
+
+	t.Run("Output to stdout", func(t *testing.T) {
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		resp := &http.Response{
+			Body: ioutil.NopCloser(strings.NewReader("Test output")),
+		}
+		opts := &gocurl.RequestOptions{}
+
+		err := gocurl.HandleOutput(resp, opts)
+		assert.NoError(t, err)
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		assert.Equal(t, "Test output", buf.String())
+	})
+
+	t.Run("Silent output", func(t *testing.T) {
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		resp := &http.Response{
+			Body: ioutil.NopCloser(strings.NewReader("Test output")),
+		}
+		opts := &gocurl.RequestOptions{
+			Silent: true,
+		}
+
+		err := gocurl.HandleOutput(resp, opts)
+		assert.NoError(t, err)
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		assert.Empty(t, buf.String())
+	})
+}
