@@ -1,13 +1,16 @@
 package gocurl_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,6 +88,12 @@ func TestProcess(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			username, password, ok := r.BasicAuth()
 			assert.True(t, ok)
+
+			if username != "testuser" || password != "testpass" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+
 			assert.Equal(t, "testuser", username)
 			assert.Equal(t, "testpass", password)
 			fmt.Fprint(w, "Authenticated")
@@ -112,7 +121,7 @@ func TestProcess(t *testing.T) {
 		}))
 		defer server.Close()
 
-		tempFile, err := ioutil.TempFile("", "gocurl-test-")
+		tempFile, err := os.CreateTemp("", "gocurl-test-")
 		require.NoError(t, err)
 		tempFile.Close()
 		defer os.Remove(tempFile.Name())
@@ -392,69 +401,78 @@ func TestExecuteRequestWithRetries(t *testing.T) {
 	})
 }
 
-// func TestHandleOutput(t *testing.T) {
-// 	t.Run("Output to file", func(t *testing.T) {
-// 		tempFile, err := ioutil.TempFile("", "gocurl-test-")
-// 		require.NoError(t, err)
-// 		tempFile.Close()
-// 		defer os.Remove(tempFile.Name())
+func TestHandleOutput(t *testing.T) {
+	t.Run("Output to file", func(t *testing.T) {
+		tempFile, err := ioutil.TempFile("", "gocurl-test-")
+		require.NoError(t, err)
+		tempFile.Close()
+		defer os.Remove(tempFile.Name())
 
-// 		resp := &http.Response{
-// 			Body: ioutil.NopCloser(strings.NewReader("Test output")),
-// 		}
-// 		opts := &gocurl.RequestOptions{
-// 			OutputFile: tempFile.Name(),
-// 		}
+		resp := &http.Response{
+			Body: ioutil.NopCloser(strings.NewReader("Test output")),
+		}
+		opts := &gocurl.RequestOptions{
+			OutputFile: tempFile.Name(),
+		}
 
-// 		err = gocurl.HandleOutput(resp, opts)
-// 		assert.NoError(t, err)
+		body, err := ioutil.ReadAll(resp.Body)
+		assert.NoError(t, err)
 
-// 		content, err := ioutil.ReadFile(tempFile.Name())
-// 		assert.NoError(t, err)
-// 		assert.Equal(t, "Test output", string(content))
-// 	})
+		err = gocurl.HandleOutput(string(body), opts)
+		assert.NoError(t, err)
 
-// 	t.Run("Output to stdout", func(t *testing.T) {
-// 		oldStdout := os.Stdout
-// 		r, w, _ := os.Pipe()
-// 		os.Stdout = w
+		content, err := ioutil.ReadFile(tempFile.Name())
+		assert.NoError(t, err)
+		assert.Equal(t, "Test output", string(content))
+	})
 
-// 		resp := &http.Response{
-// 			Body: ioutil.NopCloser(strings.NewReader("Test output")),
-// 		}
-// 		opts := &gocurl.RequestOptions{}
+	t.Run("Output to stdout", func(t *testing.T) {
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
 
-// 		err := gocurl.HandleOutput(resp, opts)
-// 		assert.NoError(t, err)
+		resp := &http.Response{
+			Body: ioutil.NopCloser(strings.NewReader("Test output")),
+		}
+		opts := &gocurl.RequestOptions{}
 
-// 		w.Close()
-// 		os.Stdout = oldStdout
+		body, err := ioutil.ReadAll(resp.Body)
+		assert.NoError(t, err)
 
-// 		var buf bytes.Buffer
-// 		io.Copy(&buf, r)
-// 		assert.Equal(t, "Test output", buf.String())
-// 	})
+		err = gocurl.HandleOutput(string(body), opts)
+		assert.NoError(t, err)
 
-// 	t.Run("Silent output", func(t *testing.T) {
-// 		oldStdout := os.Stdout
-// 		r, w, _ := os.Pipe()
-// 		os.Stdout = w
+		w.Close()
+		os.Stdout = oldStdout
 
-// 		resp := &http.Response{
-// 			Body: ioutil.NopCloser(strings.NewReader("Test output")),
-// 		}
-// 		opts := &gocurl.RequestOptions{
-// 			Silent: true,
-// 		}
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		assert.Equal(t, "Test output", buf.String())
+	})
 
-// 		err := gocurl.HandleOutput(resp, opts)
-// 		assert.NoError(t, err)
+	t.Run("Silent output", func(t *testing.T) {
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
 
-// 		w.Close()
-// 		os.Stdout = oldStdout
+		resp := &http.Response{
+			Body: ioutil.NopCloser(strings.NewReader("Test output")),
+		}
+		opts := &gocurl.RequestOptions{
+			Silent: true,
+		}
 
-// 		var buf bytes.Buffer
-// 		io.Copy(&buf, r)
-// 		assert.Empty(t, buf.String())
-// 	})
-// }
+		body, err := ioutil.ReadAll(resp.Body)
+		assert.NoError(t, err)
+
+		err = gocurl.HandleOutput(string(body), opts)
+		assert.NoError(t, err)
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		assert.Empty(t, buf.String())
+	})
+}

@@ -1,15 +1,19 @@
 package gocurl
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
 // Process executes the curl command based on the provided RequestOptions
@@ -101,6 +105,22 @@ func CreateHTTPClient(opts *RequestOptions) (*http.Client, error) {
 		},
 	}
 
+	// Add HTTP/2 support based on the options
+	if opts.HTTP2 || opts.HTTP2Only {
+		// If HTTP2Only is set, create a new HTTP/2 transport
+		if opts.HTTP2Only {
+			http2Transport := &http2.Transport{
+				TLSClientConfig: transport.TLSClientConfig,
+			}
+			client.Transport = http2Transport
+		} else {
+			// Enable HTTP/2 support if possible, while still allowing fallback to HTTP/1.1
+			if err := http2.ConfigureTransport(transport); err != nil {
+				return nil, fmt.Errorf("failed to configure HTTP/2: %v", err)
+			}
+		}
+	}
+
 	if opts.CookieJar != nil {
 		client.Jar = opts.CookieJar
 	}
@@ -124,19 +144,52 @@ func CreateRequest(ctx context.Context, opts *RequestOptions) (*http.Request, er
 	}
 
 	var body io.Reader
+	var contentType string
+
 	if opts.Body != "" {
 		body = strings.NewReader(opts.Body)
-	} else if len(opts.Form) > 0 {
+	} else if len(opts.Form) > 0 && opts.FileUpload == nil {
+		// URL-encoded form data
 		body = strings.NewReader(opts.Form.Encode())
+		contentType = "application/x-www-form-urlencoded"
 	} else if opts.FileUpload != nil {
-		// Handle file upload
-		// This is a simplified version. You might want to create a more robust multipart form data handler
+		// Multipart form data
+		var b bytes.Buffer
+		w := multipart.NewWriter(&b)
+
+		// Add file
 		file, err := os.Open(opts.FileUpload.FilePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open file for upload: %v", err)
 		}
 		defer file.Close()
-		body = file
+
+		part, err := w.CreateFormFile(opts.FileUpload.FieldName, opts.FileUpload.FileName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create form file: %v", err)
+		}
+		_, err = io.Copy(part, file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to copy file content: %v", err)
+		}
+
+		// Add other form fields
+		for key, values := range opts.Form {
+			for _, value := range values {
+				err := w.WriteField(key, value)
+				if err != nil {
+					return nil, fmt.Errorf("failed to write form field: %v", err)
+				}
+			}
+		}
+
+		err = w.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to close multipart writer: %v", err)
+		}
+
+		body = &b
+		contentType = w.FormDataContentType()
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
@@ -149,6 +202,11 @@ func CreateRequest(ctx context.Context, opts *RequestOptions) (*http.Request, er
 		for _, value := range values {
 			req.Header.Add(key, value)
 		}
+	}
+
+	// Set content type if not already set
+	if contentType != "" && req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	// Set basic auth
