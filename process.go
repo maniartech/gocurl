@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,43 +13,55 @@ import (
 )
 
 // Process executes the curl command based on the provided RequestOptions
-func Process(ctx context.Context, opts *RequestOptions) (*http.Response, error) {
+// Process executes the curl command based on the provided RequestOptions
+func Process(ctx context.Context, opts *RequestOptions) (*http.Response, string, error) {
 	// Validate options
 	if err := ValidateOptions(opts); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Create HTTP client
 	client, err := CreateHTTPClient(opts)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Create request
 	req, err := CreateRequest(ctx, opts)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Apply middleware
 	req, err = ApplyMiddleware(req, opts.Middleware)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Execute request with retries
 	resp, err := ExecuteRequestWithRetries(client, req, opts)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
+
+	// Read the response body
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read response body: %v", err)
+	}
+	resp.Body.Close()
+	bodyString := string(bodyBytes)
 
 	// Handle output
-	err = HandleOutput(resp, opts)
+	err = HandleOutput(bodyString, opts)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return resp, nil
+	// Recreate the response body for further use
+	resp.Body = ioutil.NopCloser(strings.NewReader(bodyString))
+
+	return resp, bodyString, nil
 }
 
 func ValidateOptions(opts *RequestOptions) error {
@@ -206,24 +219,19 @@ func shouldRetry(statusCode int, retryOnHTTP []int) bool {
 	return false
 }
 
-func HandleOutput(resp *http.Response, opts *RequestOptions) error {
+func HandleOutput(body string, opts *RequestOptions) error {
 	if opts.OutputFile != "" {
-		file, err := os.Create(opts.OutputFile)
-		if err != nil {
-			return fmt.Errorf("failed to create output file: %v", err)
-		}
-		defer file.Close()
-
-		_, err = io.Copy(file, resp.Body)
+		err := ioutil.WriteFile(opts.OutputFile, []byte(body), 0644)
 		if err != nil {
 			return fmt.Errorf("failed to write response to file: %v", err)
 		}
 	} else if !opts.Silent {
-		_, err := io.Copy(os.Stdout, resp.Body)
+		_, err := fmt.Fprint(os.Stdout, body)
 		if err != nil {
 			return fmt.Errorf("failed to write response to stdout: %v", err)
 		}
 	}
 
 	return nil
+
 }
