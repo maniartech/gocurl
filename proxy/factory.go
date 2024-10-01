@@ -10,9 +10,7 @@ import (
 func NewProxy(config ProxyConfig) (Proxy, error) {
 	switch config.Type {
 	case ProxyTypeNone:
-		return &NoProxy{
-			Timeout: config.Timeout,
-		}, nil
+		return &NoProxy{}, nil
 	case ProxyTypeHTTP:
 		return &HTTPProxy{
 			Address:  config.Address,
