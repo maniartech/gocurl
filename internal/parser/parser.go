@@ -17,7 +17,12 @@ func NewParser() *Parser {
 	}
 }
 
-func (p *Parser) Parse(command string, variables Variables) (map[string]string, error) {
+func (p *Parser) Parse(command string, vars ...Variables) (map[string]string, error) {
+	var variables Variables
+	if len(vars) > 0 {
+		variables = vars[0]
+	}
+
 	err := p.tokenizer.Tokenize(command)
 	if err != nil {
 		return nil, err

@@ -8,7 +8,12 @@ import (
 	"time"
 )
 
-func ParseCurlCommand(command string, variables Variables) (*RequestOptions, error) {
+func ParseCurlCommand(command string, vars ...Variables) (*RequestOptions, error) {
+	var variables Variables
+	if len(vars) > 0 {
+		variables = vars[0]
+	}
+
 	parser := NewParser()
 	parsedOptions, err := parser.Parse(command, variables)
 	if err != nil {

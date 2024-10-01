@@ -8,7 +8,19 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
+
+func TestTrial(t *testing.T) {
+	opt, err := ParseCurlCommand("curl -X POST -d '{\"key\":\"value\"}' https://api.example.com/data")
+	assert.NoError(t, err)
+
+	assert.Equal(t, "POST", opt.Method)
+	assert.Equal(t, "https://api.example.com/data", opt.URL)
+	assert.Equal(t, "{\"key\":\"value\"}", opt.Body)
+
+}
 
 func TestParseCurlCommand(t *testing.T) {
 	tests := []struct {
