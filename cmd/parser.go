@@ -113,7 +113,7 @@ func tokenize(command string) ([]string, error) {
 	return args, nil
 }
 
-func main() {
+func main2() {
 	// Example complex multi-line command with various permutations
 	command := `
 	grep "pattern with spaces" \
