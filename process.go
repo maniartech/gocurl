@@ -13,8 +13,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/maniartech/gocurl/parser"
 	"golang.org/x/net/http2"
 )
+
+func Curl(ctx context.Context, command string) (*http.Response, string, error) {
+	tokenizer := parser.NewTokenizer()
+
+	err := tokenizer.Tokenize(command)
+	if err != nil {
+		return nil, "", err
+	}
+
+	tokens := tokenizer.GetTokens()
+
+	opts, err := convertTokensToRequestOptions(tokens)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return Process(ctx, opts)
+}
 
 // Process executes the curl command based on the provided RequestOptions
 // Process executes the curl command based on the provided RequestOptions
