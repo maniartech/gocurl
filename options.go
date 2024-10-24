@@ -110,15 +110,15 @@ type RequestMetrics struct {
 }
 
 // NewRequestOptions creates a new RequestOptions with default values.
+// NewRequestOptions creates a new RequestOptions with default values aligned to cURL's defaults.
 func NewRequestOptions() *RequestOptions {
 	return &RequestOptions{
 		Headers:         make(http.Header),
 		Form:            make(url.Values),
 		QueryParams:     make(url.Values),
-		FollowRedirects: true,
-		MaxRedirects:    10,
-		Compress:        true,
-		Context:         context.Background(),
+		FollowRedirects: false, // cURL does not follow redirects by default
+		MaxRedirects:    0,     // No redirects followed unless -L is used
+		Compress:        false, // Compression not enabled by default
 	}
 }
 
