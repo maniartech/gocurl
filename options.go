@@ -3,6 +3,7 @@ package gocurl
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"time"
@@ -11,88 +12,97 @@ import (
 // RequestOptions represents the configuration for an HTTP request in GoCurl.
 type RequestOptions struct {
 	// HTTP request basics
-	Method      string
-	URL         string
-	Headers     http.Header
-	Body        string
-	Form        url.Values
-	QueryParams url.Values
+	Method      string      `json:"method"`
+	URL         string      `json:"url"`
+	Headers     http.Header `json:"headers"`
+	Body        string      `json:"body"`
+	Form        url.Values  `json:"form"`
+	QueryParams url.Values  `json:"query_params"`
 
 	// Authentication
-	BasicAuth   *BasicAuth
-	BearerToken string
+	BasicAuth   *BasicAuth `json:"basic_auth,omitempty"`
+	BearerToken string     `json:"bearer_token,omitempty"`
 
 	// TLS/SSL options
-	CertFile  string
-	KeyFile   string
-	CAFile    string
-	Insecure  bool
-	TLSConfig *tls.Config
+	CertFile  string      `json:"cert_file,omitempty"`
+	KeyFile   string      `json:"key_file,omitempty"`
+	CAFile    string      `json:"ca_file,omitempty"`
+	Insecure  bool        `json:"insecure,omitempty"`
+	TLSConfig *tls.Config `json:"-"` // Not exported to JSON
 
 	// Proxy settings
-	Proxy string
+	Proxy string `json:"proxy,omitempty"`
 
 	// Timeout settings
-	Timeout        time.Duration
-	ConnectTimeout time.Duration
+	Timeout        time.Duration `json:"timeout,omitempty"`
+	ConnectTimeout time.Duration `json:"connect_timeout,omitempty"`
 
 	// Redirect behavior
-	FollowRedirects bool
-	MaxRedirects    int
+	FollowRedirects bool `json:"follow_redirects,omitempty"`
+	MaxRedirects    int  `json:"max_redirects,omitempty"`
 
 	// Compression
-	Compress bool
+	Compress bool `json:"compress,omitempty"`
 
 	// HTTP version specific
-	HTTP2     bool
-	HTTP2Only bool
+	HTTP2     bool `json:"http2,omitempty"`
+	HTTP2Only bool `json:"http2_only,omitempty"`
 
 	// Cookie handling
-	Cookies   []*http.Cookie
-	CookieJar http.CookieJar
+	Cookies   []*http.Cookie `json:"cookies,omitempty"`
+	CookieJar http.CookieJar `json:"-"` // Not exported to JSON
 
 	// Custom options
-	UserAgent string
-	Referer   string
+	UserAgent string `json:"user_agent,omitempty"`
+	Referer   string `json:"referer,omitempty"`
 
 	// File upload
-	FileUpload *FileUpload
+	FileUpload *FileUpload `json:"file_upload,omitempty"`
 
 	// Retry configuration
-	RetryConfig *RetryConfig
+	RetryConfig *RetryConfig `json:"retry_config,omitempty"`
 
 	// Output options
-	OutputFile string
-	Silent     bool
-	Verbose    bool
+	OutputFile string `json:"output_file,omitempty"`
+	Silent     bool   `json:"silent,omitempty"`
+	Verbose    bool   `json:"verbose,omitempty"`
 
 	// Advanced options
-	Context           context.Context
-	RequestID         string
-	Middleware        []MiddlewareFunc
-	ResponseBodyLimit int64
-	ResponseDecoder   ResponseDecoder
-	Metrics           *RequestMetrics
+	Context           context.Context  `json:"-"` // Not exported to JSON
+	RequestID         string           `json:"request_id,omitempty"`
+	Middleware        []MiddlewareFunc `json:"-"`
+	ResponseBodyLimit int64            `json:"response_body_limit,omitempty"`
+	ResponseDecoder   ResponseDecoder  `json:"-"`
+	Metrics           *RequestMetrics  `json:"metrics,omitempty"`
+}
+
+// ToJSON marshals the RequestOptions struct to JSON format.
+func (ro *RequestOptions) ToJSON() (string, error) {
+	jsonBytes, err := json.Marshal(ro)
+	if err != nil {
+		return "", err
+	}
+	return string(jsonBytes), nil
 }
 
 // BasicAuth represents HTTP Basic Authentication credentials.
 type BasicAuth struct {
-	Username string
-	Password string
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // FileUpload represents a file to be uploaded in a multipart form.
 type FileUpload struct {
-	FieldName string
-	FileName  string
-	FilePath  string
+	FieldName string `json:"field_name"`
+	FileName  string `json:"file_name"`
+	FilePath  string `json:"file_path"`
 }
 
 // RetryConfig represents the configuration for request retries.
 type RetryConfig struct {
-	MaxRetries  int
-	RetryDelay  time.Duration
-	RetryOnHTTP []int // HTTP status codes to retry on
+	MaxRetries  int           `json:"max_retries"`
+	RetryDelay  time.Duration `json:"retry_delay"`
+	RetryOnHTTP []int         `json:"retry_on_http"`
 }
 
 // MiddlewareFunc is a function type for request middleware.
@@ -103,19 +113,19 @@ type ResponseDecoder func(*http.Response) (interface{}, error)
 
 // RequestMetrics represents metrics collected during a request.
 type RequestMetrics struct {
-	StartTime    time.Time
-	Duration     time.Duration
-	RetryCount   int
-	ResponseSize int64
+	StartTime    time.Time     `json:"start_time"`
+	Duration     time.Duration `json:"duration"`
+	RetryCount   int           `json:"retry_count"`
+	ResponseSize int64         `json:"response_size"`
 }
 
-// NewRequestOptions creates a new RequestOptions with default values.
 // NewRequestOptions creates a new RequestOptions with default values aligned to cURL's defaults.
 func NewRequestOptions() *RequestOptions {
 	return &RequestOptions{
-		Headers:         make(http.Header),
-		Form:            make(url.Values),
-		QueryParams:     make(url.Values),
+		// Headers:         make(http.Header),
+		// Form:            make(url.Values),
+		// QueryParams:     make(url.Values),
+		QueryParams:     nil,
 		FollowRedirects: false, // cURL does not follow redirects by default
 		MaxRedirects:    0,     // No redirects followed unless -L is used
 		Compress:        false, // Compression not enabled by default
