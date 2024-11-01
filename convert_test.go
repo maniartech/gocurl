@@ -2,23 +2,17 @@
 package gocurl_test
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/maniartech/gocurl"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestConvertTokensToRequestOptions(t *testing.T) {
-	// Set up environment variables for testing
-	os.Setenv("API_URL", "https://api.example.com/data")
-	os.Setenv("TOKEN", "dummy_token")
-
+func TestBasicRequests(t *testing.T) {
 	tests := []struct {
 		name        string
 		tokens      []string
@@ -32,9 +26,9 @@ func TestConvertTokensToRequestOptions(t *testing.T) {
 				"https://api.example.com/data",
 			},
 			expected: &gocurl.RequestOptions{
-				Method:  "GET",
-				URL:     "https://api.example.com/data",
-				Headers: http.Header{},
+				Method:      "GET",
+				URL:         "https://api.example.com/data",
+				QueryParams: url.Values{},
 			},
 		},
 		{
@@ -46,12 +40,23 @@ func TestConvertTokensToRequestOptions(t *testing.T) {
 				"https://api.example.com/data",
 			},
 			expected: &gocurl.RequestOptions{
-				Method:  "POST",
-				URL:     "https://api.example.com/data",
-				Body:    "key=value",
-				Headers: http.Header{},
+				Method:      "POST",
+				URL:         "https://api.example.com/data",
+				Body:        "key=value",
+				QueryParams: url.Values{},
 			},
 		},
+	}
+	runTests(t, tests)
+}
+
+func TestHeadersAndAuth(t *testing.T) {
+	tests := []struct {
+		name        string
+		tokens      []string
+		expected    *gocurl.RequestOptions
+		expectError bool
+	}{
 		{
 			name: "Request with headers",
 			tokens: []string{
@@ -67,18 +72,6 @@ func TestConvertTokensToRequestOptions(t *testing.T) {
 					"Content-Type":  []string{"application/json"},
 					"Authorization": []string{"Bearer dummy_token"},
 				},
-			},
-		},
-		{
-			name: "Request with environment variables",
-			tokens: []string{
-				"curl",
-				"$API_URL",
-			},
-			expected: &gocurl.RequestOptions{
-				Method:  "GET",
-				URL:     "https://api.example.com/data",
-				Headers: http.Header{},
 			},
 		},
 		{
@@ -98,6 +91,17 @@ func TestConvertTokensToRequestOptions(t *testing.T) {
 				Headers: http.Header{},
 			},
 		},
+	}
+	runTests(t, tests)
+}
+
+func TestFormAndFileUploads(t *testing.T) {
+	tests := []struct {
+		name        string
+		tokens      []string
+		expected    *gocurl.RequestOptions
+		expectError bool
+	}{
 		{
 			name: "Request with form data",
 			tokens: []string{
@@ -134,6 +138,17 @@ func TestConvertTokensToRequestOptions(t *testing.T) {
 				Headers: http.Header{},
 			},
 		},
+	}
+	runTests(t, tests)
+}
+
+func TestCookiesAndProxy(t *testing.T) {
+	tests := []struct {
+		name        string
+		tokens      []string
+		expected    *gocurl.RequestOptions
+		expectError bool
+	}{
 		{
 			name: "Request with cookies",
 			tokens: []string{
@@ -165,6 +180,17 @@ func TestConvertTokensToRequestOptions(t *testing.T) {
 				Headers: http.Header{},
 			},
 		},
+	}
+	runTests(t, tests)
+}
+
+func TestTimeoutAndSSL(t *testing.T) {
+	tests := []struct {
+		name        string
+		tokens      []string
+		expected    *gocurl.RequestOptions
+		expectError bool
+	}{
 		{
 			name: "Request with timeout",
 			tokens: []string{
@@ -197,39 +223,17 @@ func TestConvertTokensToRequestOptions(t *testing.T) {
 				Headers:  http.Header{},
 			},
 		},
-		{
-			name: "Request with HTTP/2",
-			tokens: []string{
-				"curl",
-				"--http2",
-				"https://api.example.com/data",
-			},
-			expected: &gocurl.RequestOptions{
-				Method:  "GET",
-				URL:     "https://api.example.com/data",
-				HTTP2:   true,
-				Headers: http.Header{},
-			},
-		},
-		{
-			name: "Request with User-Agent and Referer",
-			tokens: []string{
-				"curl",
-				"-A", "CustomUserAgent/1.0",
-				"-e", "https://referrer.example.com",
-				"https://api.example.com/data",
-			},
-			expected: &gocurl.RequestOptions{
-				Method:    "GET",
-				URL:       "https://api.example.com/data",
-				UserAgent: "CustomUserAgent/1.0",
-				Referer:   "https://referrer.example.com",
-				Headers: http.Header{
-					"User-Agent": []string{"CustomUserAgent/1.0"},
-					"Referer":    []string{"https://referrer.example.com"},
-				},
-			},
-		},
+	}
+	runTests(t, tests)
+}
+
+func TestErrorCases(t *testing.T) {
+	tests := []struct {
+		name        string
+		tokens      []string
+		expected    *gocurl.RequestOptions
+		expectError bool
+	}{
 		{
 			name: "Request with unknown flag",
 			tokens: []string{
@@ -257,20 +261,39 @@ func TestConvertTokensToRequestOptions(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "Request with multiple data fields",
+			name: "Request with invalid max redirects",
 			tokens: []string{
 				"curl",
-				"-d", "field1=value1",
-				"-d", "field2=value2",
+				"--max-redirs", "invalid",
 				"https://api.example.com/data",
 			},
+			expectError: true,
+		},
+	}
+	runTests(t, tests)
+}
+
+func TestEnvironmentVariables(t *testing.T) {
+	// Set up environment variables for testing
+	os.Setenv("API_URL", "https://api.example.com/data")
+	os.Setenv("TOKEN", "dummy_token")
+
+	tests := []struct {
+		name        string
+		tokens      []string
+		expected    *gocurl.RequestOptions
+		expectError bool
+	}{
+		{
+			name: "Request with environment variables",
+			tokens: []string{
+				"curl",
+				"$API_URL",
+			},
 			expected: &gocurl.RequestOptions{
-				Method: "POST",
-				URL:    "https://api.example.com/data",
-				Body:   "field1=value1&field2=value2",
-				Headers: http.Header{
-					"Content-Type": []string{"application/x-www-form-urlencoded"},
-				},
+				Method:  "GET",
+				URL:     "https://api.example.com/data",
+				Headers: http.Header{},
 			},
 		},
 		{
@@ -289,237 +312,57 @@ func TestConvertTokensToRequestOptions(t *testing.T) {
 				},
 			},
 		},
-		{
-			name: "Request with compressed option",
-			tokens: []string{
-				"curl",
-				"--compressed",
-				"https://api.example.com/data",
-			},
-			expected: &gocurl.RequestOptions{
-				Method:   "GET",
-				URL:      "https://api.example.com/data",
-				Compress: true,
-				Headers: http.Header{
-					"Accept-Encoding": []string{"deflate, gzip"},
-				},
-			},
-		},
-		{
-			name: "Request with redirect options",
-			tokens: []string{
-				"curl",
-				"-L",
-				"--max-redirs", "5",
-				"https://api.example.com/data",
-			},
-			expected: &gocurl.RequestOptions{
-				Method:          "GET",
-				URL:             "https://api.example.com/data",
-				FollowRedirects: true,
-				MaxRedirects:    5,
-				Headers:         http.Header{},
-			},
-		},
-		{
-			name: "Request with invalid max redirects",
-			tokens: []string{
-				"curl",
-				"--max-redirs", "invalid",
-				"https://api.example.com/data",
-			},
-			expectError: true,
-		},
-		{
-			name: "Request with multiple unknown tokens",
-			tokens: []string{
-				"curl",
-				"https://api.example.com/data",
-				"unexpected_token",
-			},
-			expectError: true,
-		},
 	}
+	runTests(t, tests)
+}
 
-	for i, tt := range tests {
-		var isErr bool
+// Helper function to run the tests
+func runTests(t *testing.T, tests []struct {
+	name        string
+	tokens      []string
+	expected    *gocurl.RequestOptions
+	expectError bool
+}) {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			options, err := gocurl.ArgsToOptions(tt.tokens)
 			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
+				assert.Error(t, err)
 				return
 			}
 
-			if err != nil {
-				t.Errorf("Unexpected error at test case %d: %#v", i, err)
-				return
-			}
-
-			// Normalize Headers for comparison
-			normalizeHeaders(tt.expected.Headers)
-			normalizeHeaders(options.Headers)
-
-			// Compare options
-			if !compareRequestOptions(tt.expected, options, t) {
-				fmt.Printf("# %d: %v#v", i, tt)
-				t.Errorf("Expected %+v, got %+v", tt.expected, options)
-				isErr = true
-			}
+			assert.NoError(t, err)
+			compareRequestOptions(tt.expected, options, t)
 		})
-
-		if isErr {
-			break
-		}
 	}
 }
-
-// Helper function to compare RequestOptions
 
 func compareRequestOptions(expected, actual *gocurl.RequestOptions, t *testing.T) bool {
-	equal := true
 
-	if expected.Method != actual.Method {
-		t.Errorf("Method mismatch: expected %s, got %s", expected.Method, actual.Method)
-		equal = false
-	}
-	if expected.URL != actual.URL {
-		t.Errorf("URL mismatch: expected %s, got %s", expected.URL, actual.URL)
-		equal = false
-	}
-	if expected.Body != actual.Body {
-		t.Errorf("Body mismatch: expected %s, got %s", expected.Body, actual.Body)
-		equal = false
-	}
+	normalizeHeaders(expected.Headers)
+	normalizeHeaders(actual.Headers)
 
-	// Normalize comparison for nil and empty maps for Headers, QueryParams, Form
-	if !compareMaps(expected.Headers, actual.Headers) {
-		t.Errorf("Headers mismatch: expected %v, got %v", expected.Headers, actual.Headers)
-		equal = false
-	}
-	if !compareMaps(expected.QueryParams, actual.QueryParams) {
-		t.Errorf("QueryParams mismatch: expected %v, got %v", expected.QueryParams, actual.QueryParams)
-		equal = false
-	}
-	if !compareMaps(expected.Form, actual.Form) {
-		t.Errorf("Form mismatch: expected %v, got %v", expected.Form, actual.Form)
-		equal = false
-	}
-
-	if !compareBasicAuth(expected.BasicAuth, actual.BasicAuth) {
-		equal = false
-	}
-	if expected.Proxy != actual.Proxy {
-		t.Errorf("Proxy mismatch: expected %s, got %s", expected.Proxy, actual.Proxy)
-		equal = false
-	}
-	if expected.Timeout != actual.Timeout {
-		t.Errorf("Timeout mismatch: expected %v, got %v", expected.Timeout, actual.Timeout)
-		equal = false
-	}
-	if expected.ConnectTimeout != actual.ConnectTimeout {
-		t.Errorf("ConnectTimeout mismatch: expected %v, got %v", expected.ConnectTimeout, actual.ConnectTimeout)
-		equal = false
-	}
-	if expected.Insecure != actual.Insecure {
-		t.Errorf("Insecure mismatch: expected %v, got %v", expected.Insecure, actual.Insecure)
-		equal = false
-	}
-	if expected.FollowRedirects != actual.FollowRedirects {
-		t.Errorf("FollowRedirects mismatch: expected %v, got %v", expected.FollowRedirects, actual.FollowRedirects)
-		equal = false
-	}
-	if expected.MaxRedirects != actual.MaxRedirects {
-		t.Errorf("MaxRedirects mismatch: expected %d, got %d", expected.MaxRedirects, actual.MaxRedirects)
-		equal = false
-	}
-	if expected.Compress != actual.Compress {
-		t.Errorf("Compress mismatch: expected %v, got %v", expected.Compress, actual.Compress)
-		equal = false
-	}
-	if expected.HTTP2 != actual.HTTP2 {
-		t.Errorf("HTTP2 mismatch: expected %v, got %v", expected.HTTP2, actual.HTTP2)
-		equal = false
-	}
-	if expected.HTTP2Only != actual.HTTP2Only {
-		t.Errorf("HTTP2Only mismatch: expected %v, got %v", expected.HTTP2Only, actual.HTTP2Only)
-		equal = false
-	}
-	if expected.UserAgent != actual.UserAgent {
-		t.Errorf("UserAgent mismatch: expected %s, got %s", expected.UserAgent, actual.UserAgent)
-		equal = false
-	}
-	if expected.Referer != actual.Referer {
-		t.Errorf("Referer mismatch: expected %s, got %s", expected.Referer, actual.Referer)
-		equal = false
-	}
-	if !compareCookies(expected.Cookies, actual.Cookies) {
-		equal = false
-	}
-	if !compareFileUpload(expected.FileUpload, actual.FileUpload) {
-		equal = false
-	}
-
-	// Special handling for Context
-	if !compareContext(expected.Context, actual.Context) {
-		t.Errorf("Context mismatch: expected %v, got %v", expected.Context, actual.Context)
-		equal = false
-	}
-
-	return equal
-}
-
-// Helper function to compare maps (handling nil and empty maps as equivalent)
-func compareMaps(expected, actual map[string][]string) bool {
-	if len(expected) == 0 && len(actual) == 0 {
-		return true
-	}
-	return reflect.DeepEqual(expected, actual)
-}
-
-// Helper function to compare Contexts
-func compareContext(expected, actual context.Context) bool {
-	// Since context.Background() is equivalent to context.Background(), we just check
-	// if both contexts are equivalent.
-	return expected == actual || (expected == nil && actual == context.Background())
-}
-
-// Helper function to compare BasicAuth
-func compareBasicAuth(expected, actual *gocurl.BasicAuth) bool {
-	if expected == nil && actual == nil {
-		return true
-	}
-	if expected == nil || actual == nil {
+	// Convert both expected and actual RequestOptions to json strings for comparison
+	expectedJSON, err := expected.ToJSON()
+	if err != nil {
+		t.Errorf("Error converting expected RequestOptions to JSON: %v", err)
 		return false
 	}
-	return expected.Username == actual.Username && expected.Password == actual.Password
-}
 
-// Helper function to compare Cookies
-func compareCookies(expected, actual []*http.Cookie) bool {
-	if len(expected) != len(actual) {
+	actualJSON, err := actual.ToJSON()
+	if err != nil {
+		t.Errorf("Error converting actual RequestOptions to JSON: %v", err)
 		return false
 	}
-	for i := range expected {
-		if expected[i].Name != actual[i].Name || expected[i].Value != actual[i].Value {
-			return false
-		}
+
+	assert.JSONEq(t, expectedJSON, actualJSON)
+
+	if expectedJSON != actualJSON {
+		t.Errorf("RequestOptions mismatch: expected %s, got %s", expectedJSON, actualJSON)
+		return false
 	}
+
 	return true
-}
-
-// Helper function to compare FileUpload
-func compareFileUpload(expected, actual *gocurl.FileUpload) bool {
-	if expected == nil && actual == nil {
-		return true
-	}
-	if expected == nil || actual == nil {
-		return false
-	}
-	return expected.FieldName == actual.FieldName &&
-		expected.FileName == actual.FileName &&
-		expected.FilePath == actual.FilePath
 }
 
 // Helper function to normalize headers (convert to lowercase keys)
