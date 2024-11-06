@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/maniartech/gocurl/middlewares"
+	"github.com/maniartech/gocurl/options"
 	"github.com/maniartech/gocurl/parser"
 	"golang.org/x/net/http2"
 )
@@ -35,9 +37,9 @@ func Curl(ctx context.Context, command string) (*http.Response, string, error) {
 	return Process(ctx, opts)
 }
 
-// Process executes the curl command based on the provided RequestOptions
-// Process executes the curl command based on the provided RequestOptions
-func Process(ctx context.Context, opts *RequestOptions) (*http.Response, string, error) {
+// Process executes the curl command based on the provided options.RequestOptions
+// Process executes the curl command based on the provided options.RequestOptions
+func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response, string, error) {
 	// Validate options
 	if err := ValidateOptions(opts); err != nil {
 		return nil, "", err
@@ -87,7 +89,7 @@ func Process(ctx context.Context, opts *RequestOptions) (*http.Response, string,
 	return resp, bodyString, nil
 }
 
-func ValidateOptions(opts *RequestOptions) error {
+func ValidateOptions(opts *options.RequestOptions) error {
 	if opts.URL == "" {
 		return fmt.Errorf("URL is required")
 	}
@@ -95,7 +97,7 @@ func ValidateOptions(opts *RequestOptions) error {
 	return nil
 }
 
-func CreateHTTPClient(opts *RequestOptions) (*http.Client, error) {
+func CreateHTTPClient(opts *options.RequestOptions) (*http.Client, error) {
 	transport := &http.Transport{
 		TLSClientConfig:    opts.TLSConfig,
 		DisableCompression: !opts.Compress,
@@ -147,7 +149,7 @@ func CreateHTTPClient(opts *RequestOptions) (*http.Client, error) {
 	return client, nil
 }
 
-func CreateRequest(ctx context.Context, opts *RequestOptions) (*http.Request, error) {
+func CreateRequest(ctx context.Context, opts *options.RequestOptions) (*http.Request, error) {
 	method := opts.Method
 	if method == "" {
 		method = "GET"
@@ -251,7 +253,7 @@ func CreateRequest(ctx context.Context, opts *RequestOptions) (*http.Request, er
 	return req, nil
 }
 
-func ApplyMiddleware(req *http.Request, middleware []MiddlewareFunc) (*http.Request, error) {
+func ApplyMiddleware(req *http.Request, middleware []middlewares.MiddlewareFunc) (*http.Request, error) {
 	var err error
 	for _, mw := range middleware {
 		req, err = mw(req)
@@ -262,7 +264,7 @@ func ApplyMiddleware(req *http.Request, middleware []MiddlewareFunc) (*http.Requ
 	return req, nil
 }
 
-func ExecuteRequestWithRetries(client *http.Client, req *http.Request, opts *RequestOptions) (*http.Response, error) {
+func ExecuteRequestWithRetries(client *http.Client, req *http.Request, opts *options.RequestOptions) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 
@@ -296,7 +298,7 @@ func shouldRetry(statusCode int, retryOnHTTP []int) bool {
 	return false
 }
 
-func HandleOutput(body string, opts *RequestOptions) error {
+func HandleOutput(body string, opts *options.RequestOptions) error {
 	if opts.OutputFile != "" {
 		err := ioutil.WriteFile(opts.OutputFile, []byte(body), 0644)
 		if err != nil {

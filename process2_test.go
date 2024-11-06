@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/maniartech/gocurl"
+	"github.com/maniartech/gocurl/options"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +31,7 @@ func TestPostRequests(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			Method: "POST",
 			URL:    server.URL,
 			Form: url.Values{
@@ -73,10 +74,10 @@ func TestPostRequests(t *testing.T) {
 		err = tmpfile.Close()
 		require.NoError(t, err)
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			Method: "POST",
 			URL:    server.URL,
-			FileUpload: &gocurl.FileUpload{
+			FileUpload: &options.FileUpload{
 				FieldName: "file",
 				FileName:  "test.txt",
 				FilePath:  tmpfile.Name(),
@@ -101,7 +102,7 @@ func TestCustomTLSConfig(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: server.URL,
 			TLSConfig: &tls.Config{
 				InsecureSkipVerify: true, // Only for testing purposes
@@ -128,7 +129,7 @@ func TestRedirectBehavior(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL:             server.URL,
 			FollowRedirects: true,
 			MaxRedirects:    10,
@@ -152,7 +153,7 @@ func TestRedirectBehavior(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL:             server.URL,
 			FollowRedirects: false,
 		}
@@ -174,7 +175,7 @@ func TestHTTPVersions(t *testing.T) {
 		server.StartTLS()
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: server.URL,
 			TLSConfig: &tls.Config{
 				InsecureSkipVerify: true,
@@ -198,7 +199,7 @@ func TestCustomUserAgent(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL:       server.URL,
 			UserAgent: "GoCurl/1.0",
 		}
@@ -219,7 +220,7 @@ func TestTimeoutBehavior(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL:     server.URL,
 			Timeout: 1 * time.Second,
 		}
@@ -238,7 +239,7 @@ func TestEdgeCases(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: server.URL,
 		}
 
@@ -256,7 +257,7 @@ func TestEdgeCases(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL:     server.URL,
 			Timeout: 200 * time.Millisecond,
 		}
@@ -275,7 +276,7 @@ func TestEdgeCases(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: server.URL,
 		}
 
