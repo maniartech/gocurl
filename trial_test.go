@@ -8,18 +8,8 @@ import (
 )
 
 func TestTrial(t *testing.T) {
-	res, _, err := gocurl.Process(context.Background(), &gocurl.RequestOptions{
-		Method: "GET",
-		URL:    "https://example.com",
-		Headers: map[string][]string{
-			"Content-Type": {"application/json"},
-		},
-	})
+	res, _, _ := gocurl.Curl(context.Background(), "https://example.com")
 
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-
-	t.Logf("Response: %v", res)
+	t.Logf("Response: %#v", res)
 	// t.Logf("Body: %v", body)
 }

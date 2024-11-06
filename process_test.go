@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/maniartech/gocurl"
+	"github.com/maniartech/gocurl/middlewares"
+	"github.com/maniartech/gocurl/options"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +29,7 @@ func TestProcess(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: server.URL,
 		}
 
@@ -49,7 +51,7 @@ func TestProcess(t *testing.T) {
 		tempFile.Close()
 		defer os.Remove(tempFile.Name())
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL:        server.URL,
 			OutputFile: tempFile.Name(),
 		}
@@ -69,7 +71,7 @@ func TestProcess(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: server.URL,
 			Headers: http.Header{
 				"X-Test-Header": []string{"TestValue"},
@@ -100,9 +102,9 @@ func TestProcess(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: server.URL,
-			BasicAuth: &gocurl.BasicAuth{
+			BasicAuth: &options.BasicAuth{
 				Username: "testuser",
 				Password: "testpass",
 			},
@@ -126,7 +128,7 @@ func TestProcess(t *testing.T) {
 		tempFile.Close()
 		defer os.Remove(tempFile.Name())
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL:        server.URL,
 			OutputFile: tempFile.Name(),
 		}
@@ -151,9 +153,9 @@ func TestProcess(t *testing.T) {
 		}))
 		defer server.Close()
 
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: server.URL,
-			RetryConfig: &gocurl.RetryConfig{
+			RetryConfig: &options.RetryConfig{
 				MaxRetries:  3,
 				RetryDelay:  time.Millisecond,
 				RetryOnHTTP: []int{500},
@@ -173,7 +175,7 @@ func TestProcess(t *testing.T) {
 
 func TestValidateOptions(t *testing.T) {
 	t.Run("Valid options", func(t *testing.T) {
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: "https://example.com",
 		}
 		err := gocurl.ValidateOptions(opts)
@@ -181,7 +183,7 @@ func TestValidateOptions(t *testing.T) {
 	})
 
 	t.Run("Missing URL", func(t *testing.T) {
-		opts := &gocurl.RequestOptions{}
+		opts := &options.RequestOptions{}
 		err := gocurl.ValidateOptions(opts)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "URL is required")
@@ -192,14 +194,14 @@ func TestValidateOptions(t *testing.T) {
 
 func TestCreateHTTPClient(t *testing.T) {
 	t.Run("Default client", func(t *testing.T) {
-		opts := &gocurl.RequestOptions{}
+		opts := &options.RequestOptions{}
 		client, err := gocurl.CreateHTTPClient(opts)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
 	})
 
 	t.Run("Custom timeout", func(t *testing.T) {
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			Timeout: 5 * time.Second,
 		}
 		client, err := gocurl.CreateHTTPClient(opts)
@@ -212,7 +214,7 @@ func TestCreateHTTPClient(t *testing.T) {
 
 func TestCreateRequest(t *testing.T) {
 	t.Run("GET request", func(t *testing.T) {
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: "https://example.com",
 		}
 		req, err := gocurl.CreateRequest(context.Background(), opts)
@@ -222,7 +224,7 @@ func TestCreateRequest(t *testing.T) {
 	})
 
 	t.Run("POST request with body", func(t *testing.T) {
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			Method: "POST",
 			URL:    "https://example.com",
 			Body:   "test data",
@@ -235,7 +237,7 @@ func TestCreateRequest(t *testing.T) {
 	})
 
 	t.Run("Request with query parameters", func(t *testing.T) {
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: "https://example.com",
 			QueryParams: url.Values{
 				"key1": []string{"value1"},
@@ -249,7 +251,7 @@ func TestCreateRequest(t *testing.T) {
 	})
 
 	t.Run("Request with custom headers", func(t *testing.T) {
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: "https://example.com",
 			Headers: http.Header{
 				"X-Custom-Header": []string{"CustomValue"},
@@ -261,9 +263,9 @@ func TestCreateRequest(t *testing.T) {
 	})
 
 	t.Run("Request with basic auth", func(t *testing.T) {
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL: "https://example.com",
-			BasicAuth: &gocurl.BasicAuth{
+			BasicAuth: &options.BasicAuth{
 				Username: "user",
 				Password: "pass",
 			},
@@ -277,7 +279,7 @@ func TestCreateRequest(t *testing.T) {
 	})
 
 	t.Run("Request with bearer token", func(t *testing.T) {
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			URL:         "https://example.com",
 			BearerToken: "token123",
 		}
@@ -295,7 +297,7 @@ func TestApplyMiddleware(t *testing.T) {
 		}
 
 		req, _ := http.NewRequest("GET", "https://example.com", nil)
-		modifiedReq, err := gocurl.ApplyMiddleware(req, []gocurl.MiddlewareFunc{middleware})
+		modifiedReq, err := gocurl.ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware})
 
 		assert.NoError(t, err)
 		assert.Equal(t, "Applied", modifiedReq.Header.Get("X-Middleware"))
@@ -312,7 +314,7 @@ func TestApplyMiddleware(t *testing.T) {
 		}
 
 		req, _ := http.NewRequest("GET", "https://example.com", nil)
-		modifiedReq, err := gocurl.ApplyMiddleware(req, []gocurl.MiddlewareFunc{middleware1, middleware2})
+		modifiedReq, err := gocurl.ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware1, middleware2})
 
 		assert.NoError(t, err)
 		assert.Equal(t, "Applied1", modifiedReq.Header.Get("X-Middleware-1"))
@@ -325,7 +327,7 @@ func TestApplyMiddleware(t *testing.T) {
 		}
 
 		req, _ := http.NewRequest("GET", "https://example.com", nil)
-		_, err := gocurl.ApplyMiddleware(req, []gocurl.MiddlewareFunc{middleware})
+		_, err := gocurl.ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware})
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "middleware error")
@@ -341,7 +343,7 @@ func TestExecuteRequestWithRetries(t *testing.T) {
 
 		client := &http.Client{}
 		req, _ := http.NewRequest("GET", server.URL, nil)
-		opts := &gocurl.RequestOptions{}
+		opts := &options.RequestOptions{}
 
 		resp, err := gocurl.ExecuteRequestWithRetries(client, req, opts)
 
@@ -363,8 +365,8 @@ func TestExecuteRequestWithRetries(t *testing.T) {
 
 		client := &http.Client{}
 		req, _ := http.NewRequest("GET", server.URL, nil)
-		opts := &gocurl.RequestOptions{
-			RetryConfig: &gocurl.RetryConfig{
+		opts := &options.RequestOptions{
+			RetryConfig: &options.RetryConfig{
 				MaxRetries:  3,
 				RetryDelay:  time.Millisecond,
 				RetryOnHTTP: []int{500},
@@ -386,8 +388,8 @@ func TestExecuteRequestWithRetries(t *testing.T) {
 
 		client := &http.Client{}
 		req, _ := http.NewRequest("GET", server.URL, nil)
-		opts := &gocurl.RequestOptions{
-			RetryConfig: &gocurl.RetryConfig{
+		opts := &options.RequestOptions{
+			RetryConfig: &options.RetryConfig{
 				MaxRetries:  2,
 				RetryDelay:  time.Millisecond,
 				RetryOnHTTP: []int{500},
@@ -411,7 +413,7 @@ func TestHandleOutput(t *testing.T) {
 		resp := &http.Response{
 			Body: ioutil.NopCloser(strings.NewReader("Test output")),
 		}
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			OutputFile: tempFile.Name(),
 		}
 
@@ -434,7 +436,7 @@ func TestHandleOutput(t *testing.T) {
 		resp := &http.Response{
 			Body: ioutil.NopCloser(strings.NewReader("Test output")),
 		}
-		opts := &gocurl.RequestOptions{}
+		opts := &options.RequestOptions{}
 
 		body, err := ioutil.ReadAll(resp.Body)
 		assert.NoError(t, err)
@@ -458,7 +460,7 @@ func TestHandleOutput(t *testing.T) {
 		resp := &http.Response{
 			Body: ioutil.NopCloser(strings.NewReader("Test output")),
 		}
-		opts := &gocurl.RequestOptions{
+		opts := &options.RequestOptions{
 			Silent: true,
 		}
 
