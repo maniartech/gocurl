@@ -12,10 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/maniartech/gocurl/options"
 	"github.com/maniartech/gocurl/parser"
 )
 
-func ArgsToOptions(args []string) (*RequestOptions, error) {
+func ArgsToOptions(args []string) (*options.RequestOptions, error) {
 	tokens := []parser.Token{}
 	for _, arg := range args {
 		tokens = append(tokens, parser.Token{Type: parser.TokenValue, Value: arg})
@@ -23,12 +24,12 @@ func ArgsToOptions(args []string) (*RequestOptions, error) {
 	return convertTokensToRequestOptions(tokens)
 }
 
-// ConvertTokensToRequestOptions converts the tokenized cURL command into RequestOptions.
-func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, error) {
-	options := NewRequestOptions()
+// ConvertTokensToRequestOptions converts the tokenized cURL command into options.RequestOptions.
+func convertTokensToRequestOptions(tokens []parser.Token) (*options.RequestOptions, error) {
+	o := options.NewRequestOptions()
 
 	// Default method is GET
-	options.Method = "GET"
+	o.Method = "GET"
 
 	// Initialize slices for accumulating multiple headers and data fields
 	dataFields := []string{}
@@ -59,15 +60,15 @@ func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, erro
 				if i >= tokenLen {
 					return nil, fmt.Errorf("expected method after %s", token)
 				}
-				options.Method = token
+				o.Method = token
 			case "-d", "--data", "--data-raw", "--data-binary":
 				i++
 				if i >= tokenLen {
 					return nil, fmt.Errorf("expected data after %s", token)
 				}
 				dataFields = append(dataFields, token)
-				if options.Method == "GET" {
-					options.Method = "POST" // cURL defaults to POST when data is provided
+				if o.Method == "GET" {
+					o.Method = "POST" // cURL defaults to POST when data is provided
 				}
 			case "-H", "--header":
 				i++
@@ -81,7 +82,7 @@ func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, erro
 				}
 				key := strings.TrimSpace(headerLine[:idx])
 				value := strings.TrimSpace(headerLine[idx+1:])
-				options.Headers.Add(key, value)
+				o.Headers.Add(key, value)
 			case "-F", "--form":
 				i++
 				if i >= tokenLen {
@@ -102,7 +103,7 @@ func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, erro
 					if lastSlash := strings.LastIndex(filePath, "/"); lastSlash != -1 {
 						fileName = filePath[lastSlash+1:]
 					}
-					options.FileUpload = &FileUpload{
+					o.FileUpload = &options.FileUpload{
 						FieldName: key,
 						FileName:  fileName,
 						FilePath:  filePath,
@@ -110,8 +111,8 @@ func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, erro
 				} else {
 					formFields.Add(key, value)
 				}
-				if options.Method == "GET" {
-					options.Method = "POST"
+				if o.Method == "GET" {
+					o.Method = "POST"
 				}
 			case "-u", "--user":
 				i++
@@ -123,7 +124,7 @@ func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, erro
 				if len(parts) != 2 {
 					return nil, fmt.Errorf("invalid credentials format: %s", creds)
 				}
-				options.SetBasicAuth(parts[0], parts[1])
+				o.SetBasicAuth(parts[0], parts[1])
 			case "-b", "--cookie":
 				i++
 				if i >= tokenLen {
@@ -133,14 +134,14 @@ func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, erro
 				if strings.Contains(cookieData, "=") {
 					// Inline cookies
 					cookies := parseCookies(cookieData)
-					options.Cookies = append(options.Cookies, cookies...)
+					o.Cookies = append(o.Cookies, cookies...)
 				} else {
 					// Cookie file
 					fileCookies, err := readCookiesFromFile(cookieData)
 					if err != nil {
 						return nil, fmt.Errorf("error reading cookies from file: %v", err)
 					}
-					options.Cookies = append(options.Cookies, fileCookies...)
+					o.Cookies = append(o.Cookies, fileCookies...)
 				}
 			case "-c", "--cookie-jar":
 				i++
@@ -148,55 +149,55 @@ func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, erro
 					return nil, fmt.Errorf("expected cookie jar file after %s", token)
 				}
 				// For simplicity, we won't implement cookie jar file writing here
-				// You can set options.CookieJar or handle it as needed
+				// You can set o.CookieJar or handle it as needed
 			case "-o", "--output":
 				i++
 				if i >= tokenLen {
 					return nil, fmt.Errorf("expected output file after %s", token)
 				}
-				options.OutputFile = token
+				o.OutputFile = token
 			case "--compressed":
-				options.Compress = true
+				o.Compress = true
 			case "-A", "--user-agent":
 				i++
 				if i >= tokenLen {
 					return nil, fmt.Errorf("expected user-agent after %s", token)
 				}
-				options.UserAgent = token
+				o.UserAgent = token
 			case "-e", "--referer":
 				i++
 				if i >= tokenLen {
 					return nil, fmt.Errorf("expected referer after %s", token)
 				}
-				options.Referer = token
+				o.Referer = token
 			case "--cert":
 				i++
 				if i >= tokenLen {
 					return nil, fmt.Errorf("expected certificate file after %s", token)
 				}
-				options.CertFile = token
+				o.CertFile = token
 			case "--key":
 				i++
 				if i >= tokenLen {
 					return nil, fmt.Errorf("expected key file after %s", token)
 				}
-				options.KeyFile = token
+				o.KeyFile = token
 			case "--cacert":
 				i++
 				if i >= tokenLen {
 					return nil, fmt.Errorf("expected CA certificate file after %s", token)
 				}
-				options.CAFile = token
+				o.CAFile = token
 			case "--http2":
-				options.HTTP2 = true
+				o.HTTP2 = true
 			case "--http2-only":
-				options.HTTP2Only = true
+				o.HTTP2Only = true
 			case "-x", "--proxy":
 				i++
 				if i >= tokenLen {
 					return nil, fmt.Errorf("expected proxy after %s", token)
 				}
-				options.Proxy = token
+				o.Proxy = token
 			case "--max-time":
 				i++
 				if i >= tokenLen {
@@ -206,11 +207,11 @@ func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, erro
 				if err != nil {
 					return nil, err
 				}
-				options.Timeout = timeout
+				o.Timeout = timeout
 			case "-k", "--insecure":
-				options.Insecure = true
+				o.Insecure = true
 			case "-L", "--location":
-				options.FollowRedirects = true
+				o.FollowRedirects = true
 			case "--max-redirs":
 				i++
 				if i >= tokenLen {
@@ -220,19 +221,19 @@ func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, erro
 				if err != nil {
 					return nil, fmt.Errorf("invalid max redirects: %v", err)
 				}
-				options.MaxRedirects = maxRedirs
+				o.MaxRedirects = maxRedirs
 			case "-v", "--verbose":
-				options.Verbose = true
+				o.Verbose = true
 			case "-s", "--silent":
-				options.Silent = true
+				o.Silent = true
 			default:
 				return nil, fmt.Errorf("unknown flag: %s", token)
 			}
 			i++
 		} else {
 			// Handle positional arguments (e.g., URL)
-			if options.URL == "" && strings.HasPrefix(token, "http") {
-				options.URL = token
+			if o.URL == "" && strings.HasPrefix(token, "http") {
+				o.URL = token
 				i++
 			} else {
 				// Handle unexpected tokens
@@ -242,53 +243,53 @@ func convertTokensToRequestOptions(tokens []parser.Token) (*RequestOptions, erro
 	}
 
 	// Ensure URL is provided
-	if options.URL == "" {
+	if o.URL == "" {
 		return nil, fmt.Errorf("no URL provided")
 	}
 
 	// Parse the URL and extract query parameters
-	parsedURL, err := url.Parse(options.URL)
+	parsedURL, err := url.Parse(o.URL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
-	options.QueryParams = parsedURL.Query()
-	options.URL = parsedURL.Scheme + "://" + parsedURL.Host + parsedURL.Path
+	o.QueryParams = parsedURL.Query()
+	o.URL = parsedURL.Scheme + "://" + parsedURL.Host + parsedURL.Path
 
 	// Combine data fields if any
 	if len(dataFields) > 0 {
-		options.Body = strings.Join(dataFields, "&")
+		o.Body = strings.Join(dataFields, "&")
 	}
 
 	// Set form data if any
 	if len(formFields) > 0 {
-		options.Form = formFields
+		o.Form = formFields
 	}
 
 	// Handle Compression
-	if options.Compress {
-		options.Headers.Set("Accept-Encoding", "deflate, gzip")
+	if o.Compress {
+		o.Headers.Set("Accept-Encoding", "deflate, gzip")
 	}
 
 	// Set User-Agent
-	if options.UserAgent != "" {
-		options.Headers.Set("User-Agent", options.UserAgent)
+	if o.UserAgent != "" {
+		o.Headers.Set("User-Agent", o.UserAgent)
 	}
 
 	// Set Referer
-	if options.Referer != "" {
-		options.Headers.Set("Referer", options.Referer)
+	if o.Referer != "" {
+		o.Headers.Set("Referer", o.Referer)
 	}
 
 	// Handle TLS Config if CertFile, KeyFile, or CAFile are provided
-	if options.CertFile != "" || options.KeyFile != "" || options.CAFile != "" || options.Insecure {
-		tlsConfig, err := createTLSConfig(options)
+	if o.CertFile != "" || o.KeyFile != "" || o.CAFile != "" || o.Insecure {
+		tlsConfig, err := createTLSConfig(o)
 		if err != nil {
 			return nil, fmt.Errorf("error creating TLS config: %v", err)
 		}
-		options.TLSConfig = tlsConfig
+		o.TLSConfig = tlsConfig
 	}
 
-	return options, nil
+	return o, nil
 }
 
 // Helper function to expand environment variables within a string
@@ -325,21 +326,21 @@ func readCookiesFromFile(filename string) ([]*http.Cookie, error) {
 }
 
 // Helper function to create TLS configuration
-func createTLSConfig(options *RequestOptions) (*tls.Config, error) {
+func createTLSConfig(o *options.RequestOptions) (*tls.Config, error) {
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: options.Insecure,
+		InsecureSkipVerify: o.Insecure,
 	}
 
-	if options.CertFile != "" && options.KeyFile != "" {
-		cert, err := tls.LoadX509KeyPair(options.CertFile, options.KeyFile)
+	if o.CertFile != "" && o.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(o.CertFile, o.KeyFile)
 		if err != nil {
 			return nil, err
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
 	}
 
-	if options.CAFile != "" {
-		caCert, err := ioutil.ReadFile(options.CAFile)
+	if o.CAFile != "" {
+		caCert, err := ioutil.ReadFile(o.CAFile)
 		if err != nil {
 			return nil, err
 		}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/maniartech/gocurl"
+	"github.com/maniartech/gocurl/options"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,7 +17,7 @@ func TestBasicRequests(t *testing.T) {
 	tests := []struct {
 		name        string
 		tokens      []string
-		expected    *gocurl.RequestOptions
+		expected    *options.RequestOptions
 		expectError bool
 	}{
 		{
@@ -25,7 +26,7 @@ func TestBasicRequests(t *testing.T) {
 				"curl",
 				"https://api.example.com/data",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method:      "GET",
 				URL:         "https://api.example.com/data",
 				QueryParams: url.Values{},
@@ -39,7 +40,7 @@ func TestBasicRequests(t *testing.T) {
 				"-d", "key=value",
 				"https://api.example.com/data",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method:      "POST",
 				URL:         "https://api.example.com/data",
 				Body:        "key=value",
@@ -54,7 +55,7 @@ func TestHeadersAndAuth(t *testing.T) {
 	tests := []struct {
 		name        string
 		tokens      []string
-		expected    *gocurl.RequestOptions
+		expected    *options.RequestOptions
 		expectError bool
 	}{
 		{
@@ -65,7 +66,7 @@ func TestHeadersAndAuth(t *testing.T) {
 				"-H", "Authorization: Bearer dummy_token",
 				"https://api.example.com/data",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method: "GET",
 				URL:    "https://api.example.com/data",
 				Headers: http.Header{
@@ -81,10 +82,10 @@ func TestHeadersAndAuth(t *testing.T) {
 				"-u", "username:password",
 				"https://api.example.com/data",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method: "GET",
 				URL:    "https://api.example.com/data",
-				BasicAuth: &gocurl.BasicAuth{
+				BasicAuth: &options.BasicAuth{
 					Username: "username",
 					Password: "password",
 				},
@@ -99,7 +100,7 @@ func TestFormAndFileUploads(t *testing.T) {
 	tests := []struct {
 		name        string
 		tokens      []string
-		expected    *gocurl.RequestOptions
+		expected    *options.RequestOptions
 		expectError bool
 	}{
 		{
@@ -110,7 +111,7 @@ func TestFormAndFileUploads(t *testing.T) {
 				"-F", "field2=value2",
 				"https://api.example.com/data",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method: "POST",
 				URL:    "https://api.example.com/data",
 				Form: url.Values{
@@ -127,10 +128,10 @@ func TestFormAndFileUploads(t *testing.T) {
 				"-F", "file=@/path/to/file.txt",
 				"https://api.example.com/upload",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method: "POST",
 				URL:    "https://api.example.com/upload",
-				FileUpload: &gocurl.FileUpload{
+				FileUpload: &options.FileUpload{
 					FieldName: "file",
 					FileName:  "file.txt",
 					FilePath:  "/path/to/file.txt",
@@ -146,7 +147,7 @@ func TestCookiesAndProxy(t *testing.T) {
 	tests := []struct {
 		name        string
 		tokens      []string
-		expected    *gocurl.RequestOptions
+		expected    *options.RequestOptions
 		expectError bool
 	}{
 		{
@@ -156,7 +157,7 @@ func TestCookiesAndProxy(t *testing.T) {
 				"-b", "session=abcd1234; theme=light",
 				"https://api.example.com/data",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method: "GET",
 				URL:    "https://api.example.com/data",
 				Cookies: []*http.Cookie{
@@ -173,7 +174,7 @@ func TestCookiesAndProxy(t *testing.T) {
 				"-x", "http://proxy.example.com:8080",
 				"https://api.example.com/data",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method:  "GET",
 				URL:     "https://api.example.com/data",
 				Proxy:   "http://proxy.example.com:8080",
@@ -188,7 +189,7 @@ func TestTimeoutAndSSL(t *testing.T) {
 	tests := []struct {
 		name        string
 		tokens      []string
-		expected    *gocurl.RequestOptions
+		expected    *options.RequestOptions
 		expectError bool
 	}{
 		{
@@ -198,7 +199,7 @@ func TestTimeoutAndSSL(t *testing.T) {
 				"--max-time", "30",
 				"https://api.example.com/data",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method:  "GET",
 				URL:     "https://api.example.com/data",
 				Timeout: 30 * time.Second,
@@ -214,7 +215,7 @@ func TestTimeoutAndSSL(t *testing.T) {
 				"--cacert", "ca.crt",
 				"https://api.example.com/data",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method:   "GET",
 				URL:      "https://api.example.com/data",
 				CertFile: "client.crt",
@@ -231,7 +232,7 @@ func TestErrorCases(t *testing.T) {
 	tests := []struct {
 		name        string
 		tokens      []string
-		expected    *gocurl.RequestOptions
+		expected    *options.RequestOptions
 		expectError bool
 	}{
 		{
@@ -281,7 +282,7 @@ func TestEnvironmentVariables(t *testing.T) {
 	tests := []struct {
 		name        string
 		tokens      []string
-		expected    *gocurl.RequestOptions
+		expected    *options.RequestOptions
 		expectError bool
 	}{
 		{
@@ -290,7 +291,7 @@ func TestEnvironmentVariables(t *testing.T) {
 				"curl",
 				"$API_URL",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method:  "GET",
 				URL:     "https://api.example.com/data",
 				Headers: http.Header{},
@@ -303,7 +304,7 @@ func TestEnvironmentVariables(t *testing.T) {
 				"-d", "token=$TOKEN",
 				"https://api.example.com/data",
 			},
-			expected: &gocurl.RequestOptions{
+			expected: &options.RequestOptions{
 				Method: "POST",
 				URL:    "https://api.example.com/data",
 				Body:   "token=dummy_token",
@@ -320,7 +321,7 @@ func TestEnvironmentVariables(t *testing.T) {
 func runTests(t *testing.T, tests []struct {
 	name        string
 	tokens      []string
-	expected    *gocurl.RequestOptions
+	expected    *options.RequestOptions
 	expectError bool
 }) {
 	for _, tt := range tests {
@@ -337,7 +338,7 @@ func runTests(t *testing.T, tests []struct {
 	}
 }
 
-func compareRequestOptions(expected, actual *gocurl.RequestOptions, t *testing.T) bool {
+func compareRequestOptions(expected, actual *options.RequestOptions, t *testing.T) bool {
 
 	normalizeHeaders(expected.Headers)
 	normalizeHeaders(actual.Headers)
