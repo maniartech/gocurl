@@ -26,7 +26,7 @@ func ArgsToOptions(args []string) (*options.RequestOptions, error) {
 
 // ConvertTokensToRequestOptions converts the tokenized cURL command into options.RequestOptions.
 func convertTokensToRequestOptions(tokens []parser.Token) (*options.RequestOptions, error) {
-	o := options.NewRequestOptions()
+	o := options.NewRequestOptions("https://api.example.com/data")
 
 	// Default method is GET
 	o.Method = "GET"
