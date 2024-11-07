@@ -1,6 +1,6 @@
 // internal/parser/tokenizer.go
 
-package parser
+package tokenizer
 
 import (
 	"fmt"
