@@ -13,19 +13,19 @@ import (
 	"time"
 
 	"github.com/maniartech/gocurl/options"
-	"github.com/maniartech/gocurl/parser"
+	"github.com/maniartech/gocurl/tokenizer"
 )
 
 func ArgsToOptions(args []string) (*options.RequestOptions, error) {
-	tokens := []parser.Token{}
+	tokens := []tokenizer.Token{}
 	for _, arg := range args {
-		tokens = append(tokens, parser.Token{Type: parser.TokenValue, Value: arg})
+		tokens = append(tokens, tokenizer.Token{Type: tokenizer.TokenValue, Value: arg})
 	}
 	return convertTokensToRequestOptions(tokens)
 }
 
 // ConvertTokensToRequestOptions converts the tokenized cURL command into options.RequestOptions.
-func convertTokensToRequestOptions(tokens []parser.Token) (*options.RequestOptions, error) {
+func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOptions, error) {
 	o := options.NewRequestOptions("https://api.example.com/data")
 
 	// Default method is GET
