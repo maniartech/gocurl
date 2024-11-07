@@ -15,12 +15,12 @@ import (
 
 	"github.com/maniartech/gocurl/middlewares"
 	"github.com/maniartech/gocurl/options"
-	"github.com/maniartech/gocurl/parser"
+	"github.com/maniartech/gocurl/tokenizer"
 	"golang.org/x/net/http2"
 )
 
 func Curl(ctx context.Context, command string) (*http.Response, string, error) {
-	tokenizer := parser.NewTokenizer()
+	tokenizer := tokenizer.NewTokenizer()
 
 	err := tokenizer.Tokenize(command)
 	if err != nil {
