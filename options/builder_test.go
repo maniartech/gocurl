@@ -161,3 +161,106 @@ func TestRequestOptionsBuilder(t *testing.T) {
 		t.Errorf("expected verbose to be true")
 	}
 }
+
+func TestScenarioOrientedMethods(t *testing.T) {
+	// Test POST method
+	builder := options.NewRequestOptionsBuilder()
+	requestOptions := builder.POST("https://example.com", "{\"key\":\"value\"}", http.Header{"Content-Type": []string{"application/json"}}).Build()
+
+	if requestOptions.Method != "POST" {
+		t.Errorf("expected method to be POST, got %s", requestOptions.Method)
+	}
+
+	if requestOptions.URL != "https://example.com" {
+		t.Errorf("expected URL to be https://example.com, got %s", requestOptions.URL)
+	}
+
+	if requestOptions.Body != "{\"key\":\"value\"}" {
+		t.Errorf("expected body to be {\"key\":\"value\"}, got %s", requestOptions.Body)
+	}
+
+	if requestOptions.Headers.Get("Content-Type") != "application/json" {
+		t.Errorf("expected Content-Type header to be application/json, got %s", requestOptions.Headers.Get("Content-Type"))
+	}
+
+	// Test GET method
+	builder = options.NewRequestOptionsBuilder()
+	requestOptions = builder.GET("https://example.com", http.Header{"Accept": []string{"application/json"}}).Build()
+
+	if requestOptions.Method != "GET" {
+		t.Errorf("expected method to be GET, got %s", requestOptions.Method)
+	}
+
+	if requestOptions.URL != "https://example.com" {
+		t.Errorf("expected URL to be https://example.com, got %s", requestOptions.URL)
+	}
+
+	if requestOptions.Headers.Get("Accept") != "application/json" {
+		t.Errorf("expected Accept header to be application/json, got %s", requestOptions.Headers.Get("Accept"))
+	}
+
+	// Test PUT method
+	builder = options.NewRequestOptionsBuilder()
+	requestOptions = builder.PUT("https://example.com", "{\"key\":\"value\"}", http.Header{"Content-Type": []string{"application/json"}}).Build()
+
+	if requestOptions.Method != "PUT" {
+		t.Errorf("expected method to be PUT, got %s", requestOptions.Method)
+	}
+
+	if requestOptions.URL != "https://example.com" {
+		t.Errorf("expected URL to be https://example.com, got %s", requestOptions.URL)
+	}
+
+	if requestOptions.Body != "{\"key\":\"value\"}" {
+		t.Errorf("expected body to be {\"key\":\"value\"}, got %s", requestOptions.Body)
+	}
+
+	if requestOptions.Headers.Get("Content-Type") != "application/json" {
+		t.Errorf("expected Content-Type header to be application/json, got %s", requestOptions.Headers.Get("Content-Type"))
+	}
+
+	// Test DELETE method
+	builder = options.NewRequestOptionsBuilder()
+	requestOptions = builder.DELETE("https://example.com", http.Header{"Accept": []string{"application/json"}}).Build()
+
+	if requestOptions.Method != "DELETE" {
+		t.Errorf("expected method to be DELETE, got %s", requestOptions.Method)
+	}
+
+	if requestOptions.URL != "https://example.com" {
+		t.Errorf("expected URL to be https://example.com, got %s", requestOptions.URL)
+	}
+
+	if requestOptions.Headers.Get("Accept") != "application/json" {
+		t.Errorf("expected Accept header to be application/json, got %s", requestOptions.Headers.Get("Accept"))
+	}
+
+	// Test PATCH method
+	builder = options.NewRequestOptionsBuilder()
+	requestOptions = builder.PATCH("https://example.com", "{\"key\":\"value\"}", http.Header{"Content-Type": []string{"application/json"}}).Build()
+
+	if requestOptions.Method != "PATCH" {
+		t.Errorf("expected method to be PATCH, got %s", requestOptions.Method)
+	}
+
+	if requestOptions.URL != "https://example.com" {
+		t.Errorf("expected URL to be https://example.com, got %s", requestOptions.URL)
+	}
+
+	if requestOptions.Body != "{\"key\":\"value\"}" {
+		t.Errorf("expected body to be {\"key\":\"value\"}, got %s", requestOptions.Body)
+	}
+
+	if requestOptions.Headers.Get("Content-Type") != "application/json" {
+		t.Errorf("expected Content-Type header to be application/json, got %s", requestOptions.Headers.Get("Content-Type"))
+	}
+}
+
+func TestSetHeaders(t *testing.T) {
+	builder := options.NewRequestOptionsBuilder()
+	requestOptions := builder.SetHeaders(http.Header{"Accept": []string{"application/json"}}).Build()
+
+	if requestOptions.Headers.Get("Accept") != "application/json" {
+		t.Errorf("expected Accept header to be application/json, got %s", requestOptions.Headers.Get("Accept"))
+	}
+}
