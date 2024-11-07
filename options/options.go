@@ -78,6 +78,20 @@ type RequestOptions struct {
 	Metrics           *RequestMetrics              `json:"metrics,omitempty"`
 }
 
+// NewRequestOptions creates a new RequestOptions with default values aligned to cURL's defaults.
+func NewRequestOptions(url string) *RequestOptions {
+	return &RequestOptions{
+		URL: url,
+		// Headers:         make(http.Header),
+		// Form:            make(url.Values),
+		// QueryParams:     make(url.Values),
+		QueryParams:     nil,
+		FollowRedirects: false, // cURL does not follow redirects by default
+		MaxRedirects:    0,     // No redirects followed unless -L is used
+		Compress:        false, // Compression not enabled by default
+	}
+}
+
 // ToJSON marshals the RequestOptions struct to JSON format.
 func (ro *RequestOptions) ToJSON() (string, error) {
 	jsonBytes, err := json.Marshal(ro)
@@ -116,19 +130,6 @@ type RequestMetrics struct {
 	Duration     time.Duration `json:"duration"`
 	RetryCount   int           `json:"retry_count"`
 	ResponseSize int64         `json:"response_size"`
-}
-
-// NewRequestOptions creates a new RequestOptions with default values aligned to cURL's defaults.
-func NewRequestOptions() *RequestOptions {
-	return &RequestOptions{
-		// Headers:         make(http.Header),
-		// Form:            make(url.Values),
-		// QueryParams:     make(url.Values),
-		QueryParams:     nil,
-		FollowRedirects: false, // cURL does not follow redirects by default
-		MaxRedirects:    0,     // No redirects followed unless -L is used
-		Compress:        false, // Compression not enabled by default
-	}
 }
 
 // Clone creates a deep copy of RequestOptions.
