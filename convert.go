@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,7 +25,12 @@ func ArgsToOptions(args []string) (*options.RequestOptions, error) {
 
 // ConvertTokensToRequestOptions converts the tokenized cURL command into options.RequestOptions.
 func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOptions, error) {
-	o := options.NewRequestOptions("https://api.example.com/data")
+	o := options.NewRequestOptions("")
+
+	// Initialize all maps and slices to prevent nil pointer panics
+	o.Headers = make(http.Header)
+	o.Form = make(url.Values)
+	o.QueryParams = make(url.Values)
 
 	// Default method is GET
 	o.Method = "GET"
@@ -36,46 +40,50 @@ func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOp
 	formFields := url.Values{}
 
 	// Expand environment variables in tokens
-	expandedTokens := []string{}
+	expandedTokens := []tokenizer.Token{}
 	for _, token := range tokens {
-		expandedTokens = append(expandedTokens, expandVariables(token.Value))
+		expandedTokens = append(expandedTokens, tokenizer.Token{
+			Type:  token.Type,
+			Value: expandVariables(token.Value),
+		})
 	}
-	// tokens = expandedTokens
+
 	tokenLen := len(expandedTokens)
 
 	i := 0
 	for i < tokenLen {
 		token := expandedTokens[i]
 
-		if i == 0 && token == "curl" {
+		if i == 0 && token.Value == "curl" {
 			i++
 			continue
 		}
 
 		// Handle flags
-		if strings.HasPrefix(token, "-") {
-			switch token {
+		if strings.HasPrefix(token.Value, "-") {
+			flagName := token.Value
+			switch flagName {
 			case "-X", "--request":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected method after %s", token)
+					return nil, fmt.Errorf("expected method after %s", flagName)
 				}
-				o.Method = token
+				o.Method = expandedTokens[i].Value
 			case "-d", "--data", "--data-raw", "--data-binary":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected data after %s", token)
+					return nil, fmt.Errorf("expected data after %s", flagName)
 				}
-				dataFields = append(dataFields, token)
+				dataFields = append(dataFields, expandedTokens[i].Value)
 				if o.Method == "GET" {
 					o.Method = "POST" // cURL defaults to POST when data is provided
 				}
 			case "-H", "--header":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected header after %s", token)
+					return nil, fmt.Errorf("expected header after %s", flagName)
 				}
-				headerLine := token
+				headerLine := expandedTokens[i].Value
 				idx := strings.Index(headerLine, ":")
 				if idx <= 0 {
 					return nil, fmt.Errorf("invalid header format: %s", headerLine)
@@ -86,9 +94,9 @@ func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOp
 			case "-F", "--form":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected form data after %s", token)
+					return nil, fmt.Errorf("expected form data after %s", flagName)
 				}
-				formData := token
+				formData := expandedTokens[i].Value
 				idx := strings.Index(formData, "=")
 				if idx <= 0 {
 					return nil, fmt.Errorf("invalid form data: %s", formData)
@@ -117,9 +125,9 @@ func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOp
 			case "-u", "--user":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected credentials after %s", token)
+					return nil, fmt.Errorf("expected credentials after %s", flagName)
 				}
-				creds := token
+				creds := expandedTokens[i].Value
 				parts := strings.SplitN(creds, ":", 2)
 				if len(parts) != 2 {
 					return nil, fmt.Errorf("invalid credentials format: %s", creds)
@@ -128,9 +136,9 @@ func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOp
 			case "-b", "--cookie":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected cookie data after %s", token)
+					return nil, fmt.Errorf("expected cookie data after %s", flagName)
 				}
-				cookieData := token
+				cookieData := expandedTokens[i].Value
 				if strings.Contains(cookieData, "=") {
 					// Inline cookies
 					cookies := parseCookies(cookieData)
@@ -146,48 +154,48 @@ func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOp
 			case "-c", "--cookie-jar":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected cookie jar file after %s", token)
+					return nil, fmt.Errorf("expected cookie jar file after %s", flagName)
 				}
 				// For simplicity, we won't implement cookie jar file writing here
 				// You can set o.CookieJar or handle it as needed
 			case "-o", "--output":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected output file after %s", token)
+					return nil, fmt.Errorf("expected output file after %s", flagName)
 				}
-				o.OutputFile = token
+				o.OutputFile = expandedTokens[i].Value
 			case "--compressed":
 				o.Compress = true
 			case "-A", "--user-agent":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected user-agent after %s", token)
+					return nil, fmt.Errorf("expected user-agent after %s", flagName)
 				}
-				o.UserAgent = token
+				o.UserAgent = expandedTokens[i].Value
 			case "-e", "--referer":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected referer after %s", token)
+					return nil, fmt.Errorf("expected referer after %s", flagName)
 				}
-				o.Referer = token
+				o.Referer = expandedTokens[i].Value
 			case "--cert":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected certificate file after %s", token)
+					return nil, fmt.Errorf("expected certificate file after %s", flagName)
 				}
-				o.CertFile = token
+				o.CertFile = expandedTokens[i].Value
 			case "--key":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected key file after %s", token)
+					return nil, fmt.Errorf("expected key file after %s", flagName)
 				}
-				o.KeyFile = token
+				o.KeyFile = expandedTokens[i].Value
 			case "--cacert":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected CA certificate file after %s", token)
+					return nil, fmt.Errorf("expected CA certificate file after %s", flagName)
 				}
-				o.CAFile = token
+				o.CAFile = expandedTokens[i].Value
 			case "--http2":
 				o.HTTP2 = true
 			case "--http2-only":
@@ -195,15 +203,15 @@ func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOp
 			case "-x", "--proxy":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected proxy after %s", token)
+					return nil, fmt.Errorf("expected proxy after %s", flagName)
 				}
-				o.Proxy = token
+				o.Proxy = expandedTokens[i].Value
 			case "--max-time":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected time after %s", token)
+					return nil, fmt.Errorf("expected time after %s", flagName)
 				}
-				timeout, err := time.ParseDuration(token + "s")
+				timeout, err := time.ParseDuration(expandedTokens[i].Value + "s")
 				if err != nil {
 					return nil, err
 				}
@@ -215,9 +223,9 @@ func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOp
 			case "--max-redirs":
 				i++
 				if i >= tokenLen {
-					return nil, fmt.Errorf("expected number after %s", token)
+					return nil, fmt.Errorf("expected number after %s", flagName)
 				}
-				maxRedirs, err := parseInt(token)
+				maxRedirs, err := parseInt(expandedTokens[i].Value)
 				if err != nil {
 					return nil, fmt.Errorf("invalid max redirects: %v", err)
 				}
@@ -227,17 +235,17 @@ func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOp
 			case "-s", "--silent":
 				o.Silent = true
 			default:
-				return nil, fmt.Errorf("unknown flag: %s", token)
+				return nil, fmt.Errorf("unknown flag: %s", flagName)
 			}
 			i++
 		} else {
 			// Handle positional arguments (e.g., URL)
-			if o.URL == "" && strings.HasPrefix(token, "http") {
-				o.URL = token
+			if o.URL == "" && strings.HasPrefix(token.Value, "http") {
+				o.URL = token.Value
 				i++
 			} else {
 				// Handle unexpected tokens
-				return nil, fmt.Errorf("unexpected token: %s", token)
+				return nil, fmt.Errorf("unexpected token: %s", token.Value)
 			}
 		}
 	}
@@ -318,7 +326,7 @@ func parseCookies(cookieStr string) []*http.Cookie {
 
 // Helper function to read cookies from a file
 func readCookiesFromFile(filename string) ([]*http.Cookie, error) {
-	content, err := ioutil.ReadFile(filename)
+	content, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +348,7 @@ func createTLSConfig(o *options.RequestOptions) (*tls.Config, error) {
 	}
 
 	if o.CAFile != "" {
-		caCert, err := ioutil.ReadFile(o.CAFile)
+		caCert, err := os.ReadFile(o.CAFile)
 		if err != nil {
 			return nil, err
 		}
