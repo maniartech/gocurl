@@ -333,6 +333,10 @@ func runTests(t *testing.T, tests []struct {
 			}
 
 			assert.NoError(t, err)
+			if options == nil {
+				t.Errorf("Expected options to be non-nil")
+				return
+			}
 			compareRequestOptions(tt.expected, options, t)
 		})
 	}

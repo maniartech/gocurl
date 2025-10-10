@@ -16,10 +16,10 @@ type RequestOptions struct {
 	// HTTP request basics
 	Method      string      `json:"method"`
 	URL         string      `json:"url"`
-	Headers     http.Header `json:"headers"`
+	Headers     http.Header `json:"headers,omitempty"`
 	Body        string      `json:"body"`
-	Form        url.Values  `json:"form"`
-	QueryParams url.Values  `json:"query_params"`
+	Form        url.Values  `json:"form,omitempty"`
+	QueryParams url.Values  `json:"query_params,omitempty"`
 
 	// Authentication
 	BasicAuth   *BasicAuth `json:"basic_auth,omitempty"`
