@@ -26,7 +26,7 @@ func TestConcurrentRequestConstruction(t *testing.T) {
 					"-d", `{"key":"value"}`,
 					"https://example.com/test",
 				}
-				
+
 				_, err := gocurl.ArgsToOptions(args)
 				if err != nil {
 					errors <- err

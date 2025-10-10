@@ -14,10 +14,10 @@ func BenchmarkRequestConstruction(b *testing.B) {
 		"-d", `{"key":"value"}`,
 		"https://example.com",
 	}
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		_, err := gocurl.ArgsToOptions(args)
 		if err != nil {
@@ -34,10 +34,10 @@ func BenchmarkVariableExpansion(b *testing.B) {
 		"data":  "important data",
 	}
 	text := "Authorization: Bearer ${token}, URL: ${url}, Data: ${data}"
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		_, err := gocurl.ExpandVariables(text, vars)
 		if err != nil {
@@ -50,16 +50,16 @@ func BenchmarkVariableExpansion(b *testing.B) {
 func BenchmarkRequestAPI(b *testing.B) {
 	// Note: This will make real HTTP requests - commented out for now
 	// Uncomment when you want to benchmark with a local test server
-	
+
 	b.Skip("Skipping HTTP request benchmark - requires test server")
-	
+
 	vars := gocurl.Variables{
 		"url": "http://localhost:8080/test",
 	}
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		resp, err := gocurl.Request("curl ${url}", vars)
 		if err != nil {
