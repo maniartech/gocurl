@@ -71,7 +71,7 @@ var (
 
 // DON'T pool:
 // - Large buffers (memory waste)
-// - Complex structs (maintenance burden)
+// - Complex structs (maintenance burden)  
 // - Rarely-used objects (pool overhead > benefit)
 ```
 
@@ -82,7 +82,7 @@ var (
 User API Layer (api.go)
     ↓
 Parser Layer (parser/, tokenizer/)
-    ↓
+    ↓  
 Converter Layer (convert.go - FIXED)
     ↓
 Execution Layer (request.go, response.go, client.go)
@@ -153,7 +153,7 @@ Transport Layer (net/http with pooling)
    - Add regression tests for string input
    - Verify documented examples work
 
-**Success Criteria:**
+**Success Criteria:** 
 - All tests pass
 - `gocurl -X POST -d "key=value" https://example.com` works
 - Examples from README execute without errors
