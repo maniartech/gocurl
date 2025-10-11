@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/maniartech/gocurl/middlewares"
 	"github.com/maniartech/gocurl/options"
@@ -64,7 +63,7 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 	}
 
 	// Execute request with retries
-	resp, err := ExecuteRequestWithRetries(client, req, opts)
+	resp, err := ExecuteWithRetries(client, req, opts)
 	if err != nil {
 		return nil, "", err
 	}
@@ -90,11 +89,8 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 }
 
 func ValidateOptions(opts *options.RequestOptions) error {
-	if opts.URL == "" {
-		return fmt.Errorf("URL is required")
-	}
-	// Add more validation as needed
-	return nil
+	// Use the new security validation
+	return ValidateRequestOptions(opts)
 }
 
 func CreateHTTPClient(opts *options.RequestOptions) (*http.Client, error) {
@@ -264,38 +260,10 @@ func ApplyMiddleware(req *http.Request, middleware []middlewares.MiddlewareFunc)
 	return req, nil
 }
 
+// ExecuteRequestWithRetries is deprecated. Use ExecuteWithRetries from retry.go instead.
+// Kept for backward compatibility.
 func ExecuteRequestWithRetries(client *http.Client, req *http.Request, opts *options.RequestOptions) (*http.Response, error) {
-	var resp *http.Response
-	var err error
-
-	retries := 0
-	if opts.RetryConfig != nil {
-		retries = opts.RetryConfig.MaxRetries
-	}
-
-	for i := 0; i <= retries; i++ {
-		resp, err = client.Do(req)
-		if err == nil {
-			if opts.RetryConfig == nil || !shouldRetry(resp.StatusCode, opts.RetryConfig.RetryOnHTTP) {
-				break
-			}
-		}
-
-		if i < retries {
-			time.Sleep(opts.RetryConfig.RetryDelay)
-		}
-	}
-
-	return resp, err
-}
-
-func shouldRetry(statusCode int, retryOnHTTP []int) bool {
-	for _, code := range retryOnHTTP {
-		if statusCode == code {
-			return true
-		}
-	}
-	return false
+	return ExecuteWithRetries(client, req, opts)
 }
 
 func HandleOutput(body string, opts *options.RequestOptions) error {
