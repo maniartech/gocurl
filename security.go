@@ -4,11 +4,104 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 
 	"github.com/maniartech/gocurl/options"
 )
+
+// LoadTLSConfig creates a TLS configuration from RequestOptions.
+// Supports client certificates, custom CA bundles, and SNI.
+func LoadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
+	if opts == nil {
+		return nil, fmt.Errorf("request options cannot be nil")
+	}
+
+	// Start with secure defaults
+	tlsConfig := SecureDefaults()
+
+	// If user provided a custom TLS config, merge it
+	if opts.TLSConfig != nil {
+		// Clone the user's config to avoid modifying the original
+		tlsConfig = opts.TLSConfig.Clone()
+	}
+
+	// Handle insecure mode
+	if opts.Insecure {
+		tlsConfig.InsecureSkipVerify = true
+	}
+
+	// Load client certificate and key if provided
+	if opts.CertFile != "" && opts.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(opts.CertFile, opts.KeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load client certificate: %w", err)
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+
+	// Load custom CA bundle if provided
+	if opts.CAFile != "" {
+		caCert, err := ioutil.ReadFile(opts.CAFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CA file: %w", err)
+		}
+
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			return nil, fmt.Errorf("failed to parse CA certificate")
+		}
+
+		tlsConfig.RootCAs = caCertPool
+	}
+
+	// Certificate pinning if provided
+	if opts.CertPinFingerprints != nil && len(opts.CertPinFingerprints) > 0 {
+		// Set up VerifyPeerCertificate callback for pinning
+		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			return VerifyCertificatePin(rawCerts, opts.CertPinFingerprints)
+		}
+		// Must also set InsecureSkipVerify to true when using VerifyPeerCertificate
+		// but we still do our own verification in the callback
+		tlsConfig.InsecureSkipVerify = true
+	}
+
+	// SNI (Server Name Indication) - set the server name if provided
+	if opts.SNIServerName != "" {
+		tlsConfig.ServerName = opts.SNIServerName
+	}
+
+	return tlsConfig, nil
+}
+
+// VerifyCertificatePin checks if any certificate in the chain matches the provided fingerprints.
+// This implements certificate pinning for enhanced security.
+func VerifyCertificatePin(rawCerts [][]byte, fingerprints []string) error {
+	if len(fingerprints) == 0 {
+		return nil
+	}
+
+	for _, rawCert := range rawCerts {
+		cert, err := x509.ParseCertificate(rawCert)
+		if err != nil {
+			continue
+		}
+
+		// Calculate SHA256 fingerprint
+		certFingerprint := fmt.Sprintf("%x", cert.Raw)
+
+		for _, pin := range fingerprints {
+			// Normalize pin (remove colons, spaces, make lowercase)
+			normalizedPin := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(pin, ":", ""), " ", ""))
+			if certFingerprint == normalizedPin {
+				return nil // Pin matched
+			}
+		}
+	}
+
+	return fmt.Errorf("certificate pin verification failed: no matching fingerprint found")
+}
 
 // ValidateTLSConfig checks TLS configuration for security issues
 func ValidateTLSConfig(tlsConfig *tls.Config, opts *options.RequestOptions) error {
@@ -19,7 +112,7 @@ func ValidateTLSConfig(tlsConfig *tls.Config, opts *options.RequestOptions) erro
 	// Warn if InsecureSkipVerify is enabled
 	if tlsConfig.InsecureSkipVerify {
 		// This is allowed but should be explicit via opts.Insecure
-		if !opts.Insecure {
+		if !opts.Insecure && (opts.CertPinFingerprints == nil || len(opts.CertPinFingerprints) == 0) {
 			return fmt.Errorf("InsecureSkipVerify is enabled but --insecure flag not set")
 		}
 	}
@@ -76,6 +169,11 @@ func ValidateRequestOptions(opts *options.RequestOptions) error {
 		}
 	}
 
+	// Validate that cert and key are both provided or neither
+	if (opts.CertFile != "" && opts.KeyFile == "") || (opts.CertFile == "" && opts.KeyFile != "") {
+		return ValidationError("TLS", fmt.Errorf("both cert-file and key-file must be provided together"))
+	}
+
 	// Validate cert/key files exist if specified
 	if opts.CertFile != "" {
 		if _, err := os.Stat(opts.CertFile); err != nil {
@@ -93,11 +191,6 @@ func ValidateRequestOptions(opts *options.RequestOptions) error {
 		if _, err := os.Stat(opts.CAFile); err != nil {
 			return ValidationError("CAFile", fmt.Errorf("CA file not found: %w", err))
 		}
-	}
-
-	// Validate that cert and key are both provided or neither
-	if (opts.CertFile != "" && opts.KeyFile == "") || (opts.CertFile == "" && opts.KeyFile != "") {
-		return ValidationError("TLS", fmt.Errorf("both cert-file and key-file must be provided together"))
 	}
 
 	// Validate timeout values

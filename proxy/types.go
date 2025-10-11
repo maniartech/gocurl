@@ -17,7 +17,7 @@ const (
 	ProxyTypeSOCKS5 ProxyType = "SOCKS5"
 )
 
-// ProxyConfig holds the configuration for the proxy.// ProxyConfig holds the configuration for the proxy.
+// ProxyConfig holds the configuration for the proxy.
 type ProxyConfig struct {
 	Type              ProxyType
 	Address           string        // e.g., "127.0.0.1:8080" for HTTP or "127.0.0.1:1080" for SOCKS5
@@ -27,6 +27,7 @@ type ProxyConfig struct {
 	TLSConfig         *tls.Config   // Optional: For custom TLS settings
 	DisableKeepAlives bool          // Optional: To disable HTTP keep-alives
 	CustomDialer      proxy.Dialer  // Optional: Allows injecting a custom dialer (useful for testing)
+	NoProxy           []string      // Optional: List of domains/patterns to exclude from proxying
 }
 
 // Proxy defines the interface for different proxy types.

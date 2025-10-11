@@ -14,6 +14,7 @@ import (
 
 	"github.com/maniartech/gocurl/middlewares"
 	"github.com/maniartech/gocurl/options"
+	"github.com/maniartech/gocurl/proxy"
 	"github.com/maniartech/gocurl/tokenizer"
 	"golang.org/x/net/http2"
 )
@@ -68,6 +69,14 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 		return nil, "", err
 	}
 
+	// Decompress response if needed
+	if opts.Compress {
+		if err := DecompressResponse(resp); err != nil {
+			resp.Body.Close()
+			return nil, "", fmt.Errorf("failed to decompress response: %w", err)
+		}
+	}
+
 	// Read the response body
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -94,18 +103,54 @@ func ValidateOptions(opts *options.RequestOptions) error {
 }
 
 func CreateHTTPClient(opts *options.RequestOptions) (*http.Client, error) {
-	transport := &http.Transport{
-		TLSClientConfig:    opts.TLSConfig,
-		DisableCompression: !opts.Compress,
-		Proxy:              http.ProxyFromEnvironment,
+	// Load TLS configuration
+	tlsConfig, err := LoadTLSConfig(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load TLS config: %w", err)
 	}
 
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+		Proxy:           http.ProxyFromEnvironment,
+	}
+
+	// Configure compression - disable auto compression to handle manually with pooled readers
+	ConfigureCompressionForTransport(transport, opts.Compress)
+
+	// Handle proxy configuration
 	if opts.Proxy != "" {
 		proxyURL, err := url.Parse(opts.Proxy)
 		if err != nil {
 			return nil, fmt.Errorf("invalid proxy URL: %v", err)
 		}
-		transport.Proxy = http.ProxyURL(proxyURL)
+
+		// Determine proxy type
+		proxyType := proxy.ProxyTypeHTTP
+		if proxyURL.Scheme == "socks5" {
+			proxyType = proxy.ProxyTypeSOCKS5
+		}
+
+		// Create proxy config
+		proxyConfig := proxy.ProxyConfig{
+			Type:      proxyType,
+			Address:   proxyURL.Host,
+			Username:  proxyURL.User.Username(),
+			TLSConfig: tlsConfig,
+			NoProxy:   opts.ProxyNoProxy,
+			Timeout:   opts.ConnectTimeout,
+		}
+
+		if password, hasPassword := proxyURL.User.Password(); hasPassword {
+			proxyConfig.Password = password
+		}
+
+		// Apply proxy to transport
+		proxyTransport, err := proxy.NewTransport(proxyConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create proxy transport: %w", err)
+		}
+
+		transport = proxyTransport
 	}
 
 	client := &http.Client{
@@ -138,7 +183,15 @@ func CreateHTTPClient(opts *options.RequestOptions) (*http.Client, error) {
 		}
 	}
 
-	if opts.CookieJar != nil {
+	// Handle cookie jar
+	if opts.CookieFile != "" {
+		// Create persistent cookie jar
+		jar, err := NewPersistentCookieJar(opts.CookieFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cookie jar: %w", err)
+		}
+		client.Jar = jar
+	} else if opts.CookieJar != nil {
 		client.Jar = opts.CookieJar
 	}
 
@@ -244,6 +297,14 @@ func CreateRequest(ctx context.Context, opts *options.RequestOptions) (*http.Req
 	// Set referer
 	if opts.Referer != "" {
 		req.Header.Set("Referer", opts.Referer)
+	}
+
+	// Set Accept-Encoding if compression is enabled
+	if opts.Compress {
+		acceptEncoding := GetAcceptEncodingHeader(opts.Compress, opts.CompressionMethods)
+		if acceptEncoding != "" && req.Header.Get("Accept-Encoding") == "" {
+			req.Header.Set("Accept-Encoding", acceptEncoding)
+		}
 	}
 
 	return req, nil

@@ -13,11 +13,12 @@ func NewProxy(config ProxyConfig) (Proxy, error) {
 		return &NoProxy{}, nil
 	case ProxyTypeHTTP:
 		return &HTTPProxy{
-			Address:  config.Address,
-			Username: config.Username,
-			Password: config.Password,
-
-			Timeout: config.Timeout,
+			Address:   config.Address,
+			Username:  config.Username,
+			Password:  config.Password,
+			Timeout:   config.Timeout,
+			TLSConfig: config.TLSConfig,
+			NoProxy:   config.NoProxy,
 		}, nil
 	case ProxyTypeSOCKS5:
 		return &SOCKS5Proxy{
@@ -25,8 +26,8 @@ func NewProxy(config ProxyConfig) (Proxy, error) {
 			Username: config.Username,
 			Password: config.Password,
 			Dialer:   config.CustomDialer, // Allows injecting a custom dialer if needed
-
-			Timeout: config.Timeout,
+			Timeout:  config.Timeout,
+			NoProxy:  config.NoProxy,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported proxy type: %s", config.Type)

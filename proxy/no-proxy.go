@@ -3,6 +3,8 @@ package proxy
 import (
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -21,4 +23,130 @@ func (np *NoProxy) Apply(transport *http.Transport) error {
 	transport.DialContext = dialer.DialContext
 
 	return nil
+}
+
+// ShouldBypassProxy determines if a given URL should bypass the proxy based on no-proxy rules.
+// This function implements curl-compatible no-proxy matching logic:
+// - Exact domain match: "example.com" matches "example.com"
+// - Subdomain match: ".example.com" matches "*.example.com"
+// - IP address match: "192.168.1.1" matches exactly
+// - CIDR match: "192.168.1.0/24" matches IP range
+// - Port-specific: "example.com:8080" matches only that port
+func ShouldBypassProxy(targetURL string, noProxyList []string) bool {
+	if len(noProxyList) == 0 {
+		return false
+	}
+
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return false
+	}
+
+	host := parsedURL.Hostname()
+	port := parsedURL.Port()
+
+	for _, pattern := range noProxyList {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+
+		// Handle wildcard "*" - bypass all
+		if pattern == "*" {
+			return true
+		}
+
+		// Extract port from pattern if present
+		patternHost, patternPort, hasPort := splitHostPort(pattern)
+		if !hasPort {
+			patternHost = pattern
+		}
+
+		// If pattern has a port, it must match
+		if hasPort && patternPort != port {
+			continue
+		}
+
+		// Check if pattern is CIDR notation
+		if strings.Contains(patternHost, "/") {
+			if matchCIDR(host, patternHost) {
+				return true
+			}
+			continue
+		}
+
+		// Leading dot means "this domain and all subdomains"
+		if strings.HasPrefix(patternHost, ".") {
+			domain := patternHost[1:] // Remove leading dot
+			if host == domain || strings.HasSuffix(host, patternHost) {
+				return true
+			}
+			continue
+		}
+
+		// Exact match or subdomain match
+		if host == patternHost || strings.HasSuffix(host, "."+patternHost) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// splitHostPort splits a host:port string, handling IPv6 addresses correctly
+func splitHostPort(hostPort string) (host, port string, hasPort bool) {
+	// Handle IPv6 addresses
+	if strings.HasPrefix(hostPort, "[") {
+		// IPv6 with port: [::1]:8080
+		if closeBracket := strings.Index(hostPort, "]"); closeBracket != -1 {
+			host = hostPort[1:closeBracket]
+			if len(hostPort) > closeBracket+1 && hostPort[closeBracket+1] == ':' {
+				port = hostPort[closeBracket+2:]
+				hasPort = true
+			}
+			return
+		}
+	}
+
+	// Regular host:port or just host
+	if colonIndex := strings.LastIndex(hostPort, ":"); colonIndex != -1 {
+		// Check if this might be an IPv6 address without brackets
+		if strings.Count(hostPort, ":") > 1 {
+			// Likely IPv6 without port
+			host = hostPort
+			hasPort = false
+			return
+		}
+		host = hostPort[:colonIndex]
+		port = hostPort[colonIndex+1:]
+		hasPort = true
+		return
+	}
+
+	host = hostPort
+	hasPort = false
+	return
+}
+
+// matchCIDR checks if an IP address or hostname matches a CIDR pattern
+func matchCIDR(host, cidr string) bool {
+	// Parse the CIDR
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false
+	}
+
+	// Try to parse host as IP
+	ip := net.ParseIP(host)
+	if ip == nil {
+		// If host is a domain name, try to resolve it
+		ips, err := net.LookupIP(host)
+		if err != nil || len(ips) == 0 {
+			return false
+		}
+		// Check first resolved IP
+		ip = ips[0]
+	}
+
+	return ipNet.Contains(ip)
 }
