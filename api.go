@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/maniartech/gocurl/options"
@@ -107,6 +106,7 @@ func (r *Response) String() (string, error) {
 }
 
 // Bytes reads the response body once and caches it
+// Uses pooled buffers for responses <1MB for efficiency
 func (r *Response) Bytes() ([]byte, error) {
 	if r.bodyRead {
 		return r.bodyBytes, nil
@@ -116,9 +116,8 @@ func (r *Response) Bytes() ([]byte, error) {
 		return nil, fmt.Errorf("response body is nil")
 	}
 
-	defer r.Response.Body.Close()
-
-	data, err := io.ReadAll(r.Response.Body)
+	// Use smart response reading with pooling
+	data, err := readResponseBody(r.Response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}

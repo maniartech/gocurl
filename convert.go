@@ -266,6 +266,10 @@ func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOp
 	// Combine data fields if any
 	if len(dataFields) > 0 {
 		o.Body = strings.Join(dataFields, "&")
+		// Set Content-Type header if not already set (curl behavior)
+		if o.Headers.Get("Content-Type") == "" {
+			o.Headers.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
 	}
 
 	// Set form data if any
