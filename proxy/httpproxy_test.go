@@ -53,21 +53,12 @@ func TestHTTPProxyApplyWithRealProxy(t *testing.T) {
 	}
 
 	// Send a request to example.com through the proxy
-	resp, err := client.Get("https://example.com")
+	// Note: Using HTTP (not HTTPS) because httptest.Server doesn't support CONNECT method
+	resp, err := client.Get("http://example.com")
 	if err != nil {
 		t.Fatalf("Failed to make request through HTTP proxy: %v", err)
 	}
 	defer resp.Body.Close()
-
-	// Read the response body
-	body := make([]byte, 100)
-	n, err := resp.Body.Read(body)
-	if err != nil {
-		t.Fatalf("Failed to read response body: %v", err)
-	}
-
-	// Check the response body
-	fmt.Println(">>>", fmt.Sprint(string(body[:n])))
 
 	// Check if the request was proxied by verifying the "X-Proxied" header
 	if resp.Header.Get("X-Proxied") != "true" {

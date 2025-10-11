@@ -26,14 +26,17 @@ type RequestOptions struct {
 	BearerToken string     `json:"bearer_token,omitempty"`
 
 	// TLS/SSL options
-	CertFile  string      `json:"cert_file,omitempty"`
-	KeyFile   string      `json:"key_file,omitempty"`
-	CAFile    string      `json:"ca_file,omitempty"`
-	Insecure  bool        `json:"insecure,omitempty"`
-	TLSConfig *tls.Config `json:"-"` // Not exported to JSON
+	CertFile            string      `json:"cert_file,omitempty"`
+	KeyFile             string      `json:"key_file,omitempty"`
+	CAFile              string      `json:"ca_file,omitempty"`
+	Insecure            bool        `json:"insecure,omitempty"`
+	TLSConfig           *tls.Config `json:"-"`                               // Not exported to JSON
+	CertPinFingerprints []string    `json:"cert_pin_fingerprints,omitempty"` // SHA256 fingerprints for certificate pinning
+	SNIServerName       string      `json:"sni_server_name,omitempty"`       // Server name for SNI
 
 	// Proxy settings
-	Proxy string `json:"proxy,omitempty"`
+	Proxy        string   `json:"proxy,omitempty"`
+	ProxyNoProxy []string `json:"proxy_no_proxy,omitempty"` // Domains to exclude from proxying
 
 	// Timeout settings
 	Timeout        time.Duration `json:"timeout,omitempty"`
@@ -44,15 +47,17 @@ type RequestOptions struct {
 	MaxRedirects    int  `json:"max_redirects,omitempty"`
 
 	// Compression
-	Compress bool `json:"compress,omitempty"`
+	Compress           bool     `json:"compress,omitempty"`
+	CompressionMethods []string `json:"compression_methods,omitempty"` // Specific methods: gzip, deflate, br
 
 	// HTTP version specific
 	HTTP2     bool `json:"http2,omitempty"`
 	HTTP2Only bool `json:"http2_only,omitempty"`
 
 	// Cookie handling
-	Cookies   []*http.Cookie `json:"cookies,omitempty"`
-	CookieJar http.CookieJar `json:"-"` // Not exported to JSON
+	Cookies    []*http.Cookie `json:"cookies,omitempty"`
+	CookieJar  http.CookieJar `json:"-"`                     // Not exported to JSON
+	CookieFile string         `json:"cookie_file,omitempty"` // File to read/write cookies from/to
 
 	// Custom options
 	UserAgent string `json:"user_agent,omitempty"`
