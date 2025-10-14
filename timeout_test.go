@@ -51,7 +51,7 @@ func TestTimeoutHandling_OptsTimeoutOnly(t *testing.T) {
 	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil).
 		SetTimeout(500 * time.Millisecond)
-	
+
 	opts := builder.Build()
 	ctx := builder.GetContext() // Get context from builder
 	defer builder.Cleanup()
@@ -83,7 +83,7 @@ func TestTimeoutHandling_ContextTakesPriority(t *testing.T) {
 		Get(server.URL, nil).
 		SetTimeout(10 * time.Second). // This should be ignored
 		WithContext(ctx)
-	
+
 	opts := builder.Build()
 	builderCtx := builder.GetContext() // This has both timeouts merged
 	defer builder.Cleanup()
@@ -139,7 +139,7 @@ func TestTimeoutHandling_NoTimeoutSet(t *testing.T) {
 	// No context timeout, no opts.Timeout
 	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil)
-	
+
 	opts := builder.Build()
 	ctx := builder.GetContext()
 
@@ -165,7 +165,7 @@ func TestTimeoutHandling_BuilderWithTimeout(t *testing.T) {
 	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil).
 		WithTimeout(500 * time.Millisecond)
-	
+
 	opts := builder.Build()
 	ctx := builder.GetContext()
 	defer builder.Cleanup()
@@ -251,7 +251,7 @@ func TestTimeoutHandling_ContextCleanup(t *testing.T) {
 	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil).
 		WithTimeout(5 * time.Second)
-	
+
 	opts := builder.Build()
 	ctx := builder.GetContext()
 
