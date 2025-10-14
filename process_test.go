@@ -348,6 +348,9 @@ func TestApplyMiddleware(t *testing.T) {
 	})
 }
 
+// TestExecuteRequestWithRetries is deprecated - ExecuteRequestWithRetries function was removed
+// Retry logic is now tested in retry_test.go
+/*
 func TestExecuteRequestWithRetries(t *testing.T) {
 	t.Run("Successful request without retries", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -416,6 +419,7 @@ func TestExecuteRequestWithRetries(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
 }
+*/
 
 func TestHandleOutput(t *testing.T) {
 	t.Run("Output to file", func(t *testing.T) {

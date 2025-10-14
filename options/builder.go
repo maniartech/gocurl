@@ -12,6 +12,8 @@ import (
 // RequestOptionsBuilder is a builder for RequestOptions.
 type RequestOptionsBuilder struct {
 	options *RequestOptions
+	ctx     context.Context      // Context stored separately (not in RequestOptions)
+	cancel  context.CancelFunc   // Cancel function for cleanup
 }
 
 // NewRequestOptionsBuilder creates a new instance of RequestOptionsBuilder.
@@ -324,26 +326,44 @@ func (b *RequestOptionsBuilder) SlowTimeout() *RequestOptionsBuilder {
 }
 
 // WithContext sets the context for the request
+// The context is stored in the builder (not in RequestOptions per Go best practices)
 func (b *RequestOptionsBuilder) WithContext(ctx context.Context) *RequestOptionsBuilder {
-	b.options.Context = ctx
+	b.ctx = ctx
 	return b
 }
 
-// WithTimeout creates a context with timeout and sets it on the request
+// WithTimeout creates a context with timeout and sets it on the builder
 // This is the industry standard pattern for timeout management
-// The cancel function is stored and will be called automatically in Execute()
+// The cancel function is stored in the builder for cleanup
 func (b *RequestOptionsBuilder) WithTimeout(timeout time.Duration) *RequestOptionsBuilder {
-	ctx := b.options.Context
+	ctx := b.ctx
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	// Create timeout context
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
-	b.options.Context = timeoutCtx
-	b.options.ContextCancel = cancel // Store for cleanup
+	b.ctx = timeoutCtx
+	b.cancel = cancel // Store for cleanup
 
 	return b
+}
+
+// GetContext returns the context stored in the builder.
+// Returns context.Background() if no context was set.
+func (b *RequestOptionsBuilder) GetContext() context.Context {
+	if b.ctx == nil {
+		return context.Background()
+	}
+	return b.ctx
+}
+
+// Cleanup calls the cancel function if one was created (e.g., by WithTimeout).
+// This should be called when done with the builder to prevent context leaks.
+func (b *RequestOptionsBuilder) Cleanup() {
+	if b.cancel != nil {
+		b.cancel()
+	}
 }
 
 // Example usage

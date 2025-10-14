@@ -95,17 +95,20 @@ func TestContextError_WithRetries(t *testing.T) {
 	defer cancel()
 
 	// Configure retries
-	opts := options.NewRequestOptionsBuilder().
+	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil).
 		SetRetryConfig(&options.RetryConfig{
 			MaxRetries: 5, // Try 5 times
 			RetryDelay: 100 * time.Millisecond,
 		}).
-		WithContext(ctx).
-		Build()
+		WithContext(ctx)
+	
+	opts := builder.Build()
+	builderCtx := builder.GetContext()
+	defer builder.Cleanup()
 
 	start := time.Now()
-	resp, err := gocurl.Execute(opts)
+	resp, err := gocurl.Execute(builderCtx, opts)
 	elapsed := time.Since(start)
 
 	// Should fail with context deadline, not complete all retries
@@ -141,19 +144,22 @@ func TestContextError_CancelDuringRetry(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Configure retries
-	opts := options.NewRequestOptionsBuilder().
+	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil).
 		SetRetryConfig(&options.RetryConfig{
 			MaxRetries: 10, // Many retries
 			RetryDelay: 100 * time.Millisecond,
 		}).
-		WithContext(ctx).
-		Build()
+		WithContext(ctx)
+	
+	opts := builder.Build()
+	builderCtx := builder.GetContext()
+	defer builder.Cleanup()
 
 	// Start request in goroutine
 	errChan := make(chan error, 1)
 	go func() {
-		_, err := gocurl.Execute(opts)
+		_, err := gocurl.Execute(builderCtx, opts)
 		errChan <- err
 	}()
 
@@ -250,16 +256,19 @@ func TestContextError_CheckBeforeRetry(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 	defer cancel()
 
-	opts := options.NewRequestOptionsBuilder().
+	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil).
 		SetRetryConfig(&options.RetryConfig{
 			MaxRetries: 5,
 			RetryDelay: 100 * time.Millisecond,
 		}).
-		WithContext(ctx).
-		Build()
+		WithContext(ctx)
+	
+	opts := builder.Build()
+	builderCtx := builder.GetContext()
+	defer builder.Cleanup()
 
-	_, err := gocurl.Execute(opts)
+	_, err := gocurl.Execute(builderCtx, opts)
 
 	// Should fail immediately without any attempts (context already expired)
 	require.Error(t, err)
@@ -293,15 +302,18 @@ func TestContextError_HTTPClientRespect(t *testing.T) {
 	defer cancel()
 
 	// Send POST with body
-	opts := options.NewRequestOptionsBuilder().
+	builder := options.NewRequestOptionsBuilder().
 		SetMethod("POST").
 		SetURL(server.URL).
 		SetBody(strings.Repeat("x", 10000)). // Large body
-		WithContext(ctx).
-		Build()
+		WithContext(ctx)
+	
+	opts := builder.Build()
+	builderCtx := builder.GetContext()
+	defer builder.Cleanup()
 
 	start := time.Now()
-	_, err := gocurl.Execute(opts)
+	_, err := gocurl.Execute(builderCtx, opts)
 	elapsed := time.Since(start)
 
 	// Should timeout
