@@ -76,6 +76,9 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 		return nil, "", err
 	}
 
+	// Print verbose response details (curl -v style)
+	printResponseVerbose(opts, resp)
+
 	// Decompress response if needed
 	if opts.Compress {
 		if err := DecompressResponse(resp); err != nil {
@@ -118,6 +121,9 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 	if err != nil {
 		return nil, "", err
 	}
+
+	// Print verbose connection close info (curl -v style)
+	printConnectionClose(opts)
 
 	// Recreate the response body for further use
 	resp.Body = ioutil.NopCloser(strings.NewReader(bodyString))
@@ -363,6 +369,12 @@ func CreateRequest(ctx context.Context, opts *options.RequestOptions) (*http.Req
 			req.Header.Set("Accept-Encoding", acceptEncoding)
 		}
 	}
+
+	// Print verbose connection info (curl -v style)
+	printConnectionInfo(opts, req)
+
+	// Print verbose request details (curl -v style)
+	printRequestVerbose(opts, req)
 
 	return req, nil
 }
