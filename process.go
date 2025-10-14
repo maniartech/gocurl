@@ -84,11 +84,32 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 		}
 	}
 
-	// Read the response body
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to read response body: %v", err)
+	// Read the response body with optional size limit
+	var bodyBytes []byte
+	if opts.ResponseBodyLimit > 0 {
+		// Use LimitReader to enforce size limit
+		limitedReader := io.LimitReader(resp.Body, opts.ResponseBodyLimit+1) // +1 to detect overflow
+		bodyBytes, err = ioutil.ReadAll(limitedReader)
+		if err != nil {
+			resp.Body.Close()
+			return nil, "", fmt.Errorf("failed to read response body: %v", err)
+		}
+
+		// Check if we hit or exceeded the limit
+		if int64(len(bodyBytes)) > opts.ResponseBodyLimit {
+			resp.Body.Close()
+			return nil, "", fmt.Errorf("response body size (%d bytes) exceeds limit of %d bytes",
+				len(bodyBytes)-1, opts.ResponseBodyLimit)
+		}
+	} else {
+		// No limit - read entire response
+		bodyBytes, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			resp.Body.Close()
+			return nil, "", fmt.Errorf("failed to read response body: %v", err)
+		}
 	}
+
 	resp.Body.Close()
 	bodyString := string(bodyBytes)
 
