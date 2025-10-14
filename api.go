@@ -23,6 +23,12 @@ type Response struct {
 // Request executes a curl command with optional variable substitution
 // Accepts both string and []string formats
 func Request(command interface{}, vars Variables) (*Response, error) {
+	return RequestWithContext(context.Background(), command, vars)
+}
+
+// RequestWithContext executes a curl command with context and optional variable substitution
+// Accepts both string and []string formats
+func RequestWithContext(ctx context.Context, command interface{}, vars Variables) (*Response, error) {
 	var opts *options.RequestOptions
 	var err error
 
@@ -73,6 +79,9 @@ func Request(command interface{}, vars Variables) (*Response, error) {
 	default:
 		return nil, fmt.Errorf("command must be string or []string, got %T", command)
 	}
+
+	// Set context
+	opts.Context = ctx
 
 	return Execute(opts)
 }
@@ -160,4 +169,89 @@ func substituteVariablesInTokens(tokens []tokenizer.Token, vars Variables) ([]to
 	}
 
 	return result, nil
+}
+
+// Get is a convenience function for making GET requests
+func Get(ctx context.Context, url string, vars Variables) (*Response, error) {
+	cmd := fmt.Sprintf("curl -X GET %s", url)
+	return RequestWithContext(ctx, cmd, vars)
+}
+
+// Post is a convenience function for making POST requests with a body
+// The body can be a string, []byte, or any type that can be JSON-marshaled
+func Post(ctx context.Context, url string, body interface{}, vars Variables) (*Response, error) {
+	var bodyStr string
+
+	switch v := body.(type) {
+	case string:
+		bodyStr = v
+	case []byte:
+		bodyStr = string(v)
+	default:
+		// Try to marshal as JSON
+		data, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal body as JSON: %w", err)
+		}
+		bodyStr = string(data)
+	}
+
+	cmd := fmt.Sprintf("curl -X POST -d %q %s", bodyStr, url)
+	return RequestWithContext(ctx, cmd, vars)
+}
+
+// Put is a convenience function for making PUT requests with a body
+func Put(ctx context.Context, url string, body interface{}, vars Variables) (*Response, error) {
+	var bodyStr string
+
+	switch v := body.(type) {
+	case string:
+		bodyStr = v
+	case []byte:
+		bodyStr = string(v)
+	default:
+		// Try to marshal as JSON
+		data, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal body as JSON: %w", err)
+		}
+		bodyStr = string(data)
+	}
+
+	cmd := fmt.Sprintf("curl -X PUT -d %q %s", bodyStr, url)
+	return RequestWithContext(ctx, cmd, vars)
+}
+
+// Delete is a convenience function for making DELETE requests
+func Delete(ctx context.Context, url string, vars Variables) (*Response, error) {
+	cmd := fmt.Sprintf("curl -X DELETE %s", url)
+	return RequestWithContext(ctx, cmd, vars)
+}
+
+// Patch is a convenience function for making PATCH requests with a body
+func Patch(ctx context.Context, url string, body interface{}, vars Variables) (*Response, error) {
+	var bodyStr string
+
+	switch v := body.(type) {
+	case string:
+		bodyStr = v
+	case []byte:
+		bodyStr = string(v)
+	default:
+		// Try to marshal as JSON
+		data, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal body as JSON: %w", err)
+		}
+		bodyStr = string(data)
+	}
+
+	cmd := fmt.Sprintf("curl -X PATCH -d %q %s", bodyStr, url)
+	return RequestWithContext(ctx, cmd, vars)
+}
+
+// Head is a convenience function for making HEAD requests
+func Head(ctx context.Context, url string, vars Variables) (*Response, error) {
+	cmd := fmt.Sprintf("curl -X HEAD %s", url)
+	return RequestWithContext(ctx, cmd, vars)
 }
