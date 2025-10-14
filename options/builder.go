@@ -329,6 +329,23 @@ func (b *RequestOptionsBuilder) WithContext(ctx context.Context) *RequestOptions
 	return b
 }
 
+// WithTimeout creates a context with timeout and sets it on the request
+// This is the industry standard pattern for timeout management
+// The cancel function is stored and will be called automatically in Execute()
+func (b *RequestOptionsBuilder) WithTimeout(timeout time.Duration) *RequestOptionsBuilder {
+	ctx := b.options.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// Create timeout context
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	b.options.Context = timeoutCtx
+	b.options.ContextCancel = cancel // Store for cleanup
+
+	return b
+}
+
 // Example usage
 func example() {
 	builder := NewRequestOptionsBuilder()

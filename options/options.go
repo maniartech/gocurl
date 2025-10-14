@@ -76,6 +76,7 @@ type RequestOptions struct {
 
 	// Advanced options
 	Context           context.Context              `json:"-"` // Not exported to JSON
+	ContextCancel     context.CancelFunc           `json:"-"` // Cancel function for context cleanup
 	RequestID         string                       `json:"request_id,omitempty"`
 	Middleware        []middlewares.MiddlewareFunc `json:"-"`
 	ResponseBodyLimit int64                        `json:"response_body_limit,omitempty"`

@@ -2,6 +2,8 @@ package gocurl
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,10 +14,22 @@ import (
 
 // ExecuteWithRetries handles HTTP request execution with retry logic.
 // It properly clones requests with bodies to enable retries for POST/PUT requests.
+// It respects context cancellation and will stop retrying if context is cancelled or deadline exceeded.
 func ExecuteWithRetries(client *http.Client, req *http.Request, opts *options.RequestOptions) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 	var bodyBytes []byte
+
+	// Check if context is already cancelled/expired before starting
+	if req.Context() != nil {
+		select {
+		case <-req.Context().Done():
+			// Context already cancelled/expired
+			return nil, fmt.Errorf("request context cancelled before execution: %w", req.Context().Err())
+		default:
+			// Context is still active, proceed
+		}
+	}
 
 	// If request has a body, buffer it for retries
 	if req.Body != nil && req.Body != http.NoBody {
@@ -34,6 +48,21 @@ func ExecuteWithRetries(client *http.Client, req *http.Request, opts *options.Re
 	}
 
 	for attempt := 0; attempt <= retries; attempt++ {
+		// Check context before each retry attempt
+		if attempt > 0 && req.Context() != nil {
+			select {
+			case <-req.Context().Done():
+				// Context cancelled during retry loop
+				if resp != nil {
+					resp.Body.Close()
+				}
+				return nil, fmt.Errorf("request context cancelled during retries (attempt %d/%d): %w",
+					attempt, retries, req.Context().Err())
+			default:
+				// Context still active
+			}
+		}
+
 		// Clone the request for retry attempts (rewind body if needed)
 		attemptReq := req
 		if attempt > 0 && bodyBytes != nil {
@@ -44,6 +73,17 @@ func ExecuteWithRetries(client *http.Client, req *http.Request, opts *options.Re
 		}
 
 		resp, err = client.Do(attemptReq)
+
+		// Check if error is due to context cancellation
+		if err != nil {
+			// Unwrap and check for context errors
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				// Context error - don't retry, return immediately
+				return nil, fmt.Errorf("request failed due to context error (attempt %d/%d): %w",
+					attempt, retries, err)
+			}
+			// Other error - will retry if attempts remain
+		}
 
 		// Success - no error and no retry needed
 		if err == nil {
@@ -56,24 +96,40 @@ func ExecuteWithRetries(client *http.Client, req *http.Request, opts *options.Re
 
 		// Don't sleep after the last attempt
 		if attempt < retries {
+			var sleepDuration time.Duration
 			if opts.RetryConfig != nil && opts.RetryConfig.RetryDelay > 0 {
-				time.Sleep(opts.RetryConfig.RetryDelay)
+				sleepDuration = opts.RetryConfig.RetryDelay
 			} else {
 				// Default exponential backoff: 100ms, 200ms, 400ms, etc.
 				backoff := time.Duration(100*(1<<attempt)) * time.Millisecond
 				if backoff > 5*time.Second {
 					backoff = 5 * time.Second
 				}
-				time.Sleep(backoff)
+				sleepDuration = backoff
+			}
+
+			// Sleep with context awareness - cancel sleep if context is cancelled
+			if req.Context() != nil {
+				select {
+				case <-req.Context().Done():
+					// Context cancelled during sleep
+					return nil, fmt.Errorf("request context cancelled during retry delay: %w", req.Context().Err())
+				case <-time.After(sleepDuration):
+					// Sleep completed normally
+				}
+			} else {
+				// No context, just sleep
+				time.Sleep(sleepDuration)
 			}
 		}
 	}
 
 	// All retries exhausted
 	if err != nil {
+		// Wrap the final error with retry information
 		return nil, fmt.Errorf("request failed after %d retries: %w", retries, err)
 	}
-	// Last response had retry-worthy status code
+	// Last response had retry-worthy status code but all retries exhausted
 	return resp, nil
 }
 
