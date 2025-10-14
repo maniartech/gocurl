@@ -12,8 +12,8 @@ import (
 // RequestOptionsBuilder is a builder for RequestOptions.
 type RequestOptionsBuilder struct {
 	options *RequestOptions
-	ctx     context.Context      // Context stored separately (not in RequestOptions)
-	cancel  context.CancelFunc   // Cancel function for cleanup
+	ctx     context.Context    // Context stored separately (not in RequestOptions)
+	cancel  context.CancelFunc // Cancel function for cleanup
 }
 
 // NewRequestOptionsBuilder creates a new instance of RequestOptionsBuilder.

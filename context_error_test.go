@@ -102,7 +102,7 @@ func TestContextError_WithRetries(t *testing.T) {
 			RetryDelay: 100 * time.Millisecond,
 		}).
 		WithContext(ctx)
-	
+
 	opts := builder.Build()
 	builderCtx := builder.GetContext()
 	defer builder.Cleanup()
@@ -151,7 +151,7 @@ func TestContextError_CancelDuringRetry(t *testing.T) {
 			RetryDelay: 100 * time.Millisecond,
 		}).
 		WithContext(ctx)
-	
+
 	opts := builder.Build()
 	builderCtx := builder.GetContext()
 	defer builder.Cleanup()
@@ -263,7 +263,7 @@ func TestContextError_CheckBeforeRetry(t *testing.T) {
 			RetryDelay: 100 * time.Millisecond,
 		}).
 		WithContext(ctx)
-	
+
 	opts := builder.Build()
 	builderCtx := builder.GetContext()
 	defer builder.Cleanup()
@@ -307,7 +307,7 @@ func TestContextError_HTTPClientRespect(t *testing.T) {
 		SetURL(server.URL).
 		SetBody(strings.Repeat("x", 10000)). // Large body
 		WithContext(ctx)
-	
+
 	opts := builder.Build()
 	builderCtx := builder.GetContext()
 	defer builder.Cleanup()
