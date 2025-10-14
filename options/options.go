@@ -80,13 +80,13 @@ type RequestOptions struct {
 	RequestID         string                       `json:"request_id,omitempty"`
 	Middleware        []middlewares.MiddlewareFunc `json:"-"`
 	ResponseBodyLimit int64                        `json:"response_body_limit,omitempty"`
-	ResponseDecoder   ResponseDecoder              `json:"-"`
-	Metrics           *RequestMetrics              `json:"metrics,omitempty"`
-	CustomClient      interface{}                  `json:"-"` // HTTPClient interface for custom/mock clients
+	ResponseDecoder   ResponseDecoder              `json:"-"` // Custom response decoder function
+	Metrics           *RequestMetrics              `json:"-"` // Request metrics for observability
+	CustomClient      HTTPClient                   `json:"-"` // Custom HTTP client implementation for testing/mocking
 }
 
 // NewRequestOptions creates a new RequestOptions with default values aligned to cURL's defaults.
-func NewRequestOptions(url string) *RequestOptions {
+func NewRequestOptions(url stri ng) *RequestOptions {
 	return &RequestOptions{
 		URL: url,
 		// Headers:         make(http.Header),
@@ -128,15 +128,32 @@ type RetryConfig struct {
 	RetryOnHTTP []int         `json:"retry_on_http"`
 }
 
+// HTTPClient interface allows for custom HTTP client implementations.
+// This is useful for testing, mocking, or providing custom client logic.
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // ResponseDecoder is a function type for custom response decoding.
+// This allows users to implement custom unmarshaling logic for specialized formats
+// like XML, YAML, Protocol Buffers, or custom JSON processing.
 type ResponseDecoder func(*http.Response) (interface{}, error)
 
 // RequestMetrics represents metrics collected during a request.
+// This is useful for observability, monitoring, and debugging in production.
 type RequestMetrics struct {
-	StartTime    time.Time     `json:"start_time"`
-	Duration     time.Duration `json:"duration"`
-	RetryCount   int           `json:"retry_count"`
-	ResponseSize int64         `json:"response_size"`
+	StartTime     time.Time     `json:"start_time"`      // When the request started
+	EndTime       time.Time     `json:"end_time"`        // When the request completed
+	Duration      time.Duration `json:"duration"`        // Total request duration
+	DNSLookupTime time.Duration `json:"dns_lookup_time"` // DNS resolution time
+	ConnectTime   time.Duration `json:"connect_time"`    // Connection establishment time
+	TLSTime       time.Duration `json:"tls_time"`        // TLS handshake time
+	FirstByteTime time.Duration `json:"first_byte_time"` // Time to first response byte
+	RetryCount    int           `json:"retry_count"`     // Number of retries attempted
+	ResponseSize  int64         `json:"response_size"`   // Size of response body in bytes
+	RequestSize   int64         `json:"request_size"`    // Size of request body in bytes
+	StatusCode    int           `json:"status_code"`     // HTTP status code
+	Error         string        `json:"error,omitempty"` // Error message if request failed
 }
 
 // Clone creates a deep copy of RequestOptions.
@@ -178,8 +195,8 @@ func (ro *RequestOptions) Clone() *RequestOptions {
 	}
 
 	// Note: We're not deep copying the Context, TLSConfig, CookieJar,
-	// Middleware, or ResponseDecoder as these are typically shared or
-	// would require more complex deep copying logic.
+	// Middleware, ResponseDecoder, or CustomClient as these are typically
+	// shared or would require more complex deep copying logic.
 
 	return &clone
 }
