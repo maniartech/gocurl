@@ -11,6 +11,54 @@ import (
 )
 
 // RequestOptions represents the configuration for an HTTP request in GoCurl.
+//
+// THREAD-SAFETY GUARANTEES:
+//
+//   - SAFE for concurrent reads: All fields can be safely read from multiple goroutines
+//   - SAFE for concurrent use: Each request execution uses its own context and state
+//   - UNSAFE for concurrent writes: The map-based fields (Headers, Form, QueryParams) are
+//     NOT safe for concurrent modification without external synchronization
+//
+// Map fields requiring caution:
+//   - Headers (http.Header = map[string][]string)
+//   - Form (url.Values = map[string][]string)
+//   - QueryParams (url.Values = map[string][]string)
+//
+// Best Practices:
+//
+//  1. Concurrent Reads (SAFE):
+//     opts := options.NewRequestOptions("https://api.example.com")
+//     opts.SetHeader("Authorization", "Bearer token")
+//
+//     // Safe: Multiple goroutines reading the same options
+//     go func() { resp, _ := gocurl.Execute(ctx1, opts) }()
+//     go func() { resp, _ := gocurl.Execute(ctx2, opts) }()
+//
+//  2. Concurrent Modifications (USE CLONE):
+//     opts := options.NewRequestOptions("https://api.example.com")
+//
+//     // Safe: Clone before modification in each goroutine
+//     go func() {
+//     opts1 := opts.Clone()
+//     opts1.AddHeader("X-Request-ID", "req-1")
+//     gocurl.Execute(ctx, opts1)
+//     }()
+//
+//     go func() {
+//     opts2 := opts.Clone()
+//     opts2.AddHeader("X-Request-ID", "req-2")
+//     gocurl.Execute(ctx, opts2)
+//     }()
+//
+//  3. UNSAFE Pattern (RACE CONDITION):
+//     opts := options.NewRequestOptions("https://api.example.com")
+//
+//     // ❌ RACE: Concurrent map writes
+//     go opts.AddHeader("X-ID", "1")  // UNSAFE
+//     go opts.AddHeader("X-ID", "2")  // UNSAFE
+//
+// Use Clone() to create independent copies before concurrent modification.
+// Run tests with -race flag to detect race conditions: go test -race ./...
 type RequestOptions struct {
 	// HTTP request basics
 	Method      string      `json:"method"`
@@ -29,7 +77,7 @@ type RequestOptions struct {
 	KeyFile             string      `json:"key_file,omitempty"`
 	CAFile              string      `json:"ca_file,omitempty"`
 	Insecure            bool        `json:"insecure,omitempty"`
-	TLSConfig           *tls.Config `json:"-"`                               // Not exported to JSON
+	TLSConfig           *tls.Config `json:"-"`                               // WARNING: Do not modify after passing to Execute() - undefined behavior
 	CertPinFingerprints []string    `json:"cert_pin_fingerprints,omitempty"` // SHA256 fingerprints for certificate pinning
 	SNIServerName       string      `json:"sni_server_name,omitempty"`       // Server name for SNI
 
@@ -77,7 +125,6 @@ type RequestOptions struct {
 	RequestID         string                       `json:"request_id,omitempty"`
 	Middleware        []middlewares.MiddlewareFunc `json:"-"`
 	ResponseBodyLimit int64                        `json:"response_body_limit,omitempty"`
-	ResponseDecoder   ResponseDecoder              `json:"-"` // Custom response decoder function
 	CustomClient      HTTPClient                   `json:"-"` // Custom HTTP client implementation for testing/mocking
 }
 
@@ -130,11 +177,6 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// ResponseDecoder is a function type for custom response decoding.
-// This allows users to implement custom unmarshaling logic for specialized formats
-// like XML, YAML, Protocol Buffers, or custom JSON processing.
-type ResponseDecoder func(*http.Response) (interface{}, error)
-
 // Clone creates a deep copy of RequestOptions.
 func (ro *RequestOptions) Clone() *RequestOptions {
 	clone := *ro
@@ -169,7 +211,7 @@ func (ro *RequestOptions) Clone() *RequestOptions {
 	}
 
 	// Note: We're not deep copying the TLSConfig, CookieJar,
-	// Middleware, ResponseDecoder, or CustomClient as these are typically
+	// Middleware, or CustomClient as these are typically
 	// shared or would require more complex deep copying logic.
 
 	return &clone
