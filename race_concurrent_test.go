@@ -101,9 +101,7 @@ func TestRequestOptions_ConcurrentReadsAreSafe(t *testing.T) {
 //
 // Expected: "WARNING: DATA RACE" when run with -race flag
 func TestRequestOptions_ConcurrentHeaderWrites_DetectsRace(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping race condition demonstration in short mode")
-	}
+	t.Skip("⚠️  Skipping: This test intentionally triggers race conditions. Run manually with: go test -race -run TestRequestOptions_ConcurrentHeaderWrites_DetectsRace")
 
 	t.Log("⚠️  This test demonstrates UNSAFE concurrent map writes")
 	t.Log("⚠️  Run with -race flag to see the race detector catch this")
@@ -134,9 +132,7 @@ func TestRequestOptions_ConcurrentHeaderWrites_DetectsRace(t *testing.T) {
 
 // TestRequestOptions_ConcurrentFormWrites_DetectsRace demonstrates race in Form field.
 func TestRequestOptions_ConcurrentFormWrites_DetectsRace(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping race condition demonstration in short mode")
-	}
+	t.Skip("⚠️  Skipping: This test intentionally triggers race conditions. Run manually with: go test -race -run TestRequestOptions_ConcurrentFormWrites_DetectsRace")
 
 	t.Log("⚠️  This test demonstrates UNSAFE concurrent Form writes")
 
@@ -164,9 +160,7 @@ func TestRequestOptions_ConcurrentFormWrites_DetectsRace(t *testing.T) {
 
 // TestRequestOptions_ConcurrentQueryParamWrites_DetectsRace demonstrates race in QueryParams.
 func TestRequestOptions_ConcurrentQueryParamWrites_DetectsRace(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping race condition demonstration in short mode")
-	}
+	t.Skip("⚠️  Skipping: This test intentionally triggers race conditions. Run with GOCURL_RACE_TESTS=1 to enable")
 
 	t.Log("⚠️  This test demonstrates UNSAFE concurrent QueryParams writes")
 

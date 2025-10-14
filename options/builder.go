@@ -259,6 +259,61 @@ func (b *RequestOptionsBuilder) Patch(url string, body string, headers http.Head
 	return b
 }
 
+// Validate checks all fields for validity
+// Returns error if any validation fails
+func (b *RequestOptionsBuilder) Validate() error {
+	opts := b.options
+
+	// Validate method
+	if err := validateMethod(opts.Method); err != nil {
+		return err
+	}
+
+	// Validate URL
+	if err := validateURL(opts.URL); err != nil {
+		return err
+	}
+
+	// Validate headers
+	if err := validateHeaders(opts.Headers); err != nil {
+		return err
+	}
+
+	// Validate body
+	if opts.Body != "" {
+		limit := opts.ResponseBodyLimit
+		if limit <= 0 {
+			limit = 10 * 1024 * 1024 // 10MB default
+		}
+		if err := validateBody(opts.Body, limit); err != nil {
+			return err
+		}
+	}
+
+	// Validate form
+	if len(opts.Form) > 0 {
+		if err := validateForm(opts.Form); err != nil {
+			return err
+		}
+	}
+
+	// Validate query params
+	if len(opts.QueryParams) > 0 {
+		if err := validateQueryParams(opts.QueryParams); err != nil {
+			return err
+		}
+	}
+
+	// Validate secure auth
+	hasBasicAuth := opts.BasicAuth != nil
+	hasBearerToken := opts.BearerToken != ""
+	if err := validateSecureAuth(opts.URL, hasBasicAuth, hasBearerToken); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Build returns the configured RequestOptions instance.
 func (b *RequestOptionsBuilder) Build() *RequestOptions {
 	return b.options.Clone()

@@ -346,6 +346,16 @@ func CreateRequest(ctx context.Context, opts *options.RequestOptions) (*http.Req
 		req.Header.Set("Referer", opts.Referer)
 	}
 
+	// Apply cookies from Cookies field
+	for _, cookie := range opts.Cookies {
+		req.AddCookie(cookie)
+	}
+
+	// Add Request ID header for distributed tracing
+	if opts.RequestID != "" {
+		req.Header.Set("X-Request-ID", opts.RequestID)
+	}
+
 	// Set Accept-Encoding if compression is enabled
 	if opts.Compress {
 		acceptEncoding := GetAcceptEncodingHeader(opts.Compress, opts.CompressionMethods)
