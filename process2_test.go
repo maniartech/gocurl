@@ -103,7 +103,8 @@ func TestCustomTLSConfig(t *testing.T) {
 		defer server.Close()
 
 		opts := &options.RequestOptions{
-			URL: server.URL,
+			URL:      server.URL,
+			Insecure: true, // Required when using InsecureSkipVerify
 			TLSConfig: &tls.Config{
 				InsecureSkipVerify: true, // Only for testing purposes
 			},
@@ -176,7 +177,8 @@ func TestHTTPVersions(t *testing.T) {
 		defer server.Close()
 
 		opts := &options.RequestOptions{
-			URL: server.URL,
+			URL:      server.URL,
+			Insecure: true, // Required when using InsecureSkipVerify
 			TLSConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},
