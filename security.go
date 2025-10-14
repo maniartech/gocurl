@@ -30,6 +30,11 @@ func LoadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
 	// Handle insecure mode
 	if opts.Insecure {
 		tlsConfig.InsecureSkipVerify = true
+		// Print security warning to stderr (like curl does)
+		if opts.Verbose || !opts.Silent {
+			fmt.Fprintf(os.Stderr, "WARNING: Using --insecure mode. Certificate verification is disabled.\n")
+			fmt.Fprintf(os.Stderr, "WARNING: This is NOT secure and should only be used for testing.\n")
+		}
 	}
 
 	// Load client certificate and key if provided
