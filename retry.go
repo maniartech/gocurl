@@ -12,10 +12,11 @@ import (
 	"github.com/maniartech/gocurl/options"
 )
 
-// ExecuteWithRetries handles HTTP request execution with retry logic.
+// executeWithRetries handles HTTP request execution with retry logic.
 // It properly clones requests with bodies to enable retries for POST/PUT requests.
 // It respects context cancellation and will stop retrying if context is cancelled or deadline exceeded.
-func ExecuteWithRetries(client *http.Client, req *http.Request, opts *options.RequestOptions) (*http.Response, error) {
+// Accepts HTTPClient interface to support custom client implementations including mocks and test clients.
+func executeWithRetries(client options.HTTPClient, req *http.Request, opts *options.RequestOptions) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 	var bodyBytes []byte
