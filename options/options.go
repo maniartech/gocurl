@@ -86,7 +86,7 @@ type RequestOptions struct {
 }
 
 // NewRequestOptions creates a new RequestOptions with default values aligned to cURL's defaults.
-func NewRequestOptions(url stri ng) *RequestOptions {
+func NewRequestOptions(url string) *RequestOptions {
 	return &RequestOptions{
 		URL: url,
 		// Headers:         make(http.Header),
