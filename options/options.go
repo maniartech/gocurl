@@ -81,6 +81,7 @@ type RequestOptions struct {
 	ResponseBodyLimit int64                        `json:"response_body_limit,omitempty"`
 	ResponseDecoder   ResponseDecoder              `json:"-"`
 	Metrics           *RequestMetrics              `json:"metrics,omitempty"`
+	CustomClient      interface{}                  `json:"-"` // HTTPClient interface for custom/mock clients
 }
 
 // NewRequestOptions creates a new RequestOptions with default values aligned to cURL's defaults.

@@ -165,7 +165,7 @@ func TestRequestOptionsBuilder(t *testing.T) {
 func TestScenarioOrientedMethods(t *testing.T) {
 	// Test POST method
 	builder := options.NewRequestOptionsBuilder()
-	requestOptions := builder.POST("https://example.com", "{\"key\":\"value\"}", http.Header{"Content-Type": []string{"application/json"}}).Build()
+	requestOptions := builder.Post("https://example.com", "{\"key\":\"value\"}", http.Header{"Content-Type": []string{"application/json"}}).Build()
 
 	if requestOptions.Method != "POST" {
 		t.Errorf("expected method to be POST, got %s", requestOptions.Method)
@@ -185,7 +185,7 @@ func TestScenarioOrientedMethods(t *testing.T) {
 
 	// Test GET method
 	builder = options.NewRequestOptionsBuilder()
-	requestOptions = builder.GET("https://example.com", http.Header{"Accept": []string{"application/json"}}).Build()
+	requestOptions = builder.Get("https://example.com", http.Header{"Accept": []string{"application/json"}}).Build()
 
 	if requestOptions.Method != "GET" {
 		t.Errorf("expected method to be GET, got %s", requestOptions.Method)
@@ -201,7 +201,7 @@ func TestScenarioOrientedMethods(t *testing.T) {
 
 	// Test PUT method
 	builder = options.NewRequestOptionsBuilder()
-	requestOptions = builder.PUT("https://example.com", "{\"key\":\"value\"}", http.Header{"Content-Type": []string{"application/json"}}).Build()
+	requestOptions = builder.Put("https://example.com", "{\"key\":\"value\"}", http.Header{"Content-Type": []string{"application/json"}}).Build()
 
 	if requestOptions.Method != "PUT" {
 		t.Errorf("expected method to be PUT, got %s", requestOptions.Method)
@@ -221,7 +221,7 @@ func TestScenarioOrientedMethods(t *testing.T) {
 
 	// Test DELETE method
 	builder = options.NewRequestOptionsBuilder()
-	requestOptions = builder.DELETE("https://example.com", http.Header{"Accept": []string{"application/json"}}).Build()
+	requestOptions = builder.Delete("https://example.com", http.Header{"Accept": []string{"application/json"}}).Build()
 
 	if requestOptions.Method != "DELETE" {
 		t.Errorf("expected method to be DELETE, got %s", requestOptions.Method)
@@ -237,7 +237,7 @@ func TestScenarioOrientedMethods(t *testing.T) {
 
 	// Test PATCH method
 	builder = options.NewRequestOptionsBuilder()
-	requestOptions = builder.PATCH("https://example.com", "{\"key\":\"value\"}", http.Header{"Content-Type": []string{"application/json"}}).Build()
+	requestOptions = builder.Patch("https://example.com", "{\"key\":\"value\"}", http.Header{"Content-Type": []string{"application/json"}}).Build()
 
 	if requestOptions.Method != "PATCH" {
 		t.Errorf("expected method to be PATCH, got %s", requestOptions.Method)

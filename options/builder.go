@@ -1,7 +1,9 @@
 package options
 
 import (
+	"context"
 	"crypto/tls"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"time"
@@ -212,8 +214,8 @@ func (b *RequestOptionsBuilder) SetVerbose(verbose bool) *RequestOptionsBuilder 
 	return b
 }
 
-// POST creates a POST request with the given URL, body, and headers.
-func (b *RequestOptionsBuilder) POST(url string, body string, headers http.Header) *RequestOptionsBuilder {
+// Post creates a POST request with the given URL, body, and headers.
+func (b *RequestOptionsBuilder) Post(url string, body string, headers http.Header) *RequestOptionsBuilder {
 	b.options.Method = "POST"
 	b.options.URL = url
 	b.options.Body = body
@@ -221,16 +223,16 @@ func (b *RequestOptionsBuilder) POST(url string, body string, headers http.Heade
 	return b
 }
 
-// GET creates a GET request with the given URL and headers.
-func (b *RequestOptionsBuilder) GET(url string, headers http.Header) *RequestOptionsBuilder {
+// Get creates a GET request with the given URL and headers.
+func (b *RequestOptionsBuilder) Get(url string, headers http.Header) *RequestOptionsBuilder {
 	b.options.Method = "GET"
 	b.options.URL = url
 	b.options.Headers = headers
 	return b
 }
 
-// PUT creates a PUT request with the given URL, body, and headers.
-func (b *RequestOptionsBuilder) PUT(url string, body string, headers http.Header) *RequestOptionsBuilder {
+// Put creates a PUT request with the given URL, body, and headers.
+func (b *RequestOptionsBuilder) Put(url string, body string, headers http.Header) *RequestOptionsBuilder {
 	b.options.Method = "PUT"
 	b.options.URL = url
 	b.options.Body = body
@@ -238,16 +240,16 @@ func (b *RequestOptionsBuilder) PUT(url string, body string, headers http.Header
 	return b
 }
 
-// DELETE creates a DELETE request with the given URL and headers.
-func (b *RequestOptionsBuilder) DELETE(url string, headers http.Header) *RequestOptionsBuilder {
+// Delete creates a DELETE request with the given URL and headers.
+func (b *RequestOptionsBuilder) Delete(url string, headers http.Header) *RequestOptionsBuilder {
 	b.options.Method = "DELETE"
 	b.options.URL = url
 	b.options.Headers = headers
 	return b
 }
 
-// PATCH creates a PATCH request with the given URL, body, and headers.
-func (b *RequestOptionsBuilder) PATCH(url string, body string, headers http.Header) *RequestOptionsBuilder {
+// Patch creates a PATCH request with the given URL, body, and headers.
+func (b *RequestOptionsBuilder) Patch(url string, body string, headers http.Header) *RequestOptionsBuilder {
 	b.options.Method = "PATCH"
 	b.options.URL = url
 	b.options.Body = body
@@ -260,11 +262,78 @@ func (b *RequestOptionsBuilder) Build() *RequestOptions {
 	return b.options.Clone()
 }
 
+// Convenience methods for common patterns
+
+// JSON sets the body as JSON and adds Content-Type header
+func (b *RequestOptionsBuilder) JSON(body interface{}) *RequestOptionsBuilder {
+	data, err := json.Marshal(body)
+	if err != nil {
+		// Store error for later retrieval if needed
+		// For now, just use empty body
+		b.options.Body = ""
+	} else {
+		b.options.Body = string(data)
+		b.AddHeader("Content-Type", "application/json")
+	}
+	return b
+}
+
+// BearerAuth sets the Authorization header with a Bearer token
+func (b *RequestOptionsBuilder) BearerAuth(token string) *RequestOptionsBuilder {
+	b.AddHeader("Authorization", "Bearer "+token)
+	return b
+}
+
+// Form sets form data and Content-Type header
+func (b *RequestOptionsBuilder) Form(data url.Values) *RequestOptionsBuilder {
+	b.options.Form = data
+	b.AddHeader("Content-Type", "application/x-www-form-urlencoded")
+	return b
+}
+
+// WithDefaultRetry adds default retry configuration (3 retries, 1s delay)
+func (b *RequestOptionsBuilder) WithDefaultRetry() *RequestOptionsBuilder {
+	b.options.RetryConfig = &RetryConfig{
+		MaxRetries:  3,
+		RetryDelay:  1 * time.Second,
+		RetryOnHTTP: []int{429, 500, 502, 503, 504},
+	}
+	return b
+}
+
+// WithExponentialBackoff adds retry with exponential backoff
+func (b *RequestOptionsBuilder) WithExponentialBackoff(maxRetries int, initialDelay time.Duration) *RequestOptionsBuilder {
+	b.options.RetryConfig = &RetryConfig{
+		MaxRetries:  maxRetries,
+		RetryDelay:  initialDelay,
+		RetryOnHTTP: []int{429, 500, 502, 503, 504},
+	}
+	return b
+}
+
+// QuickTimeout sets a quick timeout (5 seconds)
+func (b *RequestOptionsBuilder) QuickTimeout() *RequestOptionsBuilder {
+	b.options.Timeout = 5 * time.Second
+	return b
+}
+
+// SlowTimeout sets a slow timeout (2 minutes)
+func (b *RequestOptionsBuilder) SlowTimeout() *RequestOptionsBuilder {
+	b.options.Timeout = 2 * time.Minute
+	return b
+}
+
+// WithContext sets the context for the request
+func (b *RequestOptionsBuilder) WithContext(ctx context.Context) *RequestOptionsBuilder {
+	b.options.Context = ctx
+	return b
+}
+
 // Example usage
 func example() {
 	builder := NewRequestOptionsBuilder()
 	requestOptions := builder.
-		POST("https://example.com", "{\"name\":\"example\"}", http.Header{"Content-Type": []string{"application/json"}}).
+		Post("https://example.com", "{\"name\":\"example\"}", http.Header{"Content-Type": []string{"application/json"}}).
 		SetTimeout(30 * time.Second).
 		SetFollowRedirects(true).
 		SetVerbose(true).
