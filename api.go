@@ -88,6 +88,12 @@ func RequestWithContext(ctx context.Context, command interface{}, vars Variables
 
 // Execute runs a request with pre-built RequestOptions
 func Execute(opts *options.RequestOptions) (*Response, error) {
+	// CRITICAL: Cleanup context if we created it
+	// This prevents goroutine leaks (industry standard pattern)
+	if opts.ContextCancel != nil {
+		defer opts.ContextCancel()
+	}
+
 	// Use context.Background if not provided
 	ctx := opts.Context
 	if ctx == nil {

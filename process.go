@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/maniartech/gocurl/middlewares"
 	"github.com/maniartech/gocurl/options"
@@ -45,8 +46,8 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 		return nil, "", err
 	}
 
-	// Create HTTP client
-	client, err := CreateHTTPClient(opts)
+	// Create HTTP client with context-aware timeout handling
+	client, err := CreateHTTPClient(ctx, opts)
 	if err != nil {
 		return nil, "", err
 	}
@@ -102,7 +103,7 @@ func ValidateOptions(opts *options.RequestOptions) error {
 	return ValidateRequestOptions(opts)
 }
 
-func CreateHTTPClient(opts *options.RequestOptions) (*http.Client, error) {
+func CreateHTTPClient(ctx context.Context, opts *options.RequestOptions) (*http.Client, error) {
 	// Load TLS configuration
 	tlsConfig, err := LoadTLSConfig(opts)
 	if err != nil {
@@ -153,9 +154,28 @@ func CreateHTTPClient(opts *options.RequestOptions) (*http.Client, error) {
 		transport = proxyTransport
 	}
 
+	// INDUSTRY STANDARD: Context Priority Pattern
+	// Determine timeout based on context deadline vs opts.Timeout
+	var clientTimeout time.Duration
+
+	if ctx != nil {
+		// If context has a deadline, prefer it over opts.Timeout
+		if _, hasDeadline := ctx.Deadline(); hasDeadline {
+			// Don't set client.Timeout, let context handle it
+			// This prevents nested timeouts and unpredictable behavior
+			clientTimeout = 0
+		} else {
+			// No deadline in context, use opts.Timeout as fallback
+			clientTimeout = opts.Timeout
+		}
+	} else {
+		// No context provided, use opts.Timeout
+		clientTimeout = opts.Timeout
+	}
+
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   opts.Timeout,
+		Timeout:   clientTimeout, // Set based on context priority pattern
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if !opts.FollowRedirects {
 				return http.ErrUseLastResponse

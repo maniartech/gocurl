@@ -194,19 +194,33 @@ func TestValidateOptions(t *testing.T) {
 
 func TestCreateHTTPClient(t *testing.T) {
 	t.Run("Default client", func(t *testing.T) {
+		ctx := context.Background()
 		opts := &options.RequestOptions{}
-		client, err := gocurl.CreateHTTPClient(opts)
+		client, err := gocurl.CreateHTTPClient(ctx, opts)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
 	})
 
-	t.Run("Custom timeout", func(t *testing.T) {
+	t.Run("Custom timeout without context deadline", func(t *testing.T) {
+		ctx := context.Background()
 		opts := &options.RequestOptions{
 			Timeout: 5 * time.Second,
 		}
-		client, err := gocurl.CreateHTTPClient(opts)
+		client, err := gocurl.CreateHTTPClient(ctx, opts)
 		assert.NoError(t, err)
 		assert.Equal(t, 5*time.Second, client.Timeout)
+	})
+
+	t.Run("Context with deadline takes priority", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		opts := &options.RequestOptions{
+			Timeout: 5 * time.Second, // Should be ignored
+		}
+		client, err := gocurl.CreateHTTPClient(ctx, opts)
+		assert.NoError(t, err)
+		// When context has deadline, client.Timeout should be 0 (context controls)
+		assert.Equal(t, time.Duration(0), client.Timeout)
 	})
 
 	// Add more client creation test cases
