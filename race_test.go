@@ -170,8 +170,8 @@ func TestHighConcurrencyStress(t *testing.T) {
 	const iterations = 10
 
 	var wg sync.WaitGroup
-	var successCount int64
-	var errorCount int64
+	var successCount atomic.Int64
+	var errorCount atomic.Int64
 
 	for i := 0; i < goroutines; i++ {
 		wg.Add(1)
@@ -187,21 +187,21 @@ func TestHighConcurrencyStress(t *testing.T) {
 
 				_, err := gocurl.ArgsToOptions(args)
 				if err != nil {
-					errorCount++
+					errorCount.Add(1)
 					return
 				}
-				successCount++
+				successCount.Add(1)
 			}
 		}(i)
 	}
 
 	wg.Wait()
 
-	if errorCount > 0 {
-		t.Errorf("High concurrency stress test had %d errors", errorCount)
+	if errorCount.Load() > 0 {
+		t.Errorf("High concurrency stress test had %d errors", errorCount.Load())
 	}
 
-	t.Logf("Successfully processed %d operations with %d goroutines", successCount, goroutines)
+	t.Logf("Successfully processed %d operations with %d goroutines", successCount.Load(), goroutines)
 }
 
 // TestConcurrentErrorHandling verifies error handling is thread-safe
