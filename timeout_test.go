@@ -48,12 +48,15 @@ func TestTimeoutHandling_OptsTimeoutOnly(t *testing.T) {
 	defer server.Close()
 
 	// Options with timeout (no context needed for this test)
-	opts := options.NewRequestOptionsBuilder().
+	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil).
-		SetTimeout(500 * time.Millisecond).
-		Build()
+		SetTimeout(500 * time.Millisecond)
+	
+	opts := builder.Build()
+	ctx := builder.GetContext() // Get context from builder
+	defer builder.Cleanup()
 
-	resp, err := gocurl.Execute(opts)
+	resp, err := gocurl.Execute(ctx, opts)
 
 	// Should timeout via opts.Timeout
 	require.Error(t, err)
@@ -76,14 +79,17 @@ func TestTimeoutHandling_ContextTakesPriority(t *testing.T) {
 
 	// Options with LONGER timeout (10 seconds)
 	// Context should take priority and timeout at 500ms
-	opts := options.NewRequestOptionsBuilder().
+	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil).
 		SetTimeout(10 * time.Second). // This should be ignored
-		WithContext(ctx).
-		Build()
+		WithContext(ctx)
+	
+	opts := builder.Build()
+	builderCtx := builder.GetContext() // This has both timeouts merged
+	defer builder.Cleanup()
 
 	start := time.Now()
-	resp, err := gocurl.Execute(opts)
+	resp, err := gocurl.Execute(builderCtx, opts)
 	elapsed := time.Since(start)
 
 	// Should timeout via context (~500ms), NOT opts.Timeout (10s)
@@ -131,11 +137,13 @@ func TestTimeoutHandling_NoTimeoutSet(t *testing.T) {
 	defer server.Close()
 
 	// No context timeout, no opts.Timeout
-	opts := options.NewRequestOptionsBuilder().
-		Get(server.URL, nil).
-		Build()
+	builder := options.NewRequestOptionsBuilder().
+		Get(server.URL, nil)
+	
+	opts := builder.Build()
+	ctx := builder.GetContext()
 
-	resp, err := gocurl.Execute(opts)
+	resp, err := gocurl.Execute(ctx, opts)
 
 	// Should succeed
 	require.NoError(t, err)
@@ -154,13 +162,16 @@ func TestTimeoutHandling_BuilderWithTimeout(t *testing.T) {
 	defer server.Close()
 
 	// Use builder's WithTimeout (creates context with timeout)
-	opts := options.NewRequestOptionsBuilder().
+	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil).
-		WithTimeout(500 * time.Millisecond).
-		Build()
+		WithTimeout(500 * time.Millisecond)
+	
+	opts := builder.Build()
+	ctx := builder.GetContext()
+	defer builder.Cleanup()
 
 	start := time.Now()
-	resp, err := gocurl.Execute(opts)
+	resp, err := gocurl.Execute(ctx, opts)
 	elapsed := time.Since(start)
 
 	// Should timeout at ~500ms
@@ -237,23 +248,25 @@ func TestTimeoutHandling_ContextCleanup(t *testing.T) {
 	defer server.Close()
 
 	// Use builder's WithTimeout which creates a context with cancel
-	opts := options.NewRequestOptionsBuilder().
+	builder := options.NewRequestOptionsBuilder().
 		Get(server.URL, nil).
-		WithTimeout(5 * time.Second).
-		Build()
+		WithTimeout(5 * time.Second)
+	
+	opts := builder.Build()
+	ctx := builder.GetContext()
 
-	// Verify cancel function is stored
-	require.NotNil(t, opts.ContextCancel, "ContextCancel should be set by WithTimeout")
-
-	// Execute (should call cancel via defer)
-	resp, err := gocurl.Execute(opts)
+	// Execute
+	resp, err := gocurl.Execute(ctx, opts)
 
 	// Should succeed
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	defer resp.Body.Close()
 
-	// The cancel should have been called (via defer in Execute)
+	// Clean up the builder's context
+	builder.Cleanup()
+
+	// The cancel should have been called (via builder.Cleanup)
 	// We can't directly test this, but no panic means it worked
 }
 

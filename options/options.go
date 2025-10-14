@@ -1,7 +1,6 @@
 package options
 
 import (
-	"context"
 	"crypto/tls"
 	"encoding/json"
 	"net/http"
@@ -75,13 +74,10 @@ type RequestOptions struct {
 	Verbose    bool   `json:"verbose,omitempty"`
 
 	// Advanced options
-	Context           context.Context              `json:"-"` // Not exported to JSON
-	ContextCancel     context.CancelFunc           `json:"-"` // Cancel function for context cleanup
 	RequestID         string                       `json:"request_id,omitempty"`
 	Middleware        []middlewares.MiddlewareFunc `json:"-"`
 	ResponseBodyLimit int64                        `json:"response_body_limit,omitempty"`
 	ResponseDecoder   ResponseDecoder              `json:"-"` // Custom response decoder function
-	Metrics           *RequestMetrics              `json:"-"` // Request metrics for observability
 	CustomClient      HTTPClient                   `json:"-"` // Custom HTTP client implementation for testing/mocking
 }
 
@@ -139,23 +135,6 @@ type HTTPClient interface {
 // like XML, YAML, Protocol Buffers, or custom JSON processing.
 type ResponseDecoder func(*http.Response) (interface{}, error)
 
-// RequestMetrics represents metrics collected during a request.
-// This is useful for observability, monitoring, and debugging in production.
-type RequestMetrics struct {
-	StartTime     time.Time     `json:"start_time"`      // When the request started
-	EndTime       time.Time     `json:"end_time"`        // When the request completed
-	Duration      time.Duration `json:"duration"`        // Total request duration
-	DNSLookupTime time.Duration `json:"dns_lookup_time"` // DNS resolution time
-	ConnectTime   time.Duration `json:"connect_time"`    // Connection establishment time
-	TLSTime       time.Duration `json:"tls_time"`        // TLS handshake time
-	FirstByteTime time.Duration `json:"first_byte_time"` // Time to first response byte
-	RetryCount    int           `json:"retry_count"`     // Number of retries attempted
-	ResponseSize  int64         `json:"response_size"`   // Size of response body in bytes
-	RequestSize   int64         `json:"request_size"`    // Size of request body in bytes
-	StatusCode    int           `json:"status_code"`     // HTTP status code
-	Error         string        `json:"error,omitempty"` // Error message if request failed
-}
-
 // Clone creates a deep copy of RequestOptions.
 func (ro *RequestOptions) Clone() *RequestOptions {
 	clone := *ro
@@ -189,12 +168,7 @@ func (ro *RequestOptions) Clone() *RequestOptions {
 		clone.RetryConfig = &clonedRetryConfig
 	}
 
-	if ro.Metrics != nil {
-		clonedMetrics := *ro.Metrics
-		clone.Metrics = &clonedMetrics
-	}
-
-	// Note: We're not deep copying the Context, TLSConfig, CookieJar,
+	// Note: We're not deep copying the TLSConfig, CookieJar,
 	// Middleware, ResponseDecoder, or CustomClient as these are typically
 	// shared or would require more complex deep copying logic.
 
