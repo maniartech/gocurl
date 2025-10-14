@@ -46,10 +46,16 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 		return nil, "", err
 	}
 
-	// Create HTTP client with context-aware timeout handling
-	client, err := CreateHTTPClient(ctx, opts)
-	if err != nil {
-		return nil, "", err
+	// Use custom client if provided, otherwise create standard HTTP client
+	var httpClient options.HTTPClient
+	if opts.CustomClient != nil {
+		httpClient = opts.CustomClient
+	} else {
+		client, err := CreateHTTPClient(ctx, opts)
+		if err != nil {
+			return nil, "", err
+		}
+		httpClient = client
 	}
 
 	// Create request
@@ -65,7 +71,7 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 	}
 
 	// Execute request with retries
-	resp, err := ExecuteWithRetries(client, req, opts)
+	resp, err := executeWithRetries(httpClient, req, opts)
 	if err != nil {
 		return nil, "", err
 	}
@@ -339,12 +345,6 @@ func ApplyMiddleware(req *http.Request, middleware []middlewares.MiddlewareFunc)
 		}
 	}
 	return req, nil
-}
-
-// ExecuteRequestWithRetries is deprecated. Use ExecuteWithRetries from retry.go instead.
-// Kept for backward compatibility.
-func ExecuteRequestWithRetries(client *http.Client, req *http.Request, opts *options.RequestOptions) (*http.Response, error) {
-	return ExecuteWithRetries(client, req, opts)
 }
 
 func HandleOutput(body string, opts *options.RequestOptions) error {
