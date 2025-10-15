@@ -16,27 +16,8 @@ import (
 	"github.com/maniartech/gocurl/middlewares"
 	"github.com/maniartech/gocurl/options"
 	"github.com/maniartech/gocurl/proxy"
-	"github.com/maniartech/gocurl/tokenizer"
 	"golang.org/x/net/http2"
 )
-
-func Curl(ctx context.Context, command string) (*http.Response, string, error) {
-	tokenizer := tokenizer.NewTokenizer()
-
-	err := tokenizer.Tokenize(command)
-	if err != nil {
-		return nil, "", err
-	}
-
-	tokens := tokenizer.GetTokens()
-
-	opts, err := convertTokensToRequestOptions(tokens)
-	if err != nil {
-		return nil, "", err
-	}
-
-	return Process(ctx, opts)
-}
 
 // Process executes the curl command based on the provided options.RequestOptions
 // Process executes the curl command based on the provided options.RequestOptions
