@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -57,7 +57,7 @@ func TestPostRequests(t *testing.T) {
 			require.NoError(t, err)
 			defer file.Close()
 			assert.Equal(t, "test.txt", header.Filename)
-			content, err := ioutil.ReadAll(file)
+			content, err := io.ReadAll(file)
 			require.NoError(t, err)
 			assert.Equal(t, "test file content", string(content))
 			fmt.Fprint(w, "Multipart form data received")
@@ -65,7 +65,7 @@ func TestPostRequests(t *testing.T) {
 		defer server.Close()
 
 		// Create a temporary file for testing
-		tmpfile, err := ioutil.TempFile("", "test.txt")
+		tmpfile, err := os.CreateTemp("", "test.txt")
 		require.NoError(t, err)
 		defer os.Remove(tmpfile.Name()) // clean up
 

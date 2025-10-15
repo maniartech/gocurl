@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -74,7 +73,7 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 	if opts.ResponseBodyLimit > 0 {
 		// Use LimitReader to enforce size limit
 		limitedReader := io.LimitReader(resp.Body, opts.ResponseBodyLimit+1) // +1 to detect overflow
-		bodyBytes, err = ioutil.ReadAll(limitedReader)
+		bodyBytes, err = io.ReadAll(limitedReader)
 		if err != nil {
 			resp.Body.Close()
 			return nil, "", fmt.Errorf("failed to read response body: %v", err)
@@ -88,7 +87,7 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 		}
 	} else {
 		// No limit - read entire response
-		bodyBytes, err = ioutil.ReadAll(resp.Body)
+		bodyBytes, err = io.ReadAll(resp.Body)
 		if err != nil {
 			resp.Body.Close()
 			return nil, "", fmt.Errorf("failed to read response body: %v", err)
@@ -108,7 +107,7 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 	printConnectionClose(opts)
 
 	// Recreate the response body for further use
-	resp.Body = ioutil.NopCloser(strings.NewReader(bodyString))
+	resp.Body = io.NopCloser(strings.NewReader(bodyString))
 
 	return resp, bodyString, nil
 }
@@ -501,7 +500,7 @@ func ApplyMiddleware(req *http.Request, middleware []middlewares.MiddlewareFunc)
 
 func HandleOutput(body string, opts *options.RequestOptions) error {
 	if opts.OutputFile != "" {
-		err := ioutil.WriteFile(opts.OutputFile, []byte(body), 0644)
+		err := os.WriteFile(opts.OutputFile, []byte(body), 0644)
 		if err != nil {
 			return fmt.Errorf("failed to write response to file: %v", err)
 		}

@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -46,7 +45,7 @@ func TestProcess(t *testing.T) {
 		}))
 		defer server.Close()
 
-		tempFile, err := ioutil.TempFile("", "gocurl-test-")
+		tempFile, err := os.CreateTemp("", "gocurl-test-")
 		require.NoError(t, err)
 		tempFile.Close()
 		defer os.Remove(tempFile.Name())
@@ -59,7 +58,7 @@ func TestProcess(t *testing.T) {
 		_, _, err = gocurl.Process(context.Background(), opts)
 		require.NoError(t, err)
 
-		content, err := ioutil.ReadFile(tempFile.Name())
+		content, err := os.ReadFile(tempFile.Name())
 		require.NoError(t, err)
 		assert.Equal(t, "File content", string(content))
 	})
@@ -136,7 +135,7 @@ func TestProcess(t *testing.T) {
 		_, _, err = gocurl.Process(context.Background(), opts)
 		require.NoError(t, err)
 
-		content, err := ioutil.ReadFile(tempFile.Name())
+		content, err := os.ReadFile(tempFile.Name())
 		require.NoError(t, err)
 		assert.Equal(t, "File content", string(content))
 	})
@@ -246,7 +245,7 @@ func TestCreateRequest(t *testing.T) {
 		req, err := gocurl.CreateRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Equal(t, "POST", req.Method)
-		body, _ := ioutil.ReadAll(req.Body)
+		body, _ := io.ReadAll(req.Body)
 		assert.Equal(t, "test data", string(body))
 	})
 
@@ -423,25 +422,25 @@ func TestExecuteRequestWithRetries(t *testing.T) {
 
 func TestHandleOutput(t *testing.T) {
 	t.Run("Output to file", func(t *testing.T) {
-		tempFile, err := ioutil.TempFile("", "gocurl-test-")
+		tempFile, err := os.CreateTemp("", "gocurl-test-")
 		require.NoError(t, err)
 		tempFile.Close()
 		defer os.Remove(tempFile.Name())
 
 		resp := &http.Response{
-			Body: ioutil.NopCloser(strings.NewReader("Test output")),
+			Body: io.NopCloser(strings.NewReader("Test output")),
 		}
 		opts := &options.RequestOptions{
 			OutputFile: tempFile.Name(),
 		}
 
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		assert.NoError(t, err)
 
 		err = gocurl.HandleOutput(string(body), opts)
 		assert.NoError(t, err)
 
-		content, err := ioutil.ReadFile(tempFile.Name())
+		content, err := os.ReadFile(tempFile.Name())
 		assert.NoError(t, err)
 		assert.Equal(t, "Test output", string(content))
 	})
@@ -452,11 +451,11 @@ func TestHandleOutput(t *testing.T) {
 		os.Stdout = w
 
 		resp := &http.Response{
-			Body: ioutil.NopCloser(strings.NewReader("Test output")),
+			Body: io.NopCloser(strings.NewReader("Test output")),
 		}
 		opts := &options.RequestOptions{}
 
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		assert.NoError(t, err)
 
 		err = gocurl.HandleOutput(string(body), opts)
@@ -476,13 +475,13 @@ func TestHandleOutput(t *testing.T) {
 		os.Stdout = w
 
 		resp := &http.Response{
-			Body: ioutil.NopCloser(strings.NewReader("Test output")),
+			Body: io.NopCloser(strings.NewReader("Test output")),
 		}
 		opts := &options.RequestOptions{
 			Silent: true,
 		}
 
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		assert.NoError(t, err)
 
 		err = gocurl.HandleOutput(string(body), opts)

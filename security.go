@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -48,7 +47,7 @@ func LoadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
 
 	// Load custom CA bundle if provided
 	if opts.CAFile != "" {
-		caCert, err := ioutil.ReadFile(opts.CAFile)
+		caCert, err := os.ReadFile(opts.CAFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read CA file: %w", err)
 		}

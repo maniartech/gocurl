@@ -2,7 +2,6 @@ package gocurl
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -70,13 +69,13 @@ func TestLoadCookiesFromFile(t *testing.T) {
 localhost	TRUE	/api	FALSE	` + fmt.Sprintf("%d", futureTime) + `	token	xyz789
 `
 
-	tmpFile, err := ioutil.TempFile("", "cookies-*.txt")
+	tmpFile, err := os.CreateTemp("", "cookies-*.txt")
 	require.NoError(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close() // Close the file before writing to it
 	defer os.Remove(tmpFileName)
 
-	err = ioutil.WriteFile(tmpFileName, []byte(cookieContent), 0644)
+	err = os.WriteFile(tmpFileName, []byte(cookieContent), 0644)
 	require.NoError(t, err)
 
 	cookies, err := LoadCookiesFromFile(tmpFileName)
@@ -101,13 +100,13 @@ func TestLoadCookiesFromFileExpired(t *testing.T) {
 .example.com	TRUE	/	FALSE	` + fmt.Sprintf("%d", expiredTime) + `	expired	old_value
 `
 
-	tmpFile, err := ioutil.TempFile("", "cookies-*.txt")
+	tmpFile, err := os.CreateTemp("", "cookies-*.txt")
 	require.NoError(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close() // Close the file before writing to it
 	defer os.Remove(tmpFileName)
 
-	err = ioutil.WriteFile(tmpFileName, []byte(cookieContent), 0644)
+	err = os.WriteFile(tmpFileName, []byte(cookieContent), 0644)
 	require.NoError(t, err)
 
 	cookies, err := LoadCookiesFromFile(tmpFileName)
@@ -136,7 +135,7 @@ func TestSaveCookiesToFile(t *testing.T) {
 		},
 	}
 
-	tmpFile, err := ioutil.TempFile("", "cookies-*.txt")
+	tmpFile, err := os.CreateTemp("", "cookies-*.txt")
 	require.NoError(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
@@ -146,7 +145,7 @@ func TestSaveCookiesToFile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Read back and verify
-	content, err := ioutil.ReadFile(tmpFileName)
+	content, err := os.ReadFile(tmpFileName)
 	require.NoError(t, err)
 
 	contentStr := string(content)
@@ -174,7 +173,7 @@ func TestSaveCookiesToFileSkipsExpired(t *testing.T) {
 		},
 	}
 
-	tmpFile, err := ioutil.TempFile("", "cookies-*.txt")
+	tmpFile, err := os.CreateTemp("", "cookies-*.txt")
 	require.NoError(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
@@ -183,7 +182,7 @@ func TestSaveCookiesToFileSkipsExpired(t *testing.T) {
 	err = SaveCookiesToFile(tmpFileName, cookies)
 	require.NoError(t, err)
 
-	content, err := ioutil.ReadFile(tmpFileName)
+	content, err := os.ReadFile(tmpFileName)
 	require.NoError(t, err)
 
 	contentStr := string(content)
@@ -200,13 +199,13 @@ func TestPersistentCookieJarLoad(t *testing.T) {
 example.com	TRUE	/	FALSE	` + fmt.Sprintf("%d", futureTime) + `	test	value123
 `
 
-	tmpFile, err := ioutil.TempFile("", "cookies-*.txt")
+	tmpFile, err := os.CreateTemp("", "cookies-*.txt")
 	require.NoError(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
 	defer os.Remove(tmpFileName)
 
-	err = ioutil.WriteFile(tmpFileName, []byte(cookieContent), 0644)
+	err = os.WriteFile(tmpFileName, []byte(cookieContent), 0644)
 	require.NoError(t, err)
 
 	// Create jar with file
@@ -264,13 +263,13 @@ invalid line format
 another	bad	line
 `
 
-	tmpFile, err := ioutil.TempFile("", "cookies-*.txt")
+	tmpFile, err := os.CreateTemp("", "cookies-*.txt")
 	require.NoError(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
 	defer os.Remove(tmpFileName)
 
-	err = ioutil.WriteFile(tmpFileName, []byte(cookieContent), 0644)
+	err = os.WriteFile(tmpFileName, []byte(cookieContent), 0644)
 	require.NoError(t, err)
 
 	// Should not error, just skip invalid lines
@@ -286,7 +285,7 @@ func TestLoadCookiesFromNonExistentFile(t *testing.T) {
 }
 
 func TestPersistentCookieJarSave(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "cookies-*.txt")
+	tmpFile, err := os.CreateTemp("", "cookies-*.txt")
 	require.NoError(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
@@ -349,11 +348,11 @@ func BenchmarkLoadCookiesFromFile(b *testing.B) {
 localhost	TRUE	/api	FALSE	` + fmt.Sprintf("%d", futureTime) + `	token	xyz789
 `
 
-	tmpFile, _ := ioutil.TempFile("", "cookies-*.txt")
+	tmpFile, _ := os.CreateTemp("", "cookies-*.txt")
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
 	defer os.Remove(tmpFileName)
-	ioutil.WriteFile(tmpFileName, []byte(cookieContent), 0644)
+	os.WriteFile(tmpFileName, []byte(cookieContent), 0644)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
