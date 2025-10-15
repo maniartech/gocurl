@@ -215,6 +215,10 @@ func TestCustomUserAgent(t *testing.T) {
 }
 
 func TestTimeoutBehavior(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping timeout test with delays in short mode")
+	}
+
 	t.Run("Request timeout", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(2 * time.Second)
@@ -242,7 +246,8 @@ func TestEdgeCases(t *testing.T) {
 		defer server.Close()
 
 		opts := &options.RequestOptions{
-			URL: server.URL,
+			URL:    server.URL,
+			Silent: true, // ✅ Don't print 10MB to stdout!
 		}
 
 		resp, body, err := gocurl.Process(context.Background(), opts)

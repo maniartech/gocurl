@@ -330,8 +330,13 @@ func TestConcurrentMixedOperations(t *testing.T) {
 
 // TestConcurrentResponseBufferPool verifies buffer pool is thread-safe
 func TestConcurrentResponseBufferPool(t *testing.T) {
-	const goroutines = 100
-	const iterations = 50
+	goroutines := 100
+	iterations := 50
+
+	if testing.Short() {
+		goroutines = 10
+		iterations = 5
+	}
 
 	// Create test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -358,6 +363,7 @@ func TestConcurrentResponseBufferPool(t *testing.T) {
 				opts := &options.RequestOptions{
 					URL:    server.URL + "?id=" + string(rune('0'+id%10)),
 					Method: "GET",
+					Silent: true, // Don't print response bodies to stdout
 				}
 
 				resp, _, err := gocurl.Process(context.Background(), opts)
@@ -381,7 +387,11 @@ func TestConcurrentResponseBufferPool(t *testing.T) {
 
 // TestConcurrentRetryLogic verifies retry logic is thread-safe
 func TestConcurrentRetryLogic(t *testing.T) {
-	const goroutines = 50
+	goroutines := 50
+	if testing.Short() {
+		goroutines = 10
+	}
+
 	attempts := int64(0)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -406,6 +416,7 @@ func TestConcurrentRetryLogic(t *testing.T) {
 			opts := &options.RequestOptions{
 				URL:    server.URL,
 				Method: "GET",
+				Silent: true, // Don't print response bodies to stdout
 				RetryConfig: &options.RetryConfig{
 					MaxRetries:  3,
 					RetryDelay:  5 * time.Millisecond,
@@ -432,8 +443,13 @@ func TestConcurrentRetryLogic(t *testing.T) {
 
 // TestConcurrentVariableSubstitution tests concurrent variable substitution
 func TestConcurrentVariableSubstitution(t *testing.T) {
-	const goroutines = 200
-	const iterations = 100
+	goroutines := 200
+	iterations := 100
+
+	if testing.Short() {
+		goroutines = 20
+		iterations = 10
+	}
 
 	vars := gocurl.Variables{
 		"host":  "example.com",

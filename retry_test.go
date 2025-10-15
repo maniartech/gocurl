@@ -338,6 +338,7 @@ func TestRetryLogic_LargeBody(t *testing.T) {
 		URL:    server.URL,
 		Method: "POST",
 		Body:   largeBody,
+		Silent: true, // ✅ Don't print 100KB body to stdout!
 		RetryConfig: &options.RetryConfig{
 			MaxRetries:  2,
 			RetryDelay:  10 * time.Millisecond,

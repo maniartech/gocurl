@@ -18,6 +18,10 @@ import (
 
 // TestContextError_DeadlineExceeded verifies proper error reporting for context deadline
 func TestContextError_DeadlineExceeded(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping context error test with intentional delays in short mode")
+	}
+
 	// Create slow server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(2 * time.Second)
@@ -44,6 +48,10 @@ func TestContextError_DeadlineExceeded(t *testing.T) {
 
 // TestContextError_Cancelled verifies proper error reporting for context cancellation
 func TestContextError_Cancelled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping context error test with intentional delays in short mode")
+	}
+
 	// Create slow server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(2 * time.Second)
@@ -81,6 +89,10 @@ func TestContextError_Cancelled(t *testing.T) {
 
 // TestContextError_WithRetries verifies context errors propagate through retries
 func TestContextError_WithRetries(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping context error test with intentional delays in short mode")
+	}
+
 	// Create server that always fails with 500
 	var attemptCount int32 // Use atomic access
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +145,10 @@ func TestContextError_WithRetries(t *testing.T) {
 
 // TestContextError_CancelDuringRetry verifies context cancellation stops retries
 func TestContextError_CancelDuringRetry(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping context error test with intentional delays in short mode")
+	}
+
 	var attemptCount int32 // Use atomic access
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&attemptCount, 1)
