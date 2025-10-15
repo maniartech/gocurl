@@ -107,6 +107,55 @@ func processFlag(tokens []tokenizer.Token, i int, o *options.RequestOptions, dat
 	flagName := tokens[i].Value
 	tokenLen := len(tokens)
 
+	// Try simple flags first (no arguments)
+	if newIdx, handled := processSimpleFlag(flagName, i, o); handled {
+		return newIdx, nil
+	}
+
+	// Try flags with arguments
+	if newIdx, err := processFlagWithArgument(tokens, i, tokenLen, flagName, o, dataFields, formFields); err == nil {
+		return newIdx, nil
+	} else if err.Error() != "not handled" {
+		return 0, err
+	}
+
+	return 0, fmt.Errorf("unknown flag: %s", flagName)
+}
+
+// processSimpleFlag handles flags that don't require arguments
+func processSimpleFlag(flagName string, i int, o *options.RequestOptions) (int, bool) {
+	switch flagName {
+	case "--compressed":
+		o.Compress = true
+		return i + 1, true
+	case "--http2":
+		o.HTTP2 = true
+		return i + 1, true
+	case "--http2-only":
+		o.HTTP2Only = true
+		return i + 1, true
+	case "-k", "--insecure":
+		o.Insecure = true
+		return i + 1, true
+	case "-L", "--location":
+		o.FollowRedirects = true
+		return i + 1, true
+	case "-v", "--verbose":
+		o.Verbose = true
+		return i + 1, true
+	case "-s", "--silent":
+		o.Silent = true
+		return i + 1, true
+	case "-c", "--cookie-jar":
+		// Skip cookie jar (not implemented)
+		return i + 2, true
+	default:
+		return 0, false
+	}
+}
+
+// processFlagWithArgument handles flags that require arguments
+func processFlagWithArgument(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions, dataFields *[]string, formFields *url.Values) (int, error) {
 	switch flagName {
 	case "-X", "--request":
 		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
@@ -129,17 +178,11 @@ func processFlag(tokens []tokenizer.Token, i int, o *options.RequestOptions, dat
 		return processUserFlag(tokens, i, tokenLen, flagName, o)
 	case "-b", "--cookie":
 		return processCookieFlag(tokens, i, tokenLen, flagName, o)
-	case "-c", "--cookie-jar":
-		// Skip cookie jar (not implemented)
-		return i + 2, nil
 	case "-o", "--output":
 		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
 			o.OutputFile = value
 			return nil
 		})
-	case "--compressed":
-		o.Compress = true
-		return i + 1, nil
 	case "-A", "--user-agent":
 		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
 			o.UserAgent = value
@@ -165,12 +208,6 @@ func processFlag(tokens []tokenizer.Token, i int, o *options.RequestOptions, dat
 			o.CAFile = value
 			return nil
 		})
-	case "--http2":
-		o.HTTP2 = true
-		return i + 1, nil
-	case "--http2-only":
-		o.HTTP2Only = true
-		return i + 1, nil
 	case "-x", "--proxy":
 		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
 			o.Proxy = value
@@ -178,22 +215,10 @@ func processFlag(tokens []tokenizer.Token, i int, o *options.RequestOptions, dat
 		})
 	case "--max-time":
 		return processMaxTimeFlag(tokens, i, tokenLen, flagName, o)
-	case "-k", "--insecure":
-		o.Insecure = true
-		return i + 1, nil
-	case "-L", "--location":
-		o.FollowRedirects = true
-		return i + 1, nil
 	case "--max-redirs":
 		return processMaxRedirsFlag(tokens, i, tokenLen, flagName, o)
-	case "-v", "--verbose":
-		o.Verbose = true
-		return i + 1, nil
-	case "-s", "--silent":
-		o.Silent = true
-		return i + 1, nil
 	default:
-		return 0, fmt.Errorf("unknown flag: %s", flagName)
+		return 0, fmt.Errorf("not handled")
 	}
 }
 

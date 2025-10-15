@@ -67,50 +67,87 @@ func tokenize(command string) ([]string, error) {
 	current := byteSlicePool.Get().([]byte)
 	defer byteSlicePool.Put(current[:0])
 
-	inSingleQuote := false
-	inDoubleQuote := false
-	escapeNext := false
+	state := &tokenizeState{
+		inSingleQuote: false,
+		inDoubleQuote: false,
+		escapeNext:    false,
+	}
 
 	for i := 0; i < len(command); i++ {
 		ch := command[i]
-		switch {
-		case escapeNext:
-			current = append(current, ch)
-			escapeNext = false
-
-		case ch == '\\' && !inSingleQuote:
-			escapeNext = true
-
-		case ch == '\'' && !inDoubleQuote:
-			inSingleQuote = !inSingleQuote
-
-		case ch == '"' && !inSingleQuote:
-			inDoubleQuote = !inDoubleQuote
-
-		case unicode.IsSpace(rune(ch)) && !inSingleQuote && !inDoubleQuote:
-			if len(current) > 0 {
-				args = append(args, string(current))
-				current = current[:0]
-			}
-
-		default:
-			current = append(current, ch)
+		var err error
+		current, err = processChar(ch, current, &args, state)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	if escapeNext {
-		return nil, errors.New("unfinished escape sequence at end of command")
+	// Validate final state
+	if err := validateFinalState(state); err != nil {
+		return nil, err
 	}
 
-	if inSingleQuote || inDoubleQuote {
-		return nil, errors.New("unclosed quote in command")
-	}
-
+	// Add final token if exists
 	if len(current) > 0 {
 		args = append(args, string(current))
 	}
 
 	return args, nil
+}
+
+// tokenizeState holds the state during tokenization
+type tokenizeState struct {
+	inSingleQuote bool
+	inDoubleQuote bool
+	escapeNext    bool
+}
+
+// processChar processes a single character during tokenization
+func processChar(ch byte, current []byte, args *[]string, state *tokenizeState) ([]byte, error) {
+	switch {
+	case state.escapeNext:
+		current = append(current, ch)
+		state.escapeNext = false
+
+	case ch == '\\' && !state.inSingleQuote:
+		state.escapeNext = true
+
+	case ch == '\'' && !state.inDoubleQuote:
+		state.inSingleQuote = !state.inSingleQuote
+
+	case ch == '"' && !state.inSingleQuote:
+		state.inDoubleQuote = !state.inDoubleQuote
+
+	case unicode.IsSpace(rune(ch)) && !state.inSingleQuote && !state.inDoubleQuote:
+		current = finalizeToken(current, args)
+
+	default:
+		current = append(current, ch)
+	}
+
+	return current, nil
+}
+
+// finalizeToken adds current token to args if non-empty and resets buffer
+func finalizeToken(current []byte, args *[]string) []byte {
+	if len(current) > 0 {
+		*args = append(*args, string(current))
+		return current[:0]
+	}
+	return current
+}
+
+// validateFinalState checks for unclosed quotes or unfinished escapes
+func validateFinalState(state *tokenizeState) error {
+	if state.escapeNext {
+		return errors.New("unfinished escape sequence at end of command")
+	}
+
+	if state.inSingleQuote || state.inDoubleQuote {
+		return errors.New("unclosed quote in command")
+	}
+
+	return nil
 }
 
 func main2() {
