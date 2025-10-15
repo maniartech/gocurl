@@ -1,4 +1,5 @@
 package main
+
 // REF: https://chatgpt.com/c/670cdaf1-6854-800f-ab63-803af17c7110
 
 import (

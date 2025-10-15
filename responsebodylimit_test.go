@@ -24,7 +24,7 @@ func TestResponseBodyLimit_NoLimit(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
-	opts.Silent = true // Prevent large bodies from spamming stdout
+	opts.Silent = true         // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 0 // No limit
 
 	resp, body, err := Process(context.Background(), opts)
@@ -53,7 +53,7 @@ func TestResponseBodyLimit_WithinLimit(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
-	opts.Silent = true // Prevent large bodies from spamming stdout
+	opts.Silent = true            // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit
 
 	resp, body, err := Process(context.Background(), opts)
@@ -83,7 +83,7 @@ func TestResponseBodyLimit_ExceedsLimit(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
-	opts.Silent = true // Prevent large bodies from spamming stdout
+	opts.Silent = true            // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit, but server returns 2MB
 
 	_, _, err := Process(context.Background(), opts)
@@ -111,7 +111,7 @@ func TestResponseBodyLimit_ExactLimit(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
-	opts.Silent = true // Prevent large bodies from spamming stdout
+	opts.Silent = true            // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit
 	opts.Silent = true            // Don't print 1KB of 'B' characters to stdout
 
@@ -141,7 +141,7 @@ func TestResponseBodyLimit_OneByteOver(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
-	opts.Silent = true // Prevent large bodies from spamming stdout
+	opts.Silent = true            // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit
 
 	_, _, err := Process(context.Background(), opts)
@@ -177,7 +177,7 @@ func TestResponseBodyLimit_DoSProtection(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
-	opts.Silent = true // Prevent large bodies from spamming stdout
+	opts.Silent = true                  // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 100 * 1024 // 100KB limit (protect against 10MB response)
 
 	_, _, err := Process(context.Background(), opts)
@@ -210,7 +210,7 @@ func TestResponseBodyLimit_Integration(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
-	opts.Silent = true // Prevent large bodies from spamming stdout
+	opts.Silent = true            // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit
 	opts.RetryConfig = &options.RetryConfig{
 		MaxRetries:  2,
