@@ -17,121 +17,193 @@ import (
 // It respects context cancellation and will stop retrying if context is cancelled or deadline exceeded.
 // Accepts HTTPClient interface to support custom client implementations including mocks and test clients.
 func executeWithRetries(client options.HTTPClient, req *http.Request, opts *options.RequestOptions) (*http.Response, error) {
+	// Check if context is already cancelled before starting
+	if err := checkContextCancelled(req); err != nil {
+		return nil, err
+	}
+
+	// Buffer request body for retries if needed
+	bodyBytes, err := bufferRequestBody(req)
+	if err != nil {
+		return nil, err
+	}
+
+	retries := getMaxRetries(opts)
+
+	return retryLoop(client, req, opts, bodyBytes, retries)
+}
+
+// checkContextCancelled checks if the request context is already cancelled
+func checkContextCancelled(req *http.Request) error {
+	if req.Context() == nil {
+		return nil
+	}
+
+	select {
+	case <-req.Context().Done():
+		return fmt.Errorf("request context cancelled before execution: %w", req.Context().Err())
+	default:
+		return nil
+	}
+}
+
+// bufferRequestBody reads and buffers the request body for retries
+func bufferRequestBody(req *http.Request) ([]byte, error) {
+	if req.Body == nil || req.Body == http.NoBody {
+		return nil, nil
+	}
+
+	bodyBytes, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read request body: %w", err)
+	}
+
+	req.Body.Close()
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	req.ContentLength = int64(len(bodyBytes))
+
+	return bodyBytes, nil
+}
+
+// getMaxRetries extracts the max retry count from options
+func getMaxRetries(opts *options.RequestOptions) int {
+	if opts.RetryConfig != nil {
+		return opts.RetryConfig.MaxRetries
+	}
+	return 0
+}
+
+// retryLoop executes the retry loop
+func retryLoop(client options.HTTPClient, req *http.Request, opts *options.RequestOptions, bodyBytes []byte, retries int) (*http.Response, error) {
 	var resp *http.Response
 	var err error
-	var bodyBytes []byte
-
-	// Check if context is already cancelled/expired before starting
-	if req.Context() != nil {
-		select {
-		case <-req.Context().Done():
-			// Context already cancelled/expired
-			return nil, fmt.Errorf("request context cancelled before execution: %w", req.Context().Err())
-		default:
-			// Context is still active, proceed
-		}
-	}
-
-	// If request has a body, buffer it for retries
-	if req.Body != nil && req.Body != http.NoBody {
-		bodyBytes, err = io.ReadAll(req.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read request body: %w", err)
-		}
-		req.Body.Close()
-		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-		req.ContentLength = int64(len(bodyBytes))
-	}
-
-	retries := 0
-	if opts.RetryConfig != nil {
-		retries = opts.RetryConfig.MaxRetries
-	}
 
 	for attempt := 0; attempt <= retries; attempt++ {
 		// Check context before each retry attempt
-		if attempt > 0 && req.Context() != nil {
-			select {
-			case <-req.Context().Done():
-				// Context cancelled during retry loop
-				if resp != nil {
-					resp.Body.Close()
-				}
-				return nil, fmt.Errorf("request context cancelled during retries (attempt %d/%d): %w",
-					attempt, retries, req.Context().Err())
-			default:
-				// Context still active
+		if attempt > 0 {
+			if err := checkContextDuringRetry(req, resp, attempt, retries); err != nil {
+				return nil, err
 			}
 		}
 
-		// Clone the request for retry attempts (rewind body if needed)
-		attemptReq := req
-		if attempt > 0 && bodyBytes != nil {
-			attemptReq, err = cloneRequest(req, bodyBytes)
-			if err != nil {
-				return nil, fmt.Errorf("failed to clone request for retry: %w", err)
-			}
+		// Execute the request attempt
+		resp, err = executeAttempt(client, req, bodyBytes, attempt)
+
+		// Handle context errors
+		if err != nil && isContextError(err) {
+			return nil, fmt.Errorf("request failed due to context error (attempt %d/%d): %w",
+				attempt, retries, err)
 		}
 
-		resp, err = client.Do(attemptReq)
-
-		// Check if error is due to context cancellation
-		if err != nil {
-			// Unwrap and check for context errors
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				// Context error - don't retry, return immediately
-				return nil, fmt.Errorf("request failed due to context error (attempt %d/%d): %w",
-					attempt, retries, err)
+		// Check if retry is needed
+		if !needsRetry(resp, err, opts) {
+			if err != nil && attempt == retries {
+				return nil, fmt.Errorf("request failed after %d retries: %w", retries, err)
 			}
-			// Other error - will retry if attempts remain
+			return resp, err
 		}
 
-		// Success - no error and no retry needed
-		if err == nil {
-			if opts.RetryConfig == nil || !shouldRetry(resp.StatusCode, opts.RetryConfig.RetryOnHTTP) {
-				return resp, nil
-			}
-			// Status code indicates retry needed, close response body before retry
+		// Close response body before retry
+		if resp != nil {
 			resp.Body.Close()
 		}
 
-		// Don't sleep after the last attempt
+		// Sleep before next attempt (unless this is the last attempt)
 		if attempt < retries {
-			var sleepDuration time.Duration
-			if opts.RetryConfig != nil && opts.RetryConfig.RetryDelay > 0 {
-				sleepDuration = opts.RetryConfig.RetryDelay
-			} else {
-				// Default exponential backoff: 100ms, 200ms, 400ms, etc.
-				backoff := time.Duration(100*(1<<attempt)) * time.Millisecond
-				if backoff > 5*time.Second {
-					backoff = 5 * time.Second
-				}
-				sleepDuration = backoff
-			}
-
-			// Sleep with context awareness - cancel sleep if context is cancelled
-			if req.Context() != nil {
-				select {
-				case <-req.Context().Done():
-					// Context cancelled during sleep
-					return nil, fmt.Errorf("request context cancelled during retry delay: %w", req.Context().Err())
-				case <-time.After(sleepDuration):
-					// Sleep completed normally
-				}
-			} else {
-				// No context, just sleep
-				time.Sleep(sleepDuration)
+			if err := sleepWithContext(req, opts, attempt); err != nil {
+				return nil, err
 			}
 		}
 	}
 
-	// All retries exhausted
-	if err != nil {
-		// Wrap the final error with retry information
-		return nil, fmt.Errorf("request failed after %d retries: %w", retries, err)
-	}
-	// Last response had retry-worthy status code but all retries exhausted
 	return resp, nil
+}
+
+// checkContextDuringRetry checks if context was cancelled during retry loop
+func checkContextDuringRetry(req *http.Request, resp *http.Response, attempt, retries int) error {
+	if req.Context() == nil {
+		return nil
+	}
+
+	select {
+	case <-req.Context().Done():
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return fmt.Errorf("request context cancelled during retries (attempt %d/%d): %w",
+			attempt, retries, req.Context().Err())
+	default:
+		return nil
+	}
+}
+
+// executeAttempt executes a single request attempt
+func executeAttempt(client options.HTTPClient, req *http.Request, bodyBytes []byte, attempt int) (*http.Response, error) {
+	attemptReq := req
+
+	// Clone request for retry attempts
+	if attempt > 0 && bodyBytes != nil {
+		var err error
+		attemptReq, err = cloneRequest(req, bodyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to clone request for retry: %w", err)
+		}
+	}
+
+	return client.Do(attemptReq)
+}
+
+// isContextError checks if error is due to context cancellation
+func isContextError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// needsRetry determines if another retry attempt is needed
+func needsRetry(resp *http.Response, err error, opts *options.RequestOptions) bool {
+	if err != nil {
+		return true
+	}
+
+	if resp == nil {
+		return true
+	}
+
+	if opts.RetryConfig == nil {
+		return false
+	}
+
+	return shouldRetry(resp.StatusCode, opts.RetryConfig.RetryOnHTTP)
+}
+
+// sleepWithContext sleeps before next retry attempt with context awareness
+func sleepWithContext(req *http.Request, opts *options.RequestOptions, attempt int) error {
+	sleepDuration := calculateSleepDuration(opts, attempt)
+
+	if req.Context() != nil {
+		select {
+		case <-req.Context().Done():
+			return fmt.Errorf("request context cancelled during retry delay: %w", req.Context().Err())
+		case <-time.After(sleepDuration):
+			return nil
+		}
+	}
+
+	time.Sleep(sleepDuration)
+	return nil
+}
+
+// calculateSleepDuration calculates the sleep duration for retry
+func calculateSleepDuration(opts *options.RequestOptions, attempt int) time.Duration {
+	if opts.RetryConfig != nil && opts.RetryConfig.RetryDelay > 0 {
+		return opts.RetryConfig.RetryDelay
+	}
+
+	// Default exponential backoff: 100ms, 200ms, 400ms, etc.
+	backoff := time.Duration(100*(1<<attempt)) * time.Millisecond
+	if backoff > 5*time.Second {
+		backoff = 5 * time.Second
+	}
+	return backoff
 }
 
 // cloneRequest creates a copy of the HTTP request with a fresh body reader.

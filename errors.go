@@ -193,57 +193,68 @@ func redactPattern(text, pattern, replacement string) string {
 		return text
 	}
 
-	// Check if the pattern is inside quotes by looking backwards
-	inQuotes := false
-	quoteChar := byte(0)
+	inQuotes, quoteChar := isPatternInQuotes(text, idx)
 
+	if inQuotes {
+		return redactQuotedPattern(text, idx, len(pattern), replacement, quoteChar)
+	}
+
+	return redactUnquotedPattern(text, idx, len(pattern), replacement)
+}
+
+// isPatternInQuotes checks if the pattern at idx is inside quotes
+func isPatternInQuotes(text string, idx int) (bool, byte) {
 	// Look backwards from pattern start to find if we're in quotes
 	for i := idx - 1; i >= 0; i-- {
 		if text[i] == '"' || text[i] == '\'' {
-			inQuotes = true
-			quoteChar = text[i]
-			break
+			return true, text[i]
 		}
 		// If we hit a space before a quote, we're not in quotes
 		if text[i] == ' ' {
 			break
 		}
 	}
+	return false, 0
+}
 
-	if inQuotes {
-		// Find the closing quote
-		closeIdx := idx + len(pattern)
-		for closeIdx < len(text) && text[closeIdx] != quoteChar {
-			closeIdx++
-		}
-
-		if closeIdx < len(text) {
-			closeIdx++ // Include the closing quote
-		}
-
-		// Replace from opening quote to closing quote
-		openIdx := idx - 1
-		for openIdx >= 0 && text[openIdx] != quoteChar {
-			openIdx--
-		}
-
-		if openIdx >= 0 {
-			// Replace the entire quoted string
-			return text[:openIdx] + string(quoteChar) + replacement + string(quoteChar) + text[closeIdx:]
-		}
+// redactQuotedPattern redacts a pattern that is inside quotes
+func redactQuotedPattern(text string, idx, patternLen int, replacement string, quoteChar byte) string {
+	// Find the closing quote
+	closeIdx := idx + patternLen
+	for closeIdx < len(text) && text[closeIdx] != quoteChar {
+		closeIdx++
 	}
 
-	// Not in quotes - start right after the pattern
-	start := idx + len(pattern)
+	if closeIdx < len(text) {
+		closeIdx++ // Include the closing quote
+	}
+
+	// Find the opening quote
+	openIdx := idx - 1
+	for openIdx >= 0 && text[openIdx] != quoteChar {
+		openIdx--
+	}
+
+	if openIdx >= 0 {
+		// Replace the entire quoted string
+		return text[:openIdx] + string(quoteChar) + replacement + string(quoteChar) + text[closeIdx:]
+	}
+
+	return text
+}
+
+// redactUnquotedPattern redacts a pattern that is not inside quotes
+func redactUnquotedPattern(text string, idx, patternLen int, replacement string) string {
+	// Start right after the pattern
+	start := idx + patternLen
 
 	// Skip any whitespace after the pattern
 	for start < len(text) && (text[start] == ' ' || text[start] == '\t') {
 		start++
 	}
 
-	end := start
-
 	// Find the end of the value (space or special char)
+	end := start
 	for end < len(text) {
 		ch := text[end]
 		if ch == ' ' || ch == '"' || ch == '\'' || ch == '\n' || ch == '\r' {

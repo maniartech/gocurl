@@ -22,64 +22,26 @@ func ExpandVariables(text string, vars Variables) (string, error) {
 
 		// Check for variable ${VAR} or $VAR
 		if text[i] == '$' {
-			i++
-
-			// Check for braced variable ${VAR}
-			if i < len(text) && text[i] == '{' {
-				i++
-				start := i
-
-				// Find closing brace
-				for i < len(text) && text[i] != '}' {
-					i++
-				}
-
-				if i >= len(text) {
-					return "", fmt.Errorf("unclosed variable: ${%s", text[start:])
-				}
-
-				varName := text[start:i]
-				i++ // Skip closing brace
-
-				// Look up variable (only error if vars is provided)
-				if vars == nil || len(vars) == 0 {
-					return "", fmt.Errorf("undefined variable: %s", varName)
-				}
-
-				value, ok := vars[varName]
-				if !ok {
-					return "", fmt.Errorf("undefined variable: %s", varName)
-				}
-
-				result.WriteString(value)
-				continue
+			varName, newPos, err := extractVariable(text, i+1)
+			if err != nil {
+				return "", err
 			}
 
-			// Simple variable $VAR
-			start := i
-			for i < len(text) && (isAlphaNum(text[i]) || text[i] == '_') {
-				i++
-			}
-
-			if start == i {
+			if varName == "" {
 				// Just a $ with no variable name
 				result.WriteByte('$')
+				i++
 				continue
 			}
 
-			varName := text[start:i]
-
-			// Look up variable (only error if vars is provided)
-			if vars == nil || len(vars) == 0 {
-				return "", fmt.Errorf("undefined variable: %s", varName)
-			}
-
-			value, ok := vars[varName]
-			if !ok {
-				return "", fmt.Errorf("undefined variable: %s", varName)
+			// Look up variable value
+			value, err := lookupVariable(varName, vars)
+			if err != nil {
+				return "", err
 			}
 
 			result.WriteString(value)
+			i = newPos
 			continue
 		}
 
@@ -89,6 +51,64 @@ func ExpandVariables(text string, vars Variables) (string, error) {
 	}
 
 	return result.String(), nil
+}
+
+// extractVariable extracts variable name from position i in text
+// Returns variable name, new position, and error if any
+func extractVariable(text string, i int) (string, int, error) {
+	// Check for braced variable ${VAR}
+	if i < len(text) && text[i] == '{' {
+		return extractBracedVariable(text, i+1)
+	}
+
+	// Simple variable $VAR
+	return extractSimpleVariable(text, i)
+}
+
+// extractBracedVariable extracts ${VAR} style variable
+func extractBracedVariable(text string, start int) (string, int, error) {
+	i := start
+	// Find closing brace
+	for i < len(text) && text[i] != '}' {
+		i++
+	}
+
+	if i >= len(text) {
+		return "", i, fmt.Errorf("unclosed variable: ${%s", text[start:])
+	}
+
+	varName := text[start:i]
+	return varName, i + 1, nil // +1 to skip closing brace
+}
+
+// extractSimpleVariable extracts $VAR style variable
+func extractSimpleVariable(text string, start int) (string, int, error) {
+	i := start
+	for i < len(text) && (isAlphaNum(text[i]) || text[i] == '_') {
+		i++
+	}
+
+	if start == i {
+		// No variable name found
+		return "", start, nil
+	}
+
+	varName := text[start:i]
+	return varName, i, nil
+}
+
+// lookupVariable looks up variable in vars map
+func lookupVariable(varName string, vars Variables) (string, error) {
+	if vars == nil || len(vars) == 0 {
+		return "", fmt.Errorf("undefined variable: %s", varName)
+	}
+
+	value, ok := vars[varName]
+	if !ok {
+		return "", fmt.Errorf("undefined variable: %s", varName)
+	}
+
+	return value, nil
 }
 
 // isAlphaNum checks if a byte is alphanumeric
