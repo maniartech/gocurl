@@ -278,14 +278,16 @@ func TestVerbose_MatchesCurlFormat(t *testing.T) {
 	}
 
 	output := buf.String()
-	lines := strings.Split(output, "\n")
 
-	// Verify curl -v format:
-	// - Connection lines start with "*"
-	// - Request lines start with ">"
-	// - Response lines start with "<"
-	// - First request line is method + path + protocol
-	// - First response line is protocol + status
+	// Verify curl -v format
+	verifyOutputPrefixes(t, output)
+	verifyConnectionInfo(t, output)
+	verifyRequestFormat(t, output)
+}
+
+// verifyOutputPrefixes checks that output has correct curl-style prefixes
+func verifyOutputPrefixes(t *testing.T, output string) {
+	lines := strings.Split(output, "\n")
 
 	hasConnectionPrefix := false
 	hasRequestPrefix := false
@@ -306,34 +308,34 @@ func TestVerbose_MatchesCurlFormat(t *testing.T) {
 	if !hasConnectionPrefix {
 		t.Errorf("Expected connection lines starting with '*', got: %s", output)
 	}
-
 	if !hasRequestPrefix {
 		t.Errorf("Expected request lines starting with '>', got: %s", output)
 	}
-
 	if !hasResponsePrefix {
 		t.Errorf("Expected response lines starting with '<', got: %s", output)
 	}
+}
 
-	// Verify format matches curl patterns
+// verifyConnectionInfo checks for curl-style connection messages
+func verifyConnectionInfo(t *testing.T, output string) {
 	if !strings.Contains(output, "* Trying") && !strings.Contains(output, "*   Trying") {
 		t.Errorf("Expected '* Trying' connection info like curl, got: %s", output)
 	}
-
 	if !strings.Contains(output, "* Connected to") {
 		t.Errorf("Expected '* Connected to' info like curl, got: %s", output)
 	}
+	if !strings.Contains(output, "* Connection") || !strings.Contains(output, "left intact") {
+		t.Errorf("Expected connection close info like curl, got: %s", output)
+	}
+}
 
+// verifyRequestFormat checks for curl-style request formatting
+func verifyRequestFormat(t *testing.T, output string) {
 	if !strings.Contains(output, "> GET") && !strings.Contains(output, "> POST") {
 		t.Errorf("Expected request method line like curl format, got: %s", output)
 	}
-
 	if !strings.Contains(output, "> Host:") {
 		t.Errorf("Expected Host header like curl format, got: %s", output)
-	}
-
-	if !strings.Contains(output, "* Connection") || !strings.Contains(output, "left intact") {
-		t.Errorf("Expected connection close info like curl, got: %s", output)
 	}
 }
 
