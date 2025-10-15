@@ -2,7 +2,6 @@ package gocurl
 
 import (
 	"crypto/tls"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -341,16 +340,16 @@ EKTcWGekdmdDPsHloRNtsiCa697B2O9IFA==
 -----END EC PRIVATE KEY-----`
 
 	// Create temp files
-	certFile, err := ioutil.TempFile("", "cert-*.pem")
+	certFile, err := os.CreateTemp("", "cert-*.pem")
 	require.NoError(t, err)
 	defer os.Remove(certFile.Name())
 
-	keyFile, err := ioutil.TempFile("", "key-*.pem")
+	keyFile, err := os.CreateTemp("", "key-*.pem")
 	require.NoError(t, err)
 	defer os.Remove(keyFile.Name())
 
-	ioutil.WriteFile(certFile.Name(), []byte(certPEM), 0644)
-	ioutil.WriteFile(keyFile.Name(), []byte(keyPEM), 0644)
+	os.WriteFile(certFile.Name(), []byte(certPEM), 0644)
+	os.WriteFile(keyFile.Name(), []byte(keyPEM), 0644)
 
 	opts := &options.RequestOptions{
 		URL:      "https://example.com",
