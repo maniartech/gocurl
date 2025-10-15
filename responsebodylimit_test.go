@@ -3,6 +3,7 @@ package gocurl
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,6 +24,7 @@ func TestResponseBodyLimit_NoLimit(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
+	opts.Silent = true // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 0 // No limit
 
 	resp, body, err := Process(context.Background(), opts)
@@ -51,6 +53,7 @@ func TestResponseBodyLimit_WithinLimit(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
+	opts.Silent = true // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit
 
 	resp, body, err := Process(context.Background(), opts)
@@ -80,6 +83,7 @@ func TestResponseBodyLimit_ExceedsLimit(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
+	opts.Silent = true // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit, but server returns 2MB
 
 	_, _, err := Process(context.Background(), opts)
@@ -107,7 +111,9 @@ func TestResponseBodyLimit_ExactLimit(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
+	opts.Silent = true // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit
+	opts.Silent = true            // Don't print 1KB of 'B' characters to stdout
 
 	resp, body, err := Process(context.Background(), opts)
 	if err != nil {
@@ -135,6 +141,7 @@ func TestResponseBodyLimit_OneByteOver(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
+	opts.Silent = true // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit
 
 	_, _, err := Process(context.Background(), opts)
@@ -151,6 +158,11 @@ func TestResponseBodyLimit_OneByteOver(t *testing.T) {
 
 // TestResponseBodyLimit_DoSProtection verifies limit protects against large responses.
 func TestResponseBodyLimit_DoSProtection(t *testing.T) {
+	// Redirect verbose output to prevent overwhelming terminal with 10MB of 'X' characters
+	oldVerboseWriter := VerboseWriter
+	VerboseWriter = io.Discard
+	defer func() { VerboseWriter = oldVerboseWriter }()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
@@ -165,6 +177,7 @@ func TestResponseBodyLimit_DoSProtection(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
+	opts.Silent = true // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 100 * 1024 // 100KB limit (protect against 10MB response)
 
 	_, _, err := Process(context.Background(), opts)
@@ -181,6 +194,11 @@ func TestResponseBodyLimit_DoSProtection(t *testing.T) {
 
 // TestResponseBodyLimit_Integration verifies limit works with retries.
 func TestResponseBodyLimit_Integration(t *testing.T) {
+	// Redirect verbose output to prevent terminal spam
+	oldVerboseWriter := VerboseWriter
+	VerboseWriter = io.Discard
+	defer func() { VerboseWriter = oldVerboseWriter }()
+
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
@@ -192,6 +210,7 @@ func TestResponseBodyLimit_Integration(t *testing.T) {
 	defer server.Close()
 
 	opts := options.NewRequestOptions(server.URL)
+	opts.Silent = true // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit
 	opts.RetryConfig = &options.RetryConfig{
 		MaxRetries:  2,
