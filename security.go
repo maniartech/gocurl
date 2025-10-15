@@ -157,48 +157,95 @@ func ValidateRequestOptions(opts *options.RequestOptions) error {
 	}
 
 	// Validate URL
+	if err := validateURL(opts); err != nil {
+		return err
+	}
+
+	// Validate TLS configuration
+	if err := validateTLSOptions(opts); err != nil {
+		return err
+	}
+
+	// Validate timeout values
+	if err := validateTimeouts(opts); err != nil {
+		return err
+	}
+
+	// Validate redirects and retries
+	if err := validateRedirectsAndRetries(opts); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateURL validates the URL field
+func validateURL(opts *options.RequestOptions) error {
 	if opts.URL == "" {
 		return ValidationError("URL", fmt.Errorf("URL is required"))
 	}
 
-	// Check for insecure patterns
-	if strings.HasPrefix(opts.URL, "http://") && !opts.Insecure {
-		// HTTP is allowed, just not recommended for sensitive data
-		// Don't error, but could log a warning in verbose mode
-	}
+	// HTTP is allowed, just not recommended for sensitive data
+	// Don't error for http:// URLs, but could log warning in verbose mode
 
-	// Validate TLS config
+	return nil
+}
+
+// validateTLSOptions validates TLS-related options
+func validateTLSOptions(opts *options.RequestOptions) error {
+	// Validate TLS config if provided
 	if opts.TLSConfig != nil {
 		if err := ValidateTLSConfig(opts.TLSConfig, opts); err != nil {
 			return ValidationError("TLS", err)
 		}
 	}
 
-	// Validate that cert and key are both provided or neither
-	if (opts.CertFile != "" && opts.KeyFile == "") || (opts.CertFile == "" && opts.KeyFile != "") {
+	// Validate cert and key are both provided or neither
+	if err := validateCertKeyPair(opts); err != nil {
+		return err
+	}
+
+	// Validate file existence
+	if err := validateTLSFiles(opts); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateCertKeyPair ensures cert and key are provided together
+func validateCertKeyPair(opts *options.RequestOptions) error {
+	hasCert := opts.CertFile != ""
+	hasKey := opts.KeyFile != ""
+
+	if hasCert != hasKey {
 		return ValidationError("TLS", fmt.Errorf("both cert-file and key-file must be provided together"))
 	}
 
-	// Validate cert/key files exist if specified
-	if opts.CertFile != "" {
-		if _, err := os.Stat(opts.CertFile); err != nil {
-			return ValidationError("CertFile", fmt.Errorf("certificate file not found: %w", err))
+	return nil
+}
+
+// validateTLSFiles validates that TLS files exist
+func validateTLSFiles(opts *options.RequestOptions) error {
+	files := map[string]string{
+		"CertFile": opts.CertFile,
+		"KeyFile":  opts.KeyFile,
+		"CAFile":   opts.CAFile,
+	}
+
+	for name, path := range files {
+		if path != "" {
+			if _, err := os.Stat(path); err != nil {
+				return ValidationError(name, fmt.Errorf("%s file not found: %w", strings.ToLower(name), err))
+			}
 		}
 	}
 
-	if opts.KeyFile != "" {
-		if _, err := os.Stat(opts.KeyFile); err != nil {
-			return ValidationError("KeyFile", fmt.Errorf("key file not found: %w", err))
-		}
-	}
+	return nil
+}
 
-	if opts.CAFile != "" {
-		if _, err := os.Stat(opts.CAFile); err != nil {
-			return ValidationError("CAFile", fmt.Errorf("CA file not found: %w", err))
-		}
-	}
-
-	// Validate timeout values
+// validateTimeouts validates timeout values
+func validateTimeouts(opts *options.RequestOptions) error {
 	if opts.Timeout < 0 {
 		return ValidationError("Timeout", fmt.Errorf("timeout cannot be negative"))
 	}
@@ -207,12 +254,15 @@ func ValidateRequestOptions(opts *options.RequestOptions) error {
 		return ValidationError("ConnectTimeout", fmt.Errorf("connect timeout cannot be negative"))
 	}
 
-	// Validate max redirects
+	return nil
+}
+
+// validateRedirectsAndRetries validates redirect and retry configuration
+func validateRedirectsAndRetries(opts *options.RequestOptions) error {
 	if opts.MaxRedirects < 0 {
 		return ValidationError("MaxRedirects", fmt.Errorf("max redirects cannot be negative"))
 	}
 
-	// Validate retry configuration
 	if opts.RetryConfig != nil {
 		if opts.RetryConfig.MaxRetries < 0 {
 			return ValidationError("RetryConfig.MaxRetries", fmt.Errorf("max retries cannot be negative"))
