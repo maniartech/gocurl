@@ -156,6 +156,31 @@ func processSimpleFlag(flagName string, i int, o *options.RequestOptions) (int, 
 
 // processFlagWithArgument handles flags that require arguments
 func processFlagWithArgument(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions, dataFields *[]string, formFields *url.Values) (int, error) {
+	// Try request/data flags first
+	if idx, err := processRequestDataFlags(tokens, i, tokenLen, flagName, o, dataFields); err == nil || err.Error() != "not handled" {
+		return idx, err
+	}
+
+	// Try header/form/auth flags
+	if idx, err := processHeaderFormAuthFlags(tokens, i, tokenLen, flagName, o, formFields); err == nil || err.Error() != "not handled" {
+		return idx, err
+	}
+
+	// Try TLS/security flags
+	if idx, err := processTLSSecurityFlags(tokens, i, tokenLen, flagName, o); err == nil || err.Error() != "not handled" {
+		return idx, err
+	}
+
+	// Try network/output flags
+	if idx, err := processNetworkOutputFlags(tokens, i, tokenLen, flagName, o); err == nil || err.Error() != "not handled" {
+		return idx, err
+	}
+
+	return 0, fmt.Errorf("not handled")
+}
+
+// processRequestDataFlags handles request method and data flags
+func processRequestDataFlags(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions, dataFields *[]string) (int, error) {
 	switch flagName {
 	case "-X", "--request":
 		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
@@ -170,6 +195,14 @@ func processFlagWithArgument(tokens []tokenizer.Token, i int, tokenLen int, flag
 			}
 			return nil
 		})
+	default:
+		return 0, fmt.Errorf("not handled")
+	}
+}
+
+// processHeaderFormAuthFlags handles headers, forms, and authentication flags
+func processHeaderFormAuthFlags(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions, formFields *url.Values) (int, error) {
+	switch flagName {
 	case "-H", "--header":
 		return processHeaderFlag(tokens, i, tokenLen, flagName, o)
 	case "-F", "--form":
@@ -178,11 +211,6 @@ func processFlagWithArgument(tokens []tokenizer.Token, i int, tokenLen int, flag
 		return processUserFlag(tokens, i, tokenLen, flagName, o)
 	case "-b", "--cookie":
 		return processCookieFlag(tokens, i, tokenLen, flagName, o)
-	case "-o", "--output":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.OutputFile = value
-			return nil
-		})
 	case "-A", "--user-agent":
 		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
 			o.UserAgent = value
@@ -193,6 +221,14 @@ func processFlagWithArgument(tokens []tokenizer.Token, i int, tokenLen int, flag
 			o.Referer = value
 			return nil
 		})
+	default:
+		return 0, fmt.Errorf("not handled")
+	}
+}
+
+// processTLSSecurityFlags handles TLS certificate and CA flags
+func processTLSSecurityFlags(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions) (int, error) {
+	switch flagName {
 	case "--cert":
 		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
 			o.CertFile = value
@@ -208,9 +244,22 @@ func processFlagWithArgument(tokens []tokenizer.Token, i int, tokenLen int, flag
 			o.CAFile = value
 			return nil
 		})
+	default:
+		return 0, fmt.Errorf("not handled")
+	}
+}
+
+// processNetworkOutputFlags handles proxy, timeout, redirect, and output flags
+func processNetworkOutputFlags(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions) (int, error) {
+	switch flagName {
 	case "-x", "--proxy":
 		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
 			o.Proxy = value
+			return nil
+		})
+	case "-o", "--output":
+		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
+			o.OutputFile = value
 			return nil
 		})
 	case "--max-time":
