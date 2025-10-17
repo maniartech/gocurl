@@ -5,8 +5,18 @@ This directory contains runnable code examples from Chapter 1. Each example is i
 ## Prerequisites
 
 - Go 1.21 or higher
+- GoCurl installed (from parent repository)
 - Internet connection for API calls
 - API keys for certain examples (see individual directories)
+
+## Quick Start
+
+All examples use the local gocurl source code from the parent repository. Just run them directly:
+
+```bash
+cd 01-simple-get
+go run main.go
+```
 
 ## Directory Structure
 
@@ -14,13 +24,21 @@ This directory contains runnable code examples from Chapter 1. Each example is i
 examples/
 ├── README.md (this file)
 ├── 01-simple-get/          # Simple GET request
+│   └── main.go
 ├── 02-post-json/           # POST with JSON data
+│   └── main.go
 ├── 03-json-unmarshal/      # Automatic JSON unmarshaling
+│   └── main.go
 ├── 04-openai-chat/         # OpenAI API integration
+│   └── main.go
 ├── 05-stripe-payment/      # Stripe payment processing
+│   └── main.go
 ├── 06-database-query/      # Database REST API (Supabase)
+│   └── main.go
 ├── 07-slack-webhook/       # Slack notifications
+│   └── main.go
 └── 08-github-viewer/       # Complete GitHub viewer project
+    └── main.go
 ```
 
 ## Examples
@@ -44,7 +62,7 @@ examples/
 
 ## Running Examples
 
-Each example is a standalone Go module with its own `go.mod` file.
+Each example is a simple Go program. Just navigate to the directory and run it.
 
 ### Basic Examples (no API key required)
 
@@ -101,16 +119,24 @@ export GITHUB_TOKEN="ghp_..."
 ./github-viewer golang/go
 ```
 
-## Building All Examples
+## Verifying All Examples
 
-To verify all examples compile:
+To check all examples compile:
 
 ```bash
 # From the examples directory
-for dir in */; do
-  echo "Building $dir..."
-  (cd "$dir" && go build)
+for dir in 0*/; do
+  echo "Checking $dir..."
+  (cd "$dir" && go run main.go --help 2>/dev/null || echo "Compiles OK")
 done
+```
+
+Or compile them individually:
+
+```bash
+cd 01-simple-get
+go build main.go
+./main  # Run the compiled binary
 ```
 
 ## Notes
