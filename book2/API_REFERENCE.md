@@ -984,7 +984,7 @@ Adds a cookie to the request.
 func (b *RequestOptionsBuilder) SetUserAgent(userAgent string) *RequestOptionsBuilder
 ```
 
-Sets User-Agent header.
+Sets custom User-Agent header. If not set, defaults to `gocurl/dev` (or `gocurl/VERSION` in releases), following curl's behavior.
 
 #### SetReferer
 
