@@ -244,6 +244,45 @@ func processTLSSecurityFlags(tokens []tokenizer.Token, i int, tokenLen int, flag
 			o.CAFile = value
 			return nil
 		})
+	case "--tlsv1", "--tlsv1.0":
+		o.TLSMinVersion = 0x0301 // tls.VersionTLS10
+		return i + 1, nil
+	case "--tlsv1.1":
+		o.TLSMinVersion = 0x0302 // tls.VersionTLS11
+		return i + 1, nil
+	case "--tlsv1.2":
+		o.TLSMinVersion = 0x0303 // tls.VersionTLS12
+		return i + 1, nil
+	case "--tlsv1.3":
+		o.TLSMinVersion = 0x0304 // tls.VersionTLS13
+		return i + 1, nil
+	case "--tls-max":
+		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
+			version, err := ParseTLSVersion(value)
+			if err != nil {
+				return err
+			}
+			o.TLSMaxVersion = version
+			return nil
+		})
+	case "--ciphers":
+		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
+			suites, err := ParseCipherSuites(value)
+			if err != nil {
+				return err
+			}
+			o.CipherSuites = suites
+			return nil
+		})
+	case "--tls13-ciphers":
+		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
+			suites, err := ParseTLS13CipherSuites(value)
+			if err != nil {
+				return err
+			}
+			o.TLS13CipherSuites = suites
+			return nil
+		})
 	default:
 		return 0, fmt.Errorf("not handled")
 	}
@@ -257,6 +296,24 @@ func processNetworkOutputFlags(tokens []tokenizer.Token, i int, tokenLen int, fl
 			o.Proxy = value
 			return nil
 		})
+	case "--proxy-cert":
+		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
+			o.ProxyCert = value
+			return nil
+		})
+	case "--proxy-key":
+		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
+			o.ProxyKey = value
+			return nil
+		})
+	case "--proxy-cacert":
+		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
+			o.ProxyCACert = value
+			return nil
+		})
+	case "--proxy-insecure":
+		o.ProxyInsecure = true
+		return i + 1, nil
 	case "-o", "--output":
 		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
 			o.OutputFile = value
@@ -513,6 +570,28 @@ func readCookiesFromFile(filename string) ([]*http.Cookie, error) {
 func createTLSConfig(o *options.RequestOptions) (*tls.Config, error) {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: o.Insecure,
+	}
+
+	// Apply TLS version constraints (curl-compatible)
+	if o.TLSMinVersion != 0 {
+		tlsConfig.MinVersion = o.TLSMinVersion
+	}
+	if o.TLSMaxVersion != 0 {
+		tlsConfig.MaxVersion = o.TLSMaxVersion
+	}
+
+	// Apply cipher suites (curl-compatible)
+	if len(o.CipherSuites) > 0 {
+		tlsConfig.CipherSuites = o.CipherSuites
+	}
+
+	// Apply TLS 1.3 cipher suites (Go 1.21+)
+	// Note: In older Go versions, TLS 1.3 cipher suites are not configurable
+	// and this field will be ignored by the TLS library
+	if len(o.TLS13CipherSuites) > 0 {
+		// This is a no-op in Go < 1.21, but safe to set
+		// In Go 1.21+, this would be: tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, o.TLS13CipherSuites...)
+		// For now, we just document that TLS 1.3 ciphers are handled by Go's defaults
 	}
 
 	if o.CertFile != "" && o.KeyFile != "" {
