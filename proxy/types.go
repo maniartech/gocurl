@@ -28,6 +28,12 @@ type ProxyConfig struct {
 	DisableKeepAlives bool          // Optional: To disable HTTP keep-alives
 	CustomDialer      proxy.Dialer  // Optional: Allows injecting a custom dialer (useful for testing)
 	NoProxy           []string      // Optional: List of domains/patterns to exclude from proxying
+
+	// HTTPS proxy TLS authentication (curl-compatible)
+	ClientCert string // Path to client certificate for HTTPS proxy (--proxy-cert)
+	ClientKey  string // Path to client key for HTTPS proxy (--proxy-key)
+	CACert     string // Path to CA certificate for HTTPS proxy (--proxy-cacert)
+	Insecure   bool   // Skip TLS verification for HTTPS proxy (--proxy-insecure)
 }
 
 // Proxy defines the interface for different proxy types.

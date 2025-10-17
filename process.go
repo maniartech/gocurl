@@ -207,6 +207,11 @@ func createProxyConfig(proxyURL *url.URL, proxyType proxy.ProxyType, tlsConfig *
 		TLSConfig: tlsConfig,
 		NoProxy:   opts.ProxyNoProxy,
 		Timeout:   opts.ConnectTimeout,
+		// Proxy TLS authentication (curl-compatible)
+		ClientCert: opts.ProxyCert,
+		ClientKey:  opts.ProxyKey,
+		CACert:     opts.ProxyCACert,
+		Insecure:   opts.ProxyInsecure,
 	}
 
 	if password, hasPassword := proxyURL.User.Password(); hasPassword {

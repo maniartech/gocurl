@@ -81,9 +81,21 @@ type RequestOptions struct {
 	CertPinFingerprints []string    `json:"cert_pin_fingerprints,omitempty"` // SHA256 fingerprints for certificate pinning
 	SNIServerName       string      `json:"sni_server_name,omitempty"`       // Server name for SNI
 
+	// TLS version control (curl-compatible)
+	TLSMinVersion     uint16   `json:"tls_min_version,omitempty"`     // Minimum TLS version (e.g., tls.VersionTLS12)
+	TLSMaxVersion     uint16   `json:"tls_max_version,omitempty"`     // Maximum TLS version (e.g., tls.VersionTLS13)
+	CipherSuites      []uint16 `json:"cipher_suites,omitempty"`       // TLS 1.2 cipher suites
+	TLS13CipherSuites []uint16 `json:"tls13_cipher_suites,omitempty"` // TLS 1.3 cipher suites
+
 	// Proxy settings
 	Proxy        string   `json:"proxy,omitempty"`
 	ProxyNoProxy []string `json:"proxy_no_proxy,omitempty"` // Domains to exclude from proxying
+
+	// Proxy TLS authentication (curl-compatible)
+	ProxyCert     string `json:"proxy_cert,omitempty"`     // Client certificate for HTTPS proxy (--proxy-cert)
+	ProxyKey      string `json:"proxy_key,omitempty"`      // Client key for HTTPS proxy (--proxy-key)
+	ProxyCACert   string `json:"proxy_cacert,omitempty"`   // CA certificate for HTTPS proxy (--proxy-cacert)
+	ProxyInsecure bool   `json:"proxy_insecure,omitempty"` // Skip TLS verification for HTTPS proxy (--proxy-insecure)
 
 	// Timeout settings
 	Timeout        time.Duration `json:"timeout,omitempty"`
