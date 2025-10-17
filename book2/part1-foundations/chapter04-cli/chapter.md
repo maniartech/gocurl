@@ -85,7 +85,7 @@ Output:
   "args": {},
   "headers": {
     "Host": "httpbin.org",
-    "User-Agent": "Go-http-client/2.0"
+    "User-Agent": "gocurl/dev"
   },
   "origin": "203.0.113.1",
   "url": "https://httpbin.org/get"
@@ -251,6 +251,8 @@ gocurl -L https://httpbin.org/redirect/3
 ```
 
 ### Custom User-Agent (-A, --user-agent)
+
+By default, gocurl sends `gocurl/dev` as the User-Agent (matching curl's behavior of sending `curl/VERSION`). You can customize this:
 
 ```bash
 gocurl -A "MyApp/1.0" https://httpbin.org/user-agent

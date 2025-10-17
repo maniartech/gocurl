@@ -441,9 +441,12 @@ func applyHeaders(req *http.Request, opts *options.RequestOptions, contentType s
 		req.Header.Set("Content-Type", contentType)
 	}
 
-	// Set user agent
+	// Set user agent (curl always sends a User-Agent header)
 	if opts.UserAgent != "" {
 		req.Header.Set("User-Agent", opts.UserAgent)
+	} else {
+		// Default to "gocurl/VERSION" to match curl's behavior (curl/VERSION)
+		req.Header.Set("User-Agent", "gocurl/"+Version)
 	}
 
 	// Set referer

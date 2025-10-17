@@ -335,7 +335,8 @@ These are the core fields for any HTTP request:
 
 **UserAgent** (`string`)
 - Custom User-Agent header
-- Overrides default GoCurl user agent
+- Default: `gocurl/dev` (or `gocurl/VERSION` in releases)
+- Overrides the default User-Agent
 - Example: `UserAgent: "MyApp/1.0"`
 
 **Referer** (`string`)

@@ -194,6 +194,27 @@ func TestHTTPVersions(t *testing.T) {
 }
 
 func TestCustomUserAgent(t *testing.T) {
+	t.Run("Default User-Agent follows curl behavior", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userAgent := r.Header.Get("User-Agent")
+			// Should match "gocurl/VERSION" format (like curl sends "curl/VERSION")
+			assert.Equal(t, "gocurl/"+gocurl.Version, userAgent)
+			fmt.Fprintf(w, "Default User-Agent: %s", userAgent)
+		}))
+		defer server.Close()
+
+		opts := &options.RequestOptions{
+			URL: server.URL,
+			// No UserAgent set - should use default
+		}
+
+		resp, body, err := gocurl.Process(context.Background(), opts)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Contains(t, body, "gocurl/")
+	})
+
 	t.Run("Custom User-Agent string", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "GoCurl/1.0", r.Header.Get("User-Agent"))
