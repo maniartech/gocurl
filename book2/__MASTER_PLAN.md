@@ -43,7 +43,7 @@
 - **No placeholder code** - only working, tested examples
 - **Race-condition free** - tested with `-race` flag
 - **Each example in own directory** - prevents main/struct conflicts
-- **Each example has go.mod** - standalone, runnable modules
+- **Simple structure** - no go.mod overhead, just runnable code
 
 ### Example Structure Convention:
 ```
@@ -52,10 +52,8 @@ chapter-XX-name/
 ├── examples/
 │   ├── README.md
 │   ├── 01-example-name/
-│   │   ├── go.mod
 │   │   └── main.go
 │   ├── 02-another-example/
-│   │   ├── go.mod
 │   │   └── main.go
 │   └── ...
 └── exercises/
@@ -63,16 +61,15 @@ chapter-XX-name/
     ├── exercise1.md
     └── solutions/
         └── exercise1/
-            ├── go.mod
             └── main.go
 ```
 
 **Rationale:**
-- Each example is a standalone Go module
-- No conflicts between main functions or struct definitions
-- Each example can be run independently with `go run main.go`
-- Examples can import gocurl using replace directive in go.mod
-- Easy to copy examples into new projects
+- Each example in separate directory prevents name conflicts
+- No go.mod overhead - examples use parent repository's gocurl
+- Simple structure: just `go run main.go` to execute
+- Easy to read, understand, and copy
+- No dependency management complexity
 
 ---
 
