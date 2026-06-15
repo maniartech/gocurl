@@ -34,8 +34,8 @@ jobs:
       - name: Build
         run: go build ./...
 
-      - name: Test (race)
-        run: go test -race -timeout 180s ./...
+      - name: Test (race, hermetic)
+        run: go test -short -race -timeout 240s ./...
 
       - name: Coverage
         run: go test -short -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | tail -1

@@ -11,6 +11,9 @@ import (
 
 // TestTLSVersionControl demonstrates TLS version control functionality
 func TestTLSVersionControl(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping network test (www.howsmyssl.com) in -short mode")
+	}
 	// Create options with TLS 1.2 minimum
 	opts := options.NewRequestOptions("https://www.howsmyssl.com/a/check")
 	opts.TLSMinVersion = tls.VersionTLS12
@@ -41,6 +44,10 @@ func TestCipherSuiteSelection(t *testing.T) {
 
 	if len(cipherSuites) != 2 {
 		t.Errorf("Expected 2 cipher suites, got %d", len(cipherSuites))
+	}
+
+	if testing.Short() {
+		t.Skip("skipping network test (www.howsmyssl.com) in -short mode")
 	}
 
 	// Create options with specific cipher suites
