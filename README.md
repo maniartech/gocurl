@@ -1,185 +1,163 @@
-# GoCurl: Universal REST API Client for Go
+# GoCurl
 
-> NOT - READY - YET
+**Paste any curl command from any API doc straight into Go.** Test it in the shell, run
+the exact same command in your code — no translation, no guesswork.
 
-## Table of Contents
+```go
+resp, err := gocurl.CurlString(ctx, `
+  curl https://api.github.com/repos/golang/go
+`)
+```
 
-- [GoCurl: Universal REST API Client for Go](#gocurl-universal-rest-api-client-for-go)
-  - [Table of Contents](#table-of-contents)
-  - [Introduction](#introduction)
-  - [Vision](#vision)
-  - [Features](#features)
-  - [Use Cases](#use-cases)
-  - [Installation](#installation)
-  - [Usage](#usage)
-    - [As a Library](#as-a-library)
-    - [Command-Line Interface](#command-line-interface)
-  - [API Reference](#api-reference)
-    - [Main Components](#main-components)
-    - [Key Functions](#key-functions)
-  - [Security Considerations](#security-considerations)
-  - [Advanced Usage](#advanced-usage)
-  - [Performance Considerations](#performance-considerations)
-  - [Contributing](#contributing)
-  - [License](#license)
+GoCurl is a curl-ergonomic HTTP client for Go, built on `net/http`, with a CLI that
+shares the exact same syntax. It exists to remove the tax every Go developer pays when
+integrating a new API: mentally compiling a curl snippet from the docs into
+`http.NewRequest`, headers, body encoding, and auth.
 
-## Introduction
+> See [VISION.md](VISION.md) for what we're building and why.
 
-GoCurl is a powerful, flexible, and secure HTTP client library for Go that aims to be the universal translator between Go applications and REST APIs of any platform. By emulating and extending the functionality of the popular curl command-line tool, GoCurl provides a familiar and intuitive interface for Go developers to interact with any REST API, regardless of the platform or language it was built in.
+## Project status
 
-## Vision
+**Pre-1.0 and under active development.** The public API may change, and parser coverage
+of curl flags is still being completed. Not yet recommended for production-critical paths.
+Feedback and contributions are very welcome.
 
-In the diverse landscape of web services and microservices, many platforms expose REST APIs but don't provide official Go client libraries. This gap often forces Go developers to either write custom client code for each API they interact with or use generic HTTP clients that lack the convenience of purpose-built libraries.
+## Why GoCurl
 
-GoCurl aims to bridge this gap by providing:
+Every REST API documents itself with curl. Almost none ship a Go SDK for their long-tail
+endpoints. GoCurl makes the curl command *be* the code, so you can:
 
-1. A universal client that can interact with any REST API using curl-like syntax.
-2. Easy translation of curl commands (often provided in API documentation) into Go code.
-3. A consistent interface for working with diverse APIs in Go projects.
-4. Tools to generate Go structs from API responses for type-safe interactions.
-5. Middleware and plugins to extend functionality for specific API requirements.
+- **Integrate a new third-party API** by copy-pasting its documented curl example.
+- **Prototype and build internal tooling** in seconds.
+- **Write scripts, CI checks, and API smoke tests** with one syntax for shell and code.
+- **Drive HTTP from config** by storing curl commands as data and executing them.
 
-By doing so, GoCurl seeks to make any REST API easily consumable in Go-based projects, significantly reducing the time and effort required to integrate new services.
-
-## Features
-
-- Support for all HTTP methods (GET, POST, PUT, DELETE, PATCH, etc.)
-- HTTP/1.1 and HTTP/2 protocol support
-- Custom header management
-- File upload capabilities (multipart/form-data)
-- Automatic cookie handling
-- Flexible authentication support (Basic, Bearer Token, OAuth, etc.)
-- Proxy support (HTTP and SOCKS5)
-- Custom TLS configuration
-- Timeout and retry mechanisms
-- Compression support (gzip, deflate)
-- Variable substitution in curl-like commands
-- Response parsing and struct generation
-- Middleware support for request/response modification
-- Plugin system for extending functionality
-- Comprehensive security features
-
-## Use Cases
-
-1. **API Exploration**: Quickly test and explore new APIs using curl-like commands.
-2. **Service Integration**: Easily integrate diverse microservices into Go applications.
-3. **Legacy API Modernization**: Wrap older REST APIs with a modern Go interface.
-4. **Cross-Platform Development**: Use the same client library across different Go projects interacting with various APIs.
-5. **API Response Mocking**: Generate mock responses for testing based on actual API interactions.
+It's at its best wherever HTTP is glue rather than the hot path. For a high-throughput
+production client, reach for a hand-tuned `net/http` client — GoCurl gets your
+integration working first.
 
 ## Installation
 
-To use GoCurl as a library in your Go project:
+As a library:
 
 ```bash
 go get github.com/maniartech/gocurl
 ```
 
-To install the command-line tool:
+As a command-line tool:
 
 ```bash
 go install github.com/maniartech/gocurl/cmd/gocurl@latest
 ```
 
+Requires Go 1.22+.
+
 ## Usage
 
-### As a Library
+### As a library
+
+The primary entry points accept a curl command (as a single string or as separate
+arguments) and return a standard `*http.Response`:
 
 ```go
-import "github.com/maniartech/gocurl"
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    "github.com/maniartech/gocurl"
+)
 
 func main() {
-    variables := gocurl.Variables{
-        "api_key": os.Getenv("API_KEY"),
-    }
+    ctx := context.Background()
 
-    response, err := gocurl.Request([]string{
-        "curl",
-        "-X", "GET",
-        "-H", "Authorization: Bearer ${api_key}",
-        "https://api.example.com/data",
-    }, variables)
-
+    // Separate arguments (each is one token, like os.Args).
+    resp, err := gocurl.Curl(ctx,
+        "-H", "Accept: application/vnd.github+json",
+        "https://api.github.com/repos/golang/go",
+    )
     if err != nil {
-        log.Fatalf("Error: %v", err)
+        log.Fatal(err)
     }
-    fmt.Println(response)
+    defer resp.Body.Close()
 
-    // Parse response into a struct
-    var data MyDataStruct
-    if err := gocurl.ParseJSON(response, &data); err != nil {
-        log.Fatalf("Error parsing response: %v", err)
-    }
-    // Use the structured data...
+    fmt.Println(resp.StatusCode)
 }
 ```
 
-### Command-Line Interface
+Convenience helpers read the body for you:
 
-```bash
-gocurl -X GET -H "Authorization: Bearer $API_KEY" https://api.example.com/data
+```go
+// Body as a string (plus the response).
+body, resp, err := gocurl.CurlString(ctx, "https://api.github.com/repos/golang/go")
+
+// Decode JSON directly into a struct.
+var repo struct {
+    FullName string `json:"full_name"`
+    Stars    int    `json:"stargazers_count"`
+}
+_, err = gocurl.CurlJSON(ctx, &repo, "https://api.github.com/repos/golang/go")
+
+// Stream a download to a file.
+n, resp, err := gocurl.CurlDownload(ctx, "go.tar.gz",
+    "https://go.dev/dl/go1.22.0.linux-amd64.tar.gz")
 ```
 
-## API Reference
+`CurlBytes` is also available for raw `[]byte` bodies.
 
-### Main Components
+### Variable substitution
 
-- `CurlCommand`: Represents a curl command with all its options.
-- `RequestOptions`: Contains all the options for making an HTTP request.
-- `Variables`: A map type for variable substitution in commands.
-- `Middleware`: Interface for creating request/response modification middleware.
-- `Plugin`: Interface for creating plugins to extend functionality.
+By default, environment variables (`$VAR` and `${VAR}`) are expanded automatically:
 
-### Key Functions
+```go
+resp, err := gocurl.Curl(ctx,
+    "-H", "Authorization: Bearer $GITHUB_TOKEN",
+    "https://api.github.com/user",
+)
+```
 
-- `ParseCurlCommand(args []string, variables Variables) (*RequestOptions, error)`
-- `Request(args []string, variables Variables) (string, error)`
-- `(c *CurlCommand) Execute() (*http.Response, error)`
-- `ParseJSON(data string, v interface{}) error`
-- `GenerateStruct(jsonData string) (string, error)`
+For explicit, testable control — and to avoid pulling in the process environment — pass a
+`Variables` map and use the `WithVars` entry points:
 
-(Detailed API documentation to be generated and linked)
+```go
+vars := gocurl.Variables{"token": myToken}
+resp, err := gocurl.CurlWithVars(ctx, vars,
+    "-H", "Authorization: Bearer ${token}",
+    "https://api.github.com/user",
+)
+```
 
-## Security Considerations
+### Command-line interface
 
-GoCurl implements several security measures:
+The CLI uses the same curl syntax as the library:
 
-1. Input Validation: Strict validation of input arguments and Variables values.
-2. Escaping: Proper escaping of substituted values to prevent injection attacks.
-3. Sensitive Data Handling: Redaction of sensitive information in logs.
-4. TLS Security: Support for custom TLS configurations.
-5. Authentication: Flexible support for various authentication methods.
+```bash
+gocurl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/user
+gocurl -X POST -d "name=value" https://httpbin.org/post
+gocurl -o repo.json https://api.github.com/repos/golang/go
+```
 
-Users should be aware of:
-- Proper handling of sensitive data in Variables
-- Risks associated with following redirects to untrusted hosts
-- Importance of using HTTPS for secure communications
+Run `gocurl` with no arguments for usage help.
 
-## Advanced Usage
+## Supported curl features
 
-1. Creating Custom Middleware
-2. Developing Plugins for Specific APIs
-3. Generating Go Structs from API Responses
-4. Implementing Complex Authentication Flows
-5. Handling Paginated API Responses
+GoCurl targets the HTTP/HTTPS flags that appear in real API documentation, including:
+HTTP methods (`-X`), headers (`-H`), data/body (`-d`), form and file upload (`-F`),
+basic and bearer auth (`-u`), output to file (`-o`), TLS options (`--cert`, `--key`,
+`--cacert`, `-k`), proxies (`-x`, including SOCKS5), and compression (`--compressed`).
 
-(Detailed examples for each to be provided)
-
-## Performance Considerations
-
-- Connection Pooling
-- Keep-Alive Connections
-- Efficient Memory Usage for Large Responses
-- Concurrent API Requests
+It deliberately does **not** implement curl's non-HTTP protocols (FTP, SMTP, etc.) or
+flags that don't map to HTTP API usage. Flag coverage is expanding — see the roadmap in
+[VISION.md](VISION.md).
 
 ## Contributing
 
-We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) file for details on submitting pull requests, suggesting improvements, or reporting bugs.
+Contributions are welcome. The most valuable work right now is parser correctness
+(making real-world curl commands from API docs run verbatim) and test coverage. Please
+open an issue to discuss substantial changes before sending a PR.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-GoCurl is committed to evolving with the needs of the Go community and the ever-changing landscape of web APIs. We encourage feedback, contributions, and collaboration to make GoCurl the go-to solution for consuming REST APIs in Go projects.
+MIT — see [LICENSE](LICENSE).
