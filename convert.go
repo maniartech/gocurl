@@ -200,11 +200,8 @@ func processDataFlags(tokens []tokenizer.Token, i int, flag string, st *parseSta
 		if err != nil {
 			return 0, true, err
 		}
-		body, err := os.ReadFile(v)
-		if err != nil {
-			return 0, true, fmt.Errorf("failed to read upload file: %w", err)
-		}
-		st.o.Body = string(body)
+		// Stream the upload from disk (rewindable) rather than buffering it.
+		st.o.BodyStream = FileBody(v)
 		if st.o.Method == "GET" {
 			st.o.Method = "PUT"
 		}

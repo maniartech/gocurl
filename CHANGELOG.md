@@ -7,6 +7,20 @@ a tagged release.
 
 ## [Unreleased]
 
+### Added — body model & streaming (Milestone 3)
+- `BodySource` interface (in `options`) + `BytesBody`/`StringBody`/`FileBody`/`ReaderBody`/
+  `MultipartBody` constructors. Requests can now stream bodies instead of buffering them.
+- `CreateRequest` honors a streaming `BodyStream` (sets `Content-Length` for known sizes and
+  a `GetBody` for rewindable sources); the `-T` upload flag now streams from disk.
+- `MultipartBody` streams via a cancellation-safe `io.Pipe` (closing the body unblocks the
+  writer goroutine) and supplies its own `multipart/form-data` Content-Type.
+- `Request.WithBodySource`/`WithBodyFile` builders and the `Stream(...)` request option.
+
+### Changed
+- `executeWithRetries` only buffers the request body when retries are enabled and the body
+  has no `GetBody`; `executeAttempt` replays via `GetBody` when available. The default
+  (no-retry) client now streams uploads straight through.
+
 ### Added — transport & connection management (Milestone 2)
 - Config-driven, per-Client owned transport with tunable pooling and the timeout taxonomy:
   `WithMaxIdleConns`, `WithMaxIdleConnsPerHost`, `WithMaxConnsPerHost` (0 = unlimited),

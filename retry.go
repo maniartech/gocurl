@@ -22,13 +22,19 @@ func executeWithRetries(client options.HTTPClient, req *http.Request, opts *opti
 		return nil, err
 	}
 
-	// Buffer request body for retries if needed
-	bodyBytes, err := bufferRequestBody(req)
-	if err != nil {
-		return nil, err
-	}
-
 	retries := getMaxRetries(opts)
+
+	// Only buffer the body when retries are enabled AND the body cannot be
+	// re-obtained via GetBody. Streaming/rewindable bodies set GetBody, and a
+	// no-retry request streams straight through without buffering.
+	var bodyBytes []byte
+	if retries > 0 && req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
+		var err error
+		bodyBytes, err = bufferRequestBody(req)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return retryLoop(client, req, opts, bodyBytes, retries)
 }
@@ -137,16 +143,26 @@ func checkContextDuringRetry(req *http.Request, resp *http.Response, attempt, re
 	}
 }
 
-// executeAttempt executes a single request attempt
+// executeAttempt executes a single request attempt, rewinding the body for
+// retries either via GetBody (streaming/rewindable) or the buffered bytes.
 func executeAttempt(client options.HTTPClient, req *http.Request, bodyBytes []byte, attempt int) (*http.Response, error) {
 	attemptReq := req
 
-	// Clone request for retry attempts
-	if attempt > 0 && bodyBytes != nil {
-		var err error
-		attemptReq, err = cloneRequest(req, bodyBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to clone request for retry: %w", err)
+	if attempt > 0 {
+		switch {
+		case req.GetBody != nil:
+			body, err := req.GetBody()
+			if err != nil {
+				return nil, fmt.Errorf("failed to rewind body for retry: %w", err)
+			}
+			attemptReq = req.Clone(req.Context())
+			attemptReq.Body = body
+		case bodyBytes != nil:
+			var err error
+			attemptReq, err = cloneRequest(req, bodyBytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to clone request for retry: %w", err)
+			}
 		}
 	}
 

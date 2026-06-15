@@ -65,6 +65,7 @@ type RequestOptions struct {
 	URL         string      `json:"url"`
 	Headers     http.Header `json:"headers,omitempty"`
 	Body        string      `json:"body"`
+	BodyStream  BodySource  `json:"-"` // streaming request body; overrides Body when set
 	Form        url.Values  `json:"form,omitempty"`
 	QueryParams url.Values  `json:"query_params,omitempty"`
 

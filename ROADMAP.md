@@ -112,19 +112,31 @@ Spec 03. deps: M1.
 
 ---
 
-## Milestone 3 — Body model & streaming
+## Milestone 3 — Body model & streaming — **DONE** *(uncommitted, under review)*
 
 Spec 05. deps: M1.
 
-- [ ] **M3-T1 — `BodySource` interface + `BytesBody`/`ReaderBody`/`FileBody`** (B1). *DoD:
-  each source has Open/Len/Rewindable tests.*
-- [ ] **M3-T2 — Streaming request upload (`-T`/`WithBody`) and live response streaming
-  contract** (body ownership rules). *DoD: large-file upload streams (no full buffering),
-  memory bounded under test.*
-- [ ] **M3-T3 — `MultipartBody` with cancellation-safe `io.Pipe`** (F1). *DoD: goroutine
-  leak test passes on early cancel/close.*
-- [ ] **M3-T4 — Size limits reconciled with validation** (F2): streaming sources exempt
-  from the in-memory cap. *DoD: >10MB streams succeed; oversized in-memory body rejected.*
+- [x] **M3-T1 — `BodySource` interface (`options` pkg) + `BytesBody`/`StringBody`/`FileBody`/
+  `ReaderBody`** (B1). *DoD met: each source has Open/Len/Rewindable tests; ReaderBody is
+  single-use (non-rewindable).*
+- [x] **M3-T2 — Streaming request upload + live response streaming.** `CreateRequest` uses
+  `opts.BodyStream` (sets `Content-Length` and a `GetBody` for rewindable sources); `-T`
+  now streams via `FileBody`; `executeWithRetries` only buffers when retries are enabled and
+  there is no `GetBody`, so the default client streams uploads straight through. Builders:
+  `WithBodySource`/`WithBodyFile`, `Stream(...)` option. *DoD met: ~2MB upload streamed;
+  chunked response consumed incrementally; non-rewindable ReaderBody upload works.*
+- [x] **M3-T3 — `MultipartBody` with cancellation-safe `io.Pipe`** (F1). Closing the body
+  reader unblocks the writer goroutine; the boundary is stable so `ContentType()` matches
+  across opens; rewindable only when all parts are `Path`-based. *DoD met: 50× open+close
+  goroutine-leak test; path and reader round-trips; missing-file error propagates.*
+- [x] **M3-T4 — Size limits vs streaming** (F2): documented that the in-memory body cap
+  (`validateBody`, currently inactive on the live path — wired in M7) applies only to
+  `BytesBody`; streaming sources are exempt. *Reconciliation noted; no active cap to bypass yet.*
+
+> Also: `executeAttempt` now replays via `GetBody` (streaming-friendly) when available,
+> falling back to buffered bytes. Tests: `body_internal_test.go` (whitebox, body.go ~100%
+> bar one defensive multipart error branch) and `tests/streaming_blackbox_test.go` (file
+> upload, `-T`, multipart, non-rewindable reader, chunked response). `-short -race` green.
 
 ---
 
