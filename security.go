@@ -1,6 +1,7 @@
 package gocurl
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -76,6 +77,22 @@ func LoadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
 		tlsConfig.ServerName = opts.SNIServerName
 	}
 
+	// Apply explicit TLS version and cipher constraints from curl flags. This
+	// makes LoadTLSConfig the single source of truth so --tlsv1.x / --tls-max /
+	// --ciphers take effect on every request, not only when a cert is also given.
+	if opts.TLSMinVersion != 0 {
+		tlsConfig.MinVersion = opts.TLSMinVersion
+	}
+	if opts.TLSMaxVersion != 0 {
+		tlsConfig.MaxVersion = opts.TLSMaxVersion
+	}
+	if len(opts.CipherSuites) > 0 {
+		tlsConfig.CipherSuites = opts.CipherSuites
+	}
+	// NOTE: Go's crypto/tls does not support configuring TLS 1.3 cipher suites;
+	// opts.TLS13CipherSuites is accepted for curl compatibility but cannot be
+	// enforced by the standard library.
+
 	return tlsConfig, nil
 }
 
@@ -92,12 +109,17 @@ func VerifyCertificatePin(rawCerts [][]byte, fingerprints []string) error {
 			continue
 		}
 
-		// Calculate SHA256 fingerprint
-		certFingerprint := fmt.Sprintf("%x", cert.Raw)
+		// Calculate the SHA-256 fingerprint of the certificate's DER bytes.
+		sum := sha256.Sum256(cert.Raw)
+		certFingerprint := fmt.Sprintf("%x", sum[:])
 
 		for _, pin := range fingerprints {
-			// Normalize pin (remove colons, spaces, make lowercase)
-			normalizedPin := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(pin, ":", ""), " ", ""))
+			// Normalize pin (strip sha256/ prefix, colons, spaces; lowercase).
+			normalizedPin := strings.ToLower(pin)
+			normalizedPin = strings.TrimPrefix(normalizedPin, "sha256//")
+			normalizedPin = strings.TrimPrefix(normalizedPin, "sha256:")
+			normalizedPin = strings.ReplaceAll(normalizedPin, ":", "")
+			normalizedPin = strings.ReplaceAll(normalizedPin, " ", "")
 			if certFingerprint == normalizedPin {
 				return nil // Pin matched
 			}

@@ -1,7 +1,10 @@
 package gocurl
 
 import (
+	"bufio"
+	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"fmt"
 	"io"
 	"net/http"
@@ -61,11 +64,11 @@ func DecompressResponse(resp *http.Response) error {
 		}
 
 	case CompressionDeflate:
-		// For deflate, we can't pool easily, but it's less common
-		// Use standard library's flate reader
-		reader = &deflateReader{
-			body: resp.Body,
+		dr, derr := newDeflateReader(resp.Body)
+		if derr != nil {
+			return fmt.Errorf("failed to create deflate reader: %w", derr)
 		}
+		reader = dr
 
 	case CompressionBrotli:
 		// Get brotli reader from pool
@@ -138,38 +141,48 @@ func (r *pooledBrotliReader) Close() error {
 	return err
 }
 
-// deflateReader wraps a deflate decompressor
+// deflateReader decompresses a Content-Encoding: deflate body. Per RFC 7230 the
+// "deflate" coding is zlib-wrapped DEFLATE (RFC 1950), but some servers send raw
+// DEFLATE (RFC 1951); we detect which and use compress/zlib or compress/flate.
 type deflateReader struct {
 	body io.ReadCloser
-	// We'll use gzip.Reader with a modified header
-	reader io.ReadCloser
+	dec  io.ReadCloser
 }
 
-func (r *deflateReader) Read(p []byte) (n int, err error) {
-	if r.reader == nil {
-		// Create a flate reader (deflate is the raw format)
-		// We need to add a gzip header or use compress/flate directly
-		// For simplicity, try gzip reader (most servers send gzip-compatible deflate)
-		gzReader := gzipReaderPool.Get().(*gzip.Reader)
-		if err := gzReader.Reset(r.body); err != nil {
-			// If it fails, it might be raw deflate - we'd need compress/flate
-			gzipReaderPool.Put(gzReader)
-			// For now, return error - in production, implement raw deflate
-			return 0, fmt.Errorf("deflate decompression not fully implemented: %w", err)
+func newDeflateReader(body io.ReadCloser) (*deflateReader, error) {
+	br := bufio.NewReader(body)
+	var dec io.ReadCloser
+	if peek, err := br.Peek(2); err == nil && isZlibHeader(peek) {
+		zr, zerr := zlib.NewReader(br)
+		if zerr != nil {
+			return nil, zerr
 		}
-		r.reader = gzReader
+		dec = zr
+	} else {
+		dec = flate.NewReader(br)
 	}
-	return r.reader.Read(p)
+	return &deflateReader{body: body, dec: dec}, nil
+}
+
+// isZlibHeader reports whether b looks like a zlib header (RFC 1950): the low
+// nibble of CMF is 8 (the deflate method) and CMF*256+FLG is a multiple of 31.
+func isZlibHeader(b []byte) bool {
+	if len(b) < 2 || b[0]&0x0f != 0x08 {
+		return false
+	}
+	return (uint16(b[0])<<8|uint16(b[1]))%31 == 0
+}
+
+func (r *deflateReader) Read(p []byte) (int, error) {
+	return r.dec.Read(p)
 }
 
 func (r *deflateReader) Close() error {
-	if r.reader != nil {
-		if gzReader, ok := r.reader.(*gzip.Reader); ok {
-			gzReader.Close()
-			gzipReaderPool.Put(gzReader)
-		}
+	err := r.dec.Close()
+	if cerr := r.body.Close(); err == nil {
+		err = cerr
 	}
-	return r.body.Close()
+	return err
 }
 
 // GetAcceptEncodingHeader returns the appropriate Accept-Encoding header value

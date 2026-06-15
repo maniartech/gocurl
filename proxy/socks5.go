@@ -60,15 +60,31 @@ func (sp *SOCKS5Proxy) Apply(transport *http.Transport) error {
 			return dialer.DialContext(ctx, network, addr)
 		}
 
-		// Apply the custom timeout from sp.Timeout
-		timeoutCtx, cancel := context.WithTimeout(ctx, sp.Timeout)
-		defer cancel()
+		// Only impose a deadline when a positive connect timeout is configured.
+		// A zero sp.Timeout previously produced context.WithTimeout(ctx, 0),
+		// which is already expired and made every dial fail instantly.
+		dialCtx := ctx
+		if sp.Timeout > 0 {
+			var cancel context.CancelFunc
+			dialCtx, cancel = context.WithTimeout(ctx, sp.Timeout)
+			defer cancel()
+		}
 
 		dialerChan := make(chan net.Conn, 1)
 		errChan := make(chan error, 1)
 
-		// Start the dial operation in a separate goroutine
+		// Start the dial operation in a separate goroutine, preferring the
+		// context-aware dialer when the SOCKS5 dialer supports it.
 		go func() {
+			if cd, ok := socksDialer.(proxy.ContextDialer); ok {
+				conn, err := cd.DialContext(dialCtx, network, addr)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				dialerChan <- conn
+				return
+			}
 			conn, err := socksDialer.Dial(network, addr)
 			if err != nil {
 				errChan <- err
@@ -77,10 +93,10 @@ func (sp *SOCKS5Proxy) Apply(transport *http.Transport) error {
 			dialerChan <- conn
 		}()
 
-		// Wait for either the dial to complete, the context to timeout, or an error to occur
+		// Wait for either the dial to complete, the context to finish, or an error.
 		select {
-		case <-timeoutCtx.Done(): // If the custom context times out or is canceled
-			return nil, timeoutCtx.Err() // Return the context's error (timeout or cancellation)
+		case <-dialCtx.Done():
+			return nil, dialCtx.Err()
 		case conn := <-dialerChan: // Successful connection
 			return conn, nil
 		case err := <-errChan: // Error during dialing
