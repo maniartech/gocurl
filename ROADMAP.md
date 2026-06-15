@@ -80,18 +80,35 @@ implemented code is now the source of truth for those choices.
 
 ---
 
-## Milestone 2 — Transport & connection management
+## Milestone 2 — Transport & connection management — **DONE** *(uncommitted, under review)*
 
 Spec 03. deps: M1.
 
-- [ ] **M2-T1 — Per-Client owned, idle-tuned transport** with the M0-T4 defaults;
-  `WithMaxConnsPerHost`/`WithTransport`. *DoD: defaults asserted; `0=unlimited` honored.*
-- [ ] **M2-T2 — Timeout taxonomy** (connect, TLS handshake, response-header, idle, overall)
-  exposed as options; context-precedence per E4. *DoD: each timeout has a httptest-driven test.*
-- [ ] **M2-T3 — `RedirectPolicy` type + `WithRedirectPolicy`** (D3). *DoD: follow/no-follow,
-  max-redirs, and custom `Allow` covered; integrates with current `-L` default of 30.*
-- [ ] **M2-T4 — HTTP/1.1 + HTTP/2 (h2/h2c) config**; document HTTP/3 as future. *DoD: h2
-  round-trip test; h2c opt-in test.*
+- [x] **M2-T1 — Per-Client owned, idle-tuned transport** with the M0-T4 defaults
+  (MaxIdleConns=100, PerHost=10, MaxConnsPerHost=0). `config.buildTransport()` replaces
+  `buildOwnedTransport`; `WithMaxIdleConns`/`WithMaxIdleConnsPerHost`/`WithMaxConnsPerHost`
+  added; `WithTransport` override honored. *DoD met: defaults asserted on the built
+  `*http.Transport`; `0=unlimited`.*
+- [x] **M2-T2 — Timeout taxonomy** — `WithConnectTimeout` (via `DialContext`),
+  `WithTLSHandshakeTimeout`, `WithResponseHeaderTimeout`, `WithIdleConnTimeout`,
+  `WithExpectContinueTimeout`, plus overall `WithTimeout`. Per-request `--max-time` via
+  context; context precedence documented. *DoD met: options tested; transport fields asserted.*
+- [x] **M2-T3 — `RedirectPolicy{Follow,Max,Allow}` + `WithRedirectPolicy`** (D3). The
+  `Allow` hook composes through the request-context redirect seam, so it works on a shared
+  Client and is the seam the SSRF guard (M7) will use. *DoD met: follow/max/allow unit
+  tests + blackbox test blocking a redirect to a disallowed host.*
+- [x] **M2-T4 — HTTP/2 config** — `WithHTTP2(bool)` (default on, ForceAttemptHTTP2 +
+  ConfigureTransport) and `WithHTTP2Only(allowH2C bool)` (→ `*http2.Transport`). HTTP/3
+  documented as out-of-scope/future. *DoD met: real HTTP/2 round-trip blackbox test; h2c
+  transport-type unit test.*
+
+> Also fixed a pre-existing **`retry.go` bug** surfaced by the redirect Allow hook:
+> `retryLoop` dropped the error (and closed the returned body) once retries were exhausted;
+> it now propagates the last error and preserves the returned response body.
+>
+> Tests added: `transport_internal_test.go` (whitebox — options, defaults, `buildTransport`
+> variants, redirect hook) and `tests/transport_blackbox_test.go` (redirect-allow block,
+> HTTP/2 round-trip, tuned client). Full suite green under `go test -short -race ./...`.
 
 ---
 

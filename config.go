@@ -27,6 +27,24 @@ type config struct {
 	defaultHeaders http.Header
 	cookieFile     string
 
+	// redirectAllow is an optional per-redirect authorization hook (see
+	// RedirectPolicy.Allow); it composes with follow/max.
+	redirectAllow func(req *http.Request, via []*http.Request) error
+
+	// Transport tuning (applied to the Client's owned transport).
+	maxIdleConns          int
+	maxIdleConnsPerHost   int
+	maxConnsPerHost       int // 0 = unlimited (net/http semantics)
+	idleConnTimeout       time.Duration
+	tlsHandshakeTimeout   time.Duration
+	responseHeaderTimeout time.Duration
+	expectContinueTimeout time.Duration
+
+	// HTTP version selection.
+	http2     bool // attempt HTTP/2 upgrade over TLS (ForceAttemptHTTP2)
+	http2Only bool // use HTTP/2 exclusively (h2 / h2c)
+	h2c       bool // allow HTTP/2 cleartext when http2Only
+
 	// transport, when set via WithTransport, overrides the Client's owned
 	// transport (advanced / testing — e.g. an httptest or mock RoundTripper).
 	transport http.RoundTripper
@@ -43,6 +61,15 @@ func defaultConfig() *config {
 		followRedirects: false,
 		maxRedirects:    0,
 		defaultHeaders:  http.Header{},
+
+		// Connection-pool and timeout defaults (Spec 03 default table).
+		maxIdleConns:          100,
+		maxIdleConnsPerHost:   10,
+		maxConnsPerHost:       0, // unlimited
+		idleConnTimeout:       90 * time.Second,
+		tlsHandshakeTimeout:   10 * time.Second,
+		expectContinueTimeout: 1 * time.Second,
+		http2:                 true,
 	}
 }
 
@@ -171,6 +198,132 @@ func WithTransport(rt http.RoundTripper) Option {
 			return fmt.Errorf("WithTransport: round tripper cannot be nil")
 		}
 		c.transport = rt
+		return nil
+	}
+}
+
+// RedirectPolicy controls how the Client follows HTTP redirects. Allow, if set,
+// is an additional per-redirect authorization hook (e.g. an SSRF guard, Spec 07)
+// that runs after the follow/max checks.
+type RedirectPolicy struct {
+	Follow bool
+	Max    int
+	Allow  func(req *http.Request, via []*http.Request) error
+}
+
+// WithRedirectPolicy sets the redirect policy. If Follow is true and Max is 0,
+// Max defaults to 30 (curl-like).
+func WithRedirectPolicy(p RedirectPolicy) Option {
+	return func(c *config) error {
+		if p.Max < 0 {
+			return fmt.Errorf("WithRedirectPolicy: Max cannot be negative")
+		}
+		c.followRedirects = p.Follow
+		c.maxRedirects = p.Max
+		if p.Follow && c.maxRedirects == 0 {
+			c.maxRedirects = 30
+		}
+		c.redirectAllow = p.Allow
+		return nil
+	}
+}
+
+// WithMaxIdleConns sets the maximum number of idle (keep-alive) connections
+// across all hosts. 0 means no limit.
+func WithMaxIdleConns(n int) Option {
+	return func(c *config) error {
+		if n < 0 {
+			return fmt.Errorf("WithMaxIdleConns: cannot be negative")
+		}
+		c.maxIdleConns = n
+		return nil
+	}
+}
+
+// WithMaxIdleConnsPerHost sets the maximum idle connections kept per host.
+func WithMaxIdleConnsPerHost(n int) Option {
+	return func(c *config) error {
+		if n < 0 {
+			return fmt.Errorf("WithMaxIdleConnsPerHost: cannot be negative")
+		}
+		c.maxIdleConnsPerHost = n
+		return nil
+	}
+}
+
+// WithMaxConnsPerHost limits the total connections per host (dialing blocks
+// when reached). 0 means unlimited (net/http semantics).
+func WithMaxConnsPerHost(n int) Option {
+	return func(c *config) error {
+		if n < 0 {
+			return fmt.Errorf("WithMaxConnsPerHost: cannot be negative")
+		}
+		c.maxConnsPerHost = n
+		return nil
+	}
+}
+
+// WithIdleConnTimeout sets how long an idle connection is kept before closing.
+func WithIdleConnTimeout(d time.Duration) Option {
+	return func(c *config) error {
+		if d < 0 {
+			return fmt.Errorf("WithIdleConnTimeout: cannot be negative")
+		}
+		c.idleConnTimeout = d
+		return nil
+	}
+}
+
+// WithTLSHandshakeTimeout bounds the TLS handshake duration.
+func WithTLSHandshakeTimeout(d time.Duration) Option {
+	return func(c *config) error {
+		if d < 0 {
+			return fmt.Errorf("WithTLSHandshakeTimeout: cannot be negative")
+		}
+		c.tlsHandshakeTimeout = d
+		return nil
+	}
+}
+
+// WithResponseHeaderTimeout bounds the wait for response headers after the
+// request is written. 0 means no timeout.
+func WithResponseHeaderTimeout(d time.Duration) Option {
+	return func(c *config) error {
+		if d < 0 {
+			return fmt.Errorf("WithResponseHeaderTimeout: cannot be negative")
+		}
+		c.responseHeaderTimeout = d
+		return nil
+	}
+}
+
+// WithExpectContinueTimeout bounds the wait for a 100-continue response.
+func WithExpectContinueTimeout(d time.Duration) Option {
+	return func(c *config) error {
+		if d < 0 {
+			return fmt.Errorf("WithExpectContinueTimeout: cannot be negative")
+		}
+		c.expectContinueTimeout = d
+		return nil
+	}
+}
+
+// WithHTTP2 enables or disables HTTP/2 upgrade over TLS (default enabled).
+func WithHTTP2(enabled bool) Option {
+	return func(c *config) error {
+		c.http2 = enabled
+		return nil
+	}
+}
+
+// WithHTTP2Only forces HTTP/2 exclusively. If allowCleartext is true, HTTP/2
+// cleartext (h2c) is permitted for non-TLS targets.
+//
+// HTTP/3 (QUIC) is intentionally out of scope; it is a documented future add-on.
+func WithHTTP2Only(allowCleartext bool) Option {
+	return func(c *config) error {
+		c.http2Only = true
+		c.h2c = allowCleartext
 		return nil
 	}
 }

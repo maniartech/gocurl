@@ -199,7 +199,7 @@ func TestWithMiddleware_Runs(t *testing.T) {
 func TestRedirectFromContext(t *testing.T) {
 	mk := func(follow bool, max int) *http.Request {
 		req, _ := http.NewRequest("GET", "http://x", nil)
-		return req.WithContext(withRedirectSettings(context.Background(), follow, max))
+		return req.WithContext(withRedirectSettings(context.Background(), redirectSettings{follow: follow, max: max}))
 	}
 	if err := redirectFromContext(mk(false, 0), nil); err != http.ErrUseLastResponse {
 		t.Errorf("no-follow should return ErrUseLastResponse, got %v", err)
