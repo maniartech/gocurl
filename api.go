@@ -86,9 +86,21 @@ func CurlCommand(ctx context.Context, command string) (*http.Response, error) {
 		return nil, fmt.Errorf("failed to parse command: %w", err)
 	}
 
-	// Execute
-	resp, _, err := Process(ctx, opts)
-	return resp, err
+	return executeOpts(ctx, opts)
+}
+
+// executeOpts runs the request and returns the live response. The body is
+// streamed (never buffered or written to stdout by the library); the caller is
+// responsible for reading and closing resp.Body.
+func executeOpts(ctx context.Context, opts *options.RequestOptions) (*http.Response, error) {
+	resp, err := doRequest(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	if opts.ResponseBodyLimit > 0 {
+		resp.Body = newLimitedBody(resp.Body, opts.ResponseBodyLimit)
+	}
+	return resp, nil
 }
 
 // CurlArgs executes a curl command from variadic arguments.
@@ -115,8 +127,7 @@ func CurlArgs(ctx context.Context, args ...string) (*http.Response, error) {
 	}
 
 	// Execute
-	resp, _, err := Process(ctx, opts)
-	return resp, err
+	return executeOpts(ctx, opts)
 }
 
 // ============================================================================
@@ -154,8 +165,7 @@ func CurlCommandWithVars(ctx context.Context, vars Variables, command string) (*
 		return nil, fmt.Errorf("failed to parse command: %w", err)
 	}
 
-	resp, _, err := Process(ctx, opts)
-	return resp, err
+	return executeOpts(ctx, opts)
 }
 
 // CurlArgsWithVars executes variadic arguments with explicit variables
@@ -176,8 +186,7 @@ func CurlArgsWithVars(ctx context.Context, vars Variables, args ...string) (*htt
 		return nil, fmt.Errorf("failed to convert arguments: %w", err)
 	}
 
-	resp, _, err := Process(ctx, opts)
-	return resp, err
+	return executeOpts(ctx, opts)
 }
 
 // ============================================================================

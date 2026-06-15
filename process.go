@@ -16,101 +16,125 @@ import (
 	"github.com/maniartech/gocurl/middlewares"
 	"github.com/maniartech/gocurl/options"
 	"github.com/maniartech/gocurl/proxy"
-	"golang.org/x/net/http2"
 )
 
-// Process executes the curl command based on the provided options.RequestOptions
-// Process executes the curl command based on the provided options.RequestOptions
+// Process executes a request and buffers the full response body, returning it as
+// a string and re-wrapping resp.Body so it can be read again.
+//
+// Deprecated: Process buffers the entire response in memory and writes to the
+// configured OutputFile/stdout as a side effect. Prefer the Curl* functions,
+// which stream the live response body and never touch stdout. Process is
+// retained for backward compatibility.
 func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response, string, error) {
-	// Validate options
-	if err := ValidateOptions(opts); err != nil {
+	resp, err := doRequest(ctx, opts)
+	if err != nil {
 		return nil, "", err
 	}
 
-	// Use custom client if provided, otherwise create standard HTTP client
+	bodyBytes, err := readBodyWithLimit(resp.Body, opts.ResponseBodyLimit)
+	resp.Body.Close()
+	if err != nil {
+		return nil, "", err
+	}
+	bodyString := string(bodyBytes)
+
+	// Handle output (OutputFile / stdout) — a Process-only side effect.
+	if err := HandleOutput(bodyString, opts); err != nil {
+		return nil, "", err
+	}
+
+	printConnectionClose(opts)
+
+	// Recreate the response body so callers can read it again.
+	resp.Body = io.NopCloser(strings.NewReader(bodyString))
+
+	return resp, bodyString, nil
+}
+
+// doRequest runs the shared request pipeline (validate, client, build, retries,
+// verbose, decompress) and returns the live response with its body unread and
+// open. It performs NO output side effects, so library callers control the body.
+func doRequest(ctx context.Context, opts *options.RequestOptions) (*http.Response, error) {
+	if err := ValidateOptions(opts); err != nil {
+		return nil, err
+	}
+
 	var httpClient options.HTTPClient
 	if opts.CustomClient != nil {
 		httpClient = opts.CustomClient
 	} else {
 		client, err := CreateHTTPClient(ctx, opts)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		httpClient = client
 	}
 
-	// Create request
 	req, err := CreateRequest(ctx, opts)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	// Apply middleware
 	req, err = ApplyMiddleware(req, opts.Middleware)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	// Execute request with retries
 	resp, err := executeWithRetries(httpClient, req, opts)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	// Print verbose response details (curl -v style)
 	printResponseVerbose(opts, resp)
 
-	// Decompress response if needed
 	if opts.Compress {
 		if err := DecompressResponse(resp); err != nil {
 			resp.Body.Close()
-			return nil, "", fmt.Errorf("failed to decompress response: %w", err)
+			return nil, fmt.Errorf("failed to decompress response: %w", err)
 		}
 	}
 
-	// Read the response body with optional size limit
-	var bodyBytes []byte
-	if opts.ResponseBodyLimit > 0 {
-		// Use LimitReader to enforce size limit
-		limitedReader := io.LimitReader(resp.Body, opts.ResponseBodyLimit+1) // +1 to detect overflow
-		bodyBytes, err = io.ReadAll(limitedReader)
-		if err != nil {
-			resp.Body.Close()
-			return nil, "", fmt.Errorf("failed to read response body: %v", err)
-		}
-
-		// Check if we hit or exceeded the limit
-		if int64(len(bodyBytes)) > opts.ResponseBodyLimit {
-			resp.Body.Close()
-			return nil, "", fmt.Errorf("response body size (%d bytes) exceeds limit of %d bytes",
-				len(bodyBytes)-1, opts.ResponseBodyLimit)
-		}
-	} else {
-		// No limit - read entire response
-		bodyBytes, err = io.ReadAll(resp.Body)
-		if err != nil {
-			resp.Body.Close()
-			return nil, "", fmt.Errorf("failed to read response body: %v", err)
-		}
-	}
-
-	resp.Body.Close()
-	bodyString := string(bodyBytes)
-
-	// Handle output
-	err = HandleOutput(bodyString, opts)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// Print verbose connection close info (curl -v style)
-	printConnectionClose(opts)
-
-	// Recreate the response body for further use
-	resp.Body = io.NopCloser(strings.NewReader(bodyString))
-
-	return resp, bodyString, nil
+	return resp, nil
 }
+
+// readBodyWithLimit reads body fully, enforcing an optional size limit.
+func readBodyWithLimit(body io.Reader, limit int64) ([]byte, error) {
+	if limit > 0 {
+		limited := io.LimitReader(body, limit+1) // +1 to detect overflow
+		b, err := io.ReadAll(limited)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %v", err)
+		}
+		if int64(len(b)) > limit {
+			return nil, fmt.Errorf("response body size (%d bytes) exceeds limit of %d bytes",
+				len(b)-1, limit)
+		}
+		return b, nil
+	}
+	return io.ReadAll(body)
+}
+
+// limitedBody wraps a response body to enforce a maximum size while streaming.
+type limitedBody struct {
+	rc    io.ReadCloser
+	limit int64
+	read  int64
+}
+
+func newLimitedBody(rc io.ReadCloser, limit int64) io.ReadCloser {
+	return &limitedBody{rc: rc, limit: limit}
+}
+
+func (l *limitedBody) Read(p []byte) (int, error) {
+	n, err := l.rc.Read(p)
+	l.read += int64(n)
+	if l.read > l.limit {
+		return n, fmt.Errorf("response body size exceeds limit of %d bytes", l.limit)
+	}
+	return n, err
+}
+
+func (l *limitedBody) Close() error { return l.rc.Close() }
 
 func ValidateOptions(opts *options.RequestOptions) error {
 	// Use the new security validation
@@ -118,59 +142,26 @@ func ValidateOptions(opts *options.RequestOptions) error {
 }
 
 func CreateHTTPClient(ctx context.Context, opts *options.RequestOptions) (*http.Client, error) {
-	// Load TLS configuration
-	tlsConfig, err := LoadTLSConfig(opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load TLS config: %w", err)
-	}
-
-	// Create base transport
-	transport, err := createHTTPTransport(tlsConfig, opts)
+	// Obtain a (possibly cached) round tripper so connections are reused across
+	// requests that share the same connection-relevant configuration.
+	transport, err := getRoundTripper(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	// Determine timeout based on context
-	clientTimeout := determineClientTimeout(ctx, opts)
-
-	// Create client with redirect policy
-	client := createClientWithRedirects(transport, clientTimeout, opts)
-
-	// Configure HTTP/2 if needed
-	err = configureHTTP2(client, opts)
-	if err != nil {
-		return nil, err
+	// Create client with per-request redirect policy and timeout.
+	client := &http.Client{
+		Transport:     transport,
+		Timeout:       determineClientTimeout(ctx, opts),
+		CheckRedirect: redirectPolicy(opts),
 	}
 
 	// Configure cookie jar
-	err = configureCookieJar(client, opts)
-	if err != nil {
+	if err := configureCookieJar(client, opts); err != nil {
 		return nil, err
 	}
 
 	return client, nil
-}
-
-// createHTTPTransport creates the base HTTP transport with proxy support
-func createHTTPTransport(tlsConfig *tls.Config, opts *options.RequestOptions) (*http.Transport, error) {
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-		Proxy:           http.ProxyFromEnvironment,
-	}
-
-	// Configure compression
-	ConfigureCompressionForTransport(transport, opts.Compress)
-
-	// Handle proxy configuration
-	if opts.Proxy != "" {
-		proxyTransport, err := createProxyTransport(opts, tlsConfig)
-		if err != nil {
-			return nil, err
-		}
-		return proxyTransport, nil
-	}
-
-	return transport, nil
 }
 
 // createProxyTransport creates a transport with proxy configuration
@@ -238,49 +229,17 @@ func determineClientTimeout(ctx context.Context, opts *options.RequestOptions) t
 	return opts.Timeout
 }
 
-// createClientWithRedirects creates an HTTP client with redirect policy
-func createClientWithRedirects(transport *http.Transport, timeout time.Duration, opts *options.RequestOptions) *http.Client {
-	return &http.Client{
-		Transport: transport,
-		Timeout:   timeout,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if !opts.FollowRedirects {
-				return http.ErrUseLastResponse
-			}
-			if len(via) >= opts.MaxRedirects {
-				return fmt.Errorf("stopped after %d redirects", opts.MaxRedirects)
-			}
-			return nil
-		},
-	}
-}
-
-// configureHTTP2 configures HTTP/2 support for the client
-func configureHTTP2(client *http.Client, opts *options.RequestOptions) error {
-	if !opts.HTTP2 && !opts.HTTP2Only {
-		return nil
-	}
-
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok {
-		return nil // Proxy transport, skip HTTP/2 config
-	}
-
-	if opts.HTTP2Only {
-		// HTTP/2 only mode
-		http2Transport := &http2.Transport{
-			TLSClientConfig: transport.TLSClientConfig,
+// redirectPolicy returns a CheckRedirect function honoring the request options.
+func redirectPolicy(opts *options.RequestOptions) func(req *http.Request, via []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if !opts.FollowRedirects {
+			return http.ErrUseLastResponse
 		}
-		client.Transport = http2Transport
+		if len(via) >= opts.MaxRedirects {
+			return fmt.Errorf("stopped after %d redirects", opts.MaxRedirects)
+		}
 		return nil
 	}
-
-	// Enable HTTP/2 with HTTP/1.1 fallback
-	if err := http2.ConfigureTransport(transport); err != nil {
-		return fmt.Errorf("failed to configure HTTP/2: %v", err)
-	}
-
-	return nil
 }
 
 // configureCookieJar configures the cookie jar for the client
