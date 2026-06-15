@@ -7,6 +7,34 @@ a tagged release.
 
 ## [Unreleased]
 
+### Added — typed error model (Milestone 4)
+- `Kind` taxonomy on `GocurlError` (`KindParse`, `KindValidation`, `KindConnect`, `KindTLS`,
+  `KindTimeout`, `KindCanceled`, `KindServerStatus`, `KindRetryExhausted`, `KindBodyRead`) plus
+  the classification triple `Timeout()`/`Temporary()`/`Retryable()` (all nil-safe).
+- `errors.Is`/`errors.As` support: sentinels `ErrParse … ErrBodyRead` (e.g.
+  `errors.Is(err, gocurl.ErrTimeout)`), and `errors.Is(err, context.DeadlineExceeded)` still
+  resolves through the wrap chain. Package helpers `KindOf`, `IsTimeout`, `IsTemporary`,
+  `IsRetryable`.
+- New constructors `ServerStatusError`/`BodyReadError`/`ConnectError`/`TLSError`/`TimeoutError`/
+  `CanceledError`; `RequestError` now classifies the wrapped transport error
+  (`net.OpError`→connect, `*tls.CertificateVerificationError`/pin mismatch→tls,
+  `context.DeadlineExceeded`→timeout, `context.Canceled`→canceled). Classification is wired into
+  the live request path (`doRequest`, `Client.Do`) and retry exhaustion (`KindRetryExhausted`
+  chaining the last attempt's classified error).
+- Error strings get a final-pass scrub backstop so credentials embedded in a wrapped stdlib
+  error (userinfo passwords, `api_key`/`token`/… query params) never leak.
+
+### Added — status-code policy (Milestone 4)
+- Default contract formalized and tested: a non-2xx response is **not** an error; the live
+  `*http.Response` is returned. Opt in to curl `-f`/`--fail` behavior with `WithFailOnStatus`
+  (Client) or `options.FailOnError` / the `-f`/`--fail` flag — a `>=400` response then yields a
+  `ServerStatusError` while the response is still returned so the caller can read the error
+  body. The convenience wrappers (`CurlString`/`CurlBytes`/`CurlJSON`/`CurlDownload`) return the
+  response alongside the error.
+- CLI: exit codes are derived from `Kind` (22 server-status, 28 timeout, 7 connect, 35 TLS,
+  2 parse, 3 validation), replacing brittle string matching, with a legacy string fallback;
+  `-f`/`--fail` is honored.
+
 ### Added — body model & streaming (Milestone 3)
 - `BodySource` interface (in `options`) + `BytesBody`/`StringBody`/`FileBody`/`ReaderBody`/
   `MultipartBody` constructors. Requests can now stream bodies instead of buffering them.

@@ -117,6 +117,8 @@ func processSimpleFlag(flag string, i int, st *parseState) (int, bool) {
 		o.Insecure = true
 	case "-L", "--location":
 		o.FollowRedirects = true
+	case "-f", "--fail":
+		o.FailOnError = true
 	case "-v", "--verbose":
 		o.Verbose = true
 	case "-s", "--silent":

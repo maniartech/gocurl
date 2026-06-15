@@ -133,6 +133,11 @@ func executeCLI(ctx context.Context, args []string, opts OutputOptions) error {
 	// Use the library's CurlArgs function directly
 	resp, err := gocurl.CurlArgs(ctx, args...)
 	if err != nil {
+		// With -f/--fail a >=400 response returns both a response and an error;
+		// curl -f discards the body, so close it and surface the error.
+		if resp != nil {
+			resp.Body.Close()
+		}
 		return err
 	}
 	defer resp.Body.Close()
@@ -147,13 +152,30 @@ func executeCLI(ctx context.Context, args []string, opts OutputOptions) error {
 	return FormatAndPrintResponse(resp, body, opts)
 }
 
-// getExitCode returns appropriate exit code based on error
+// getExitCode returns an appropriate process exit code for an error, preferring
+// gocurl's typed Kind classification (curl-compatible codes) and falling back to
+// string matching for errors that are not typed GocurlErrors.
 func getExitCode(err error) int {
 	if err == nil {
 		return 0
 	}
 
-	// Match curl exit codes where possible
+	switch gocurl.KindOf(err) {
+	case gocurl.KindServerStatus:
+		return 22 // HTTP page not retrieved (-f/--fail)
+	case gocurl.KindTimeout:
+		return 28 // Operation timeout
+	case gocurl.KindConnect:
+		return 7 // Failed to connect to host
+	case gocurl.KindTLS:
+		return 35 // SSL/TLS connect error
+	case gocurl.KindParse:
+		return 2 // Failed to initialize / parse
+	case gocurl.KindValidation:
+		return 3 // URL malformed
+	}
+
+	// Fallback: legacy string matching for non-typed errors.
 	errStr := err.Error()
 	switch {
 	case strings.Contains(errStr, "no URL"):
@@ -185,6 +207,7 @@ func printUsage() {
 	fmt.Println("  -H, --header         Add header")
 	fmt.Println("  -d, --data           Request body data")
 	fmt.Println("  -u, --user           Basic auth credentials")
+	fmt.Println("  -f, --fail           Fail (non-zero exit) on HTTP errors (>= 400)")
 	fmt.Println("  And many more...")
 	fmt.Println()
 	fmt.Println("Examples:")

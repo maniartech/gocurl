@@ -100,6 +100,11 @@ func executeOpts(ctx context.Context, opts *options.RequestOptions) (*http.Respo
 	if opts.ResponseBodyLimit > 0 {
 		resp.Body = newLimitedBody(resp.Body, opts.ResponseBodyLimit)
 	}
+	// Fail-on-status (opt-in): a >=400 response becomes a typed error while the
+	// live response is still returned for the caller to inspect.
+	if ferr := failOnStatus(resp, opts); ferr != nil {
+		return resp, ferr
+	}
 	return resp, nil
 }
 
@@ -197,7 +202,7 @@ func CurlArgsWithVars(ctx context.Context, vars Variables, args ...string) (*htt
 func CurlString(ctx context.Context, command ...string) (string, *http.Response, error) {
 	resp, err := Curl(ctx, command...)
 	if err != nil {
-		return "", nil, err
+		return "", resp, err
 	}
 	defer resp.Body.Close()
 
@@ -213,7 +218,7 @@ func CurlString(ctx context.Context, command ...string) (string, *http.Response,
 func CurlStringCommand(ctx context.Context, command string) (string, *http.Response, error) {
 	resp, err := CurlCommand(ctx, command)
 	if err != nil {
-		return "", nil, err
+		return "", resp, err
 	}
 	defer resp.Body.Close()
 
@@ -229,7 +234,7 @@ func CurlStringCommand(ctx context.Context, command string) (string, *http.Respo
 func CurlStringArgs(ctx context.Context, args ...string) (string, *http.Response, error) {
 	resp, err := CurlArgs(ctx, args...)
 	if err != nil {
-		return "", nil, err
+		return "", resp, err
 	}
 	defer resp.Body.Close()
 
@@ -245,7 +250,7 @@ func CurlStringArgs(ctx context.Context, args ...string) (string, *http.Response
 func CurlBytes(ctx context.Context, command ...string) ([]byte, *http.Response, error) {
 	resp, err := Curl(ctx, command...)
 	if err != nil {
-		return nil, nil, err
+		return nil, resp, err
 	}
 	defer resp.Body.Close()
 
@@ -261,7 +266,7 @@ func CurlBytes(ctx context.Context, command ...string) ([]byte, *http.Response, 
 func CurlBytesCommand(ctx context.Context, command string) ([]byte, *http.Response, error) {
 	resp, err := CurlCommand(ctx, command)
 	if err != nil {
-		return nil, nil, err
+		return nil, resp, err
 	}
 	defer resp.Body.Close()
 
@@ -277,7 +282,7 @@ func CurlBytesCommand(ctx context.Context, command string) ([]byte, *http.Respon
 func CurlBytesArgs(ctx context.Context, args ...string) ([]byte, *http.Response, error) {
 	resp, err := CurlArgs(ctx, args...)
 	if err != nil {
-		return nil, nil, err
+		return nil, resp, err
 	}
 	defer resp.Body.Close()
 
@@ -293,7 +298,7 @@ func CurlBytesArgs(ctx context.Context, args ...string) ([]byte, *http.Response,
 func CurlJSON(ctx context.Context, v interface{}, command ...string) (*http.Response, error) {
 	resp, err := Curl(ctx, command...)
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 	defer resp.Body.Close()
 
@@ -308,7 +313,7 @@ func CurlJSON(ctx context.Context, v interface{}, command ...string) (*http.Resp
 func CurlJSONCommand(ctx context.Context, v interface{}, command string) (*http.Response, error) {
 	resp, err := CurlCommand(ctx, command)
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 	defer resp.Body.Close()
 
@@ -323,7 +328,7 @@ func CurlJSONCommand(ctx context.Context, v interface{}, command string) (*http.
 func CurlJSONArgs(ctx context.Context, v interface{}, args ...string) (*http.Response, error) {
 	resp, err := CurlArgs(ctx, args...)
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 	defer resp.Body.Close()
 
@@ -338,7 +343,7 @@ func CurlJSONArgs(ctx context.Context, v interface{}, args ...string) (*http.Res
 func CurlDownload(ctx context.Context, filepath string, command ...string) (int64, *http.Response, error) {
 	resp, err := Curl(ctx, command...)
 	if err != nil {
-		return 0, nil, err
+		return 0, resp, err
 	}
 	defer resp.Body.Close()
 
@@ -360,7 +365,7 @@ func CurlDownload(ctx context.Context, filepath string, command ...string) (int6
 func CurlDownloadCommand(ctx context.Context, filepath string, command string) (int64, *http.Response, error) {
 	resp, err := CurlCommand(ctx, command)
 	if err != nil {
-		return 0, nil, err
+		return 0, resp, err
 	}
 	defer resp.Body.Close()
 
@@ -382,7 +387,7 @@ func CurlDownloadCommand(ctx context.Context, filepath string, command string) (
 func CurlDownloadArgs(ctx context.Context, filepath string, args ...string) (int64, *http.Response, error) {
 	resp, err := CurlArgs(ctx, args...)
 	if err != nil {
-		return 0, nil, err
+		return 0, resp, err
 	}
 	defer resp.Body.Close()
 

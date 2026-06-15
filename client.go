@@ -113,6 +113,9 @@ func (c *Client) effectiveOptions(req *Request) *options.RequestOptions {
 		o.FollowRedirects = true
 		o.MaxRedirects = c.cfg.maxRedirects
 	}
+	if c.cfg.failOnStatus {
+		o.FailOnError = true
+	}
 	for key, values := range c.cfg.defaultHeaders {
 		if o.Headers == nil {
 			o.Headers = http.Header{}
@@ -190,7 +193,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 		if cancel != nil {
 			cancel()
 		}
-		return nil, err
+		return nil, wrapTransportError(opts.URL, err)
 	}
 
 	printResponseVerbose(opts, resp)
@@ -212,6 +215,12 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	// Ensure a per-request context (--max-time) is cancelled once the body is
 	// fully consumed/closed, without truncating the stream early.
 	resp.Body = &cancelOnCloseBody{ReadCloser: body, cancel: cancel}
+
+	// Fail-on-status (opt-in): a >=400 response becomes a typed error, but the
+	// live response is still returned so the caller can read the error body.
+	if ferr := failOnStatus(resp, opts); ferr != nil {
+		return resp, ferr
+	}
 	return resp, nil
 }
 
@@ -284,7 +293,7 @@ func (c *Client) Curl(ctx context.Context, command string) (*http.Response, erro
 func (c *Client) CurlString(ctx context.Context, command string) (string, *http.Response, error) {
 	resp, err := c.Curl(ctx, command)
 	if err != nil {
-		return "", nil, err
+		return "", resp, err
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
@@ -298,7 +307,7 @@ func (c *Client) CurlString(ctx context.Context, command string) (string, *http.
 func (c *Client) CurlBytes(ctx context.Context, command string) ([]byte, *http.Response, error) {
 	resp, err := c.Curl(ctx, command)
 	if err != nil {
-		return nil, nil, err
+		return nil, resp, err
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
@@ -312,7 +321,7 @@ func (c *Client) CurlBytes(ctx context.Context, command string) ([]byte, *http.R
 func (c *Client) CurlJSON(ctx context.Context, v interface{}, command string) (*http.Response, error) {
 	resp, err := c.Curl(ctx, command)
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 	defer resp.Body.Close()
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
@@ -325,7 +334,7 @@ func (c *Client) CurlJSON(ctx context.Context, v interface{}, command string) (*
 func (c *Client) CurlDownload(ctx context.Context, filePath, command string) (int64, *http.Response, error) {
 	resp, err := c.Curl(ctx, command)
 	if err != nil {
-		return 0, nil, err
+		return 0, resp, err
 	}
 	defer resp.Body.Close()
 	f, err := os.Create(filePath)

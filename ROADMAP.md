@@ -144,11 +144,16 @@ Spec 05. deps: M1.
 
 Spec 08. deps: M1.
 
-- [ ] **M4-T1 — `Kind` taxonomy on `GocurlError` + `KindOf`/`Timeout`/`Temporary`/`Retryable`**
+- [x] **M4-T1 — `Kind` taxonomy on `GocurlError` + `KindOf`/`Timeout`/`Temporary`/`Retryable`**
   (C1/C2), `errors.Is/As` friendly. *DoD: table test mapping causes→Kind; redaction in
-  error strings.*
-- [ ] **M4-T2 — Status-code policy** (C3): no error on 4xx/5xx by default; opt-in helper.
-  *DoD: documented + tested.*
+  error strings.* — Kind enum + 9 kinds, sentinels `ErrParse…ErrBodyRead`, `classifyTransportError`,
+  new constructors (`ServerStatus/BodyRead/Connect/TLS/Timeout/Canceled`), `scrubErrorString`
+  backstop; classification wired into the live boundaries (`doRequest`, `Client.Do`, retry
+  exhaustion). Whitebox table tests + blackbox connect/timeout/canceled tests.
+- [x] **M4-T2 — Status-code policy** (C3): no error on 4xx/5xx by default; opt-in helper.
+  *DoD: documented + tested.* — `WithFailOnStatus` / `options.FailOnError` / `-f`/`--fail`;
+  `failOnStatus` returns `ServerStatusError` *with* the response; convenience wrappers return
+  the response alongside the error. CLI maps `Kind`→curl exit codes.
 
 ---
 
