@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -15,250 +16,370 @@ import (
 	"github.com/maniartech/gocurl/tokenizer"
 )
 
+// ArgsToOptions converts raw curl-style arguments into RequestOptions.
+//
+// As a convenience for direct callers, it expands environment variables
+// ($VAR / ${VAR}) in each argument. The higher-level Curl* entry points perform
+// their own (single) expansion step and call convertTokensToRequestOptions
+// directly, so expansion is never applied twice.
 func ArgsToOptions(args []string) (*options.RequestOptions, error) {
-	tokens := []tokenizer.Token{}
+	tokens := make([]tokenizer.Token, 0, len(args))
 	for _, arg := range args {
-		tokens = append(tokens, tokenizer.Token{Type: tokenizer.TokenValue, Value: arg})
+		tokens = append(tokens, tokenizer.Token{Type: tokenizer.TokenValue, Value: expandVariables(arg)})
 	}
 	return convertTokensToRequestOptions(tokens)
 }
 
-// ConvertTokensToRequestOptions converts the tokenized cURL command into options.RequestOptions.
+// convertTokensToRequestOptions converts already-expanded tokens into
+// RequestOptions. It performs NO variable expansion of its own; callers are
+// responsible for expanding (env or explicit map) beforehand. This keeps the
+// explicit-variables-only paths (CurlWithVars) free of environment leakage.
 func convertTokensToRequestOptions(tokens []tokenizer.Token) (*options.RequestOptions, error) {
-	o := initializeRequestOptions()
-	dataFields := []string{}
-	formFields := url.Values{}
-
-	// Expand environment variables in tokens
-	expandedTokens := expandTokenVariables(tokens)
-
-	// Parse all flags and arguments
-	err := parseTokens(expandedTokens, o, &dataFields, &formFields)
-	if err != nil {
+	st := newParseState()
+	if err := parseTokens(tokens, st); err != nil {
 		return nil, err
 	}
-
-	// Finalize the request options
-	err = finalizeRequestOptions(o, dataFields, formFields)
-	if err != nil {
+	if err := finalizeRequestOptions(st); err != nil {
 		return nil, err
 	}
-
-	return o, nil
+	return st.o, nil
 }
 
-// initializeRequestOptions creates and initializes a new RequestOptions
-func initializeRequestOptions() *options.RequestOptions {
+// parseState holds the mutable state accumulated while parsing a curl command.
+type parseState struct {
+	o          *options.RequestOptions
+	data       []string   // -d/--data values (joined with &)
+	formFields url.Values // -F values
+	getMode    bool       // -G: send data as query string
+	remoteName bool       // -O: derive output filename from URL
+}
+
+func newParseState() *parseState {
 	o := options.NewRequestOptions("")
 	o.Headers = make(http.Header)
 	o.Form = make(url.Values)
-	o.QueryParams = make(url.Values)
 	o.Method = "GET"
-	return o
+	return &parseState{o: o, formFields: url.Values{}}
 }
 
-// expandTokenVariables expands environment variables in all tokens
-func expandTokenVariables(tokens []tokenizer.Token) []tokenizer.Token {
-	expandedTokens := make([]tokenizer.Token, 0, len(tokens))
-	for _, token := range tokens {
-		expandedTokens = append(expandedTokens, tokenizer.Token{
-			Type:  token.Type,
-			Value: expandVariables(token.Value),
-		})
-	}
-	return expandedTokens
-}
+// parseTokens processes all tokens and populates the parse state.
+func parseTokens(tokens []tokenizer.Token, st *parseState) error {
+	i, n := 0, len(tokens)
+	for i < n {
+		v := tokens[i].Value
 
-// parseTokens processes all tokens and populates the request options
-func parseTokens(tokens []tokenizer.Token, o *options.RequestOptions, dataFields *[]string, formFields *url.Values) error {
-	tokenLen := len(tokens)
-	i := 0
-
-	for i < tokenLen {
-		token := tokens[i]
-
-		// Skip leading "curl" command
-		if i == 0 && token.Value == "curl" {
+		// Skip a leading "curl" command word.
+		if i == 0 && v == "curl" {
 			i++
 			continue
 		}
 
-		// Handle flags vs positional arguments
-		if strings.HasPrefix(token.Value, "-") {
-			newIdx, err := processFlag(tokens, i, o, dataFields, formFields)
+		if len(v) > 1 && strings.HasPrefix(v, "-") {
+			next, err := processFlag(tokens, i, st)
 			if err != nil {
 				return err
 			}
-			i = newIdx
+			i = next
 		} else {
-			newIdx, err := processPositionalArg(tokens, i, o)
+			next, err := processPositionalArg(tokens, i, st)
 			if err != nil {
 				return err
 			}
-			i = newIdx
+			i = next
 		}
 	}
-
 	return nil
 }
 
-// processFlag handles a single flag and its arguments
-func processFlag(tokens []tokenizer.Token, i int, o *options.RequestOptions, dataFields *[]string, formFields *url.Values) (int, error) {
-	flagName := tokens[i].Value
-	tokenLen := len(tokens)
+// processFlag dispatches a single flag (and consumes its argument if any).
+func processFlag(tokens []tokenizer.Token, i int, st *parseState) (int, error) {
+	flag := tokens[i].Value
 
-	// Try simple flags first (no arguments)
-	if newIdx, handled := processSimpleFlag(flagName, i, o); handled {
-		return newIdx, nil
+	if idx, ok := processSimpleFlag(flag, i, st); ok {
+		return idx, nil
 	}
-
-	// Try flags with arguments
-	if newIdx, err := processFlagWithArgument(tokens, i, tokenLen, flagName, o, dataFields, formFields); err == nil {
-		return newIdx, nil
-	} else if err.Error() != "not handled" {
-		return 0, err
+	if idx, ok, err := processArgFlag(tokens, i, flag, st); ok {
+		return idx, err
 	}
-
-	return 0, fmt.Errorf("unknown flag: %s", flagName)
+	return 0, fmt.Errorf("unknown flag: %s", flag)
 }
 
-// processSimpleFlag handles flags that don't require arguments
-func processSimpleFlag(flagName string, i int, o *options.RequestOptions) (int, bool) {
-	switch flagName {
+// processSimpleFlag handles flags that take no argument.
+func processSimpleFlag(flag string, i int, st *parseState) (int, bool) {
+	o := st.o
+	switch flag {
 	case "--compressed":
 		o.Compress = true
-		return i + 1, true
 	case "--http2":
 		o.HTTP2 = true
-		return i + 1, true
-	case "--http2-only":
+	case "--http2-only", "--http2-prior-knowledge":
 		o.HTTP2Only = true
-		return i + 1, true
 	case "-k", "--insecure":
 		o.Insecure = true
-		return i + 1, true
 	case "-L", "--location":
 		o.FollowRedirects = true
-		return i + 1, true
 	case "-v", "--verbose":
 		o.Verbose = true
-		return i + 1, true
 	case "-s", "--silent":
 		o.Silent = true
-		return i + 1, true
-	case "-c", "--cookie-jar":
-		// Skip cookie jar (not implemented)
-		return i + 2, true
+	case "-G", "--get":
+		st.getMode = true
+	case "-I", "--head":
+		o.Method = "HEAD"
+	case "-O", "--remote-name":
+		st.remoteName = true
+	case "--proxy-insecure":
+		o.ProxyInsecure = true
 	default:
 		return 0, false
 	}
+	return i + 1, true
 }
 
-// processFlagWithArgument handles flags that require arguments
-func processFlagWithArgument(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions, dataFields *[]string, formFields *url.Values) (int, error) {
-	// Try request/data flags first
-	if idx, err := processRequestDataFlags(tokens, i, tokenLen, flagName, o, dataFields); err == nil || err.Error() != "not handled" {
-		return idx, err
+// processArgFlag handles flags that take an argument. It returns ok=true if the
+// flag was recognized (err may still be non-nil, e.g. a missing value).
+func processArgFlag(tokens []tokenizer.Token, i int, flag string, st *parseState) (int, bool, error) {
+	if idx, ok, err := processDataFlags(tokens, i, flag, st); ok {
+		return idx, ok, err
 	}
-
-	// Try header/form/auth flags
-	if idx, err := processHeaderFormAuthFlags(tokens, i, tokenLen, flagName, o, formFields); err == nil || err.Error() != "not handled" {
-		return idx, err
+	if idx, ok, err := processHeaderAuthFlags(tokens, i, flag, st); ok {
+		return idx, ok, err
 	}
-
-	// Try TLS/security flags
-	if idx, err := processTLSSecurityFlags(tokens, i, tokenLen, flagName, o); err == nil || err.Error() != "not handled" {
-		return idx, err
+	if idx, ok, err := processTLSFlags(tokens, i, flag, st.o); ok {
+		return idx, ok, err
 	}
-
-	// Try network/output flags
-	if idx, err := processNetworkOutputFlags(tokens, i, tokenLen, flagName, o); err == nil || err.Error() != "not handled" {
-		return idx, err
+	if idx, ok, err := processNetworkFlags(tokens, i, flag, st.o); ok {
+		return idx, ok, err
 	}
-
-	return 0, fmt.Errorf("not handled")
+	return 0, false, nil
 }
 
-// processRequestDataFlags handles request method and data flags
-func processRequestDataFlags(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions, dataFields *[]string) (int, error) {
-	switch flagName {
+// nextArg returns the argument following the flag at index i.
+func nextArg(tokens []tokenizer.Token, i int, flag string) (string, int, error) {
+	if i+1 >= len(tokens) {
+		return "", 0, fmt.Errorf("missing value for %s", flag)
+	}
+	return tokens[i+1].Value, i + 2, nil
+}
+
+// processDataFlags handles request method and body data flags.
+func processDataFlags(tokens []tokenizer.Token, i int, flag string, st *parseState) (int, bool, error) {
+	switch flag {
 	case "-X", "--request":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.Method = value
-			return nil
-		})
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		st.o.Method = v
+		return next, true, nil
 	case "-d", "--data", "--data-raw", "--data-binary":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			*dataFields = append(*dataFields, value)
-			if o.Method == "GET" {
-				o.Method = "POST"
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		data, err := readDataValue(flag, v)
+		if err != nil {
+			return 0, true, err
+		}
+		st.data = append(st.data, data)
+		setPostIfDefault(st.o)
+		return next, true, nil
+	case "--data-urlencode":
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		data, err := dataURLEncode(v)
+		if err != nil {
+			return 0, true, err
+		}
+		st.data = append(st.data, data)
+		setPostIfDefault(st.o)
+		return next, true, nil
+	case "-T", "--upload-file":
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		body, err := os.ReadFile(v)
+		if err != nil {
+			return 0, true, fmt.Errorf("failed to read upload file: %w", err)
+		}
+		st.o.Body = string(body)
+		if st.o.Method == "GET" {
+			st.o.Method = "PUT"
+		}
+		return next, true, nil
+	default:
+		return 0, false, nil
+	}
+}
+
+// readDataValue resolves a -d/--data value, reading @file references for all
+// forms except --data-raw. For --data, CR/LF are stripped (curl behavior); for
+// --data-binary the file content is preserved verbatim.
+func readDataValue(flag, value string) (string, error) {
+	if flag == "--data-raw" || !strings.HasPrefix(value, "@") {
+		return value, nil
+	}
+	content, err := os.ReadFile(value[1:])
+	if err != nil {
+		return "", fmt.Errorf("failed to read data file: %w", err)
+	}
+	s := string(content)
+	if flag != "--data-binary" {
+		s = strings.NewReplacer("\r", "", "\n", "").Replace(s)
+	}
+	return s, nil
+}
+
+// dataURLEncode implements curl's --data-urlencode semantics.
+func dataURLEncode(value string) (string, error) {
+	if idx := strings.IndexAny(value, "=@"); idx >= 0 {
+		name, sep, rest := value[:idx], value[idx], value[idx+1:]
+		content := rest
+		if sep == '@' {
+			b, err := os.ReadFile(rest)
+			if err != nil {
+				return "", fmt.Errorf("failed to read data file: %w", err)
 			}
-			return nil
-		})
-	default:
-		return 0, fmt.Errorf("not handled")
+			content = string(b)
+		}
+		enc := url.QueryEscape(content)
+		if name == "" {
+			return enc, nil
+		}
+		return name + "=" + enc, nil
 	}
+	return url.QueryEscape(value), nil
 }
 
-// processHeaderFormAuthFlags handles headers, forms, and authentication flags
-func processHeaderFormAuthFlags(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions, formFields *url.Values) (int, error) {
-	switch flagName {
+// processHeaderAuthFlags handles headers, forms, auth, cookies, and identity.
+func processHeaderAuthFlags(tokens []tokenizer.Token, i int, flag string, st *parseState) (int, bool, error) {
+	o := st.o
+	switch flag {
 	case "-H", "--header":
-		return processHeaderFlag(tokens, i, tokenLen, flagName, o)
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		return next, true, applyHeaderArg(o, v)
 	case "-F", "--form":
-		return processFormFlag(tokens, i, tokenLen, flagName, o, formFields)
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		return next, true, applyFormArg(o, st.formFields, v)
 	case "-u", "--user":
-		return processUserFlag(tokens, i, tokenLen, flagName, o)
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		user, pass, _ := strings.Cut(v, ":")
+		o.SetBasicAuth(user, pass)
+		return next, true, nil
 	case "-b", "--cookie":
-		return processCookieFlag(tokens, i, tokenLen, flagName, o)
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		return next, true, applyCookieArg(o, v)
+	case "-c", "--cookie-jar":
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		o.CookieFile = v
+		return next, true, nil
 	case "-A", "--user-agent":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.UserAgent = value
-			return nil
-		})
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		o.UserAgent = v
+		return next, true, nil
 	case "-e", "--referer":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.Referer = value
-			return nil
-		})
+		v, next, err := nextArg(tokens, i, flag)
+		if err != nil {
+			return 0, true, err
+		}
+		o.Referer = v
+		return next, true, nil
 	default:
-		return 0, fmt.Errorf("not handled")
+		return 0, false, nil
 	}
 }
 
-// processTLSSecurityFlags handles TLS certificate and CA flags
-func processTLSSecurityFlags(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions) (int, error) {
-	switch flagName {
+func applyHeaderArg(o *options.RequestOptions, headerLine string) error {
+	idx := strings.Index(headerLine, ":")
+	if idx <= 0 {
+		return fmt.Errorf("invalid header format: %s", headerLine)
+	}
+	key := strings.TrimSpace(headerLine[:idx])
+	value := strings.TrimSpace(headerLine[idx+1:])
+	o.Headers.Add(key, value)
+	return nil
+}
+
+func applyFormArg(o *options.RequestOptions, formFields url.Values, formData string) error {
+	idx := strings.Index(formData, "=")
+	if idx <= 0 {
+		return fmt.Errorf("invalid form data: %s", formData)
+	}
+	key, value := formData[:idx], formData[idx+1:]
+	if strings.HasPrefix(value, "@") {
+		filePath := value[1:]
+		o.FileUpload = &options.FileUpload{
+			FieldName: key,
+			FileName:  path.Base(filePath),
+			FilePath:  filePath,
+		}
+	} else {
+		formFields.Add(key, value)
+	}
+	if o.Method == "GET" {
+		o.Method = "POST"
+	}
+	return nil
+}
+
+func applyCookieArg(o *options.RequestOptions, cookieData string) error {
+	if strings.Contains(cookieData, "=") {
+		o.Cookies = append(o.Cookies, parseCookies(cookieData)...)
+		return nil
+	}
+	fileCookies, err := readCookiesFromFile(cookieData)
+	if err != nil {
+		return fmt.Errorf("error reading cookies from file: %v", err)
+	}
+	o.Cookies = append(o.Cookies, fileCookies...)
+	return nil
+}
+
+// processTLSFlags handles TLS certificate, version, and cipher flags.
+func processTLSFlags(tokens []tokenizer.Token, i int, flag string, o *options.RequestOptions) (int, bool, error) {
+	switch flag {
 	case "--cert":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.CertFile = value
-			return nil
-		})
+		return argSetter(tokens, i, flag, func(v string) error { o.CertFile = v; return nil })
 	case "--key":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.KeyFile = value
-			return nil
-		})
+		return argSetter(tokens, i, flag, func(v string) error { o.KeyFile = v; return nil })
 	case "--cacert":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.CAFile = value
-			return nil
-		})
+		return argSetter(tokens, i, flag, func(v string) error { o.CAFile = v; return nil })
 	case "--tlsv1", "--tlsv1.0":
-		o.TLSMinVersion = 0x0301 // tls.VersionTLS10
-		return i + 1, nil
+		o.TLSMinVersion = tls.VersionTLS10
+		return i + 1, true, nil
 	case "--tlsv1.1":
-		o.TLSMinVersion = 0x0302 // tls.VersionTLS11
-		return i + 1, nil
+		o.TLSMinVersion = tls.VersionTLS11
+		return i + 1, true, nil
 	case "--tlsv1.2":
-		o.TLSMinVersion = 0x0303 // tls.VersionTLS12
-		return i + 1, nil
+		o.TLSMinVersion = tls.VersionTLS12
+		return i + 1, true, nil
 	case "--tlsv1.3":
-		o.TLSMinVersion = 0x0304 // tls.VersionTLS13
-		return i + 1, nil
+		o.TLSMinVersion = tls.VersionTLS13
+		return i + 1, true, nil
 	case "--tls-max":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			version, err := ParseTLSVersion(value)
+		return argSetter(tokens, i, flag, func(v string) error {
+			version, err := ParseTLSVersion(v)
 			if err != nil {
 				return err
 			}
@@ -266,8 +387,8 @@ func processTLSSecurityFlags(tokens []tokenizer.Token, i int, tokenLen int, flag
 			return nil
 		})
 	case "--ciphers":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			suites, err := ParseCipherSuites(value)
+		return argSetter(tokens, i, flag, func(v string) error {
+			suites, err := ParseCipherSuites(v)
 			if err != nil {
 				return err
 			}
@@ -275,8 +396,8 @@ func processTLSSecurityFlags(tokens []tokenizer.Token, i int, tokenLen int, flag
 			return nil
 		})
 	case "--tls13-ciphers":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			suites, err := ParseTLS13CipherSuites(value)
+		return argSetter(tokens, i, flag, func(v string) error {
+			suites, err := ParseTLS13CipherSuites(v)
 			if err != nil {
 				return err
 			}
@@ -284,233 +405,120 @@ func processTLSSecurityFlags(tokens []tokenizer.Token, i int, tokenLen int, flag
 			return nil
 		})
 	default:
-		return 0, fmt.Errorf("not handled")
+		return 0, false, nil
 	}
 }
 
-// processNetworkOutputFlags handles proxy, timeout, redirect, and output flags
-func processNetworkOutputFlags(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions) (int, error) {
-	switch flagName {
+// processNetworkFlags handles proxy, timeout, redirect, retry, and output flags.
+func processNetworkFlags(tokens []tokenizer.Token, i int, flag string, o *options.RequestOptions) (int, bool, error) {
+	switch flag {
 	case "-x", "--proxy":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.Proxy = value
-			return nil
-		})
+		return argSetter(tokens, i, flag, func(v string) error { o.Proxy = v; return nil })
 	case "--proxy-cert":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.ProxyCert = value
-			return nil
-		})
+		return argSetter(tokens, i, flag, func(v string) error { o.ProxyCert = v; return nil })
 	case "--proxy-key":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.ProxyKey = value
-			return nil
-		})
+		return argSetter(tokens, i, flag, func(v string) error { o.ProxyKey = v; return nil })
 	case "--proxy-cacert":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.ProxyCACert = value
+		return argSetter(tokens, i, flag, func(v string) error { o.ProxyCACert = v; return nil })
+	case "--noproxy":
+		return argSetter(tokens, i, flag, func(v string) error {
+			o.ProxyNoProxy = splitList(v)
 			return nil
 		})
-	case "--proxy-insecure":
-		o.ProxyInsecure = true
-		return i + 1, nil
 	case "-o", "--output":
-		return processFlagWithArg(tokens, i, tokenLen, flagName, func(value string) error {
-			o.OutputFile = value
+		return argSetter(tokens, i, flag, func(v string) error { o.OutputFile = v; return nil })
+	case "--url":
+		return argSetter(tokens, i, flag, func(v string) error { o.URL = v; return nil })
+	case "--max-time":
+		return argSetter(tokens, i, flag, func(v string) error {
+			d, err := parseSeconds(v)
+			if err != nil {
+				return err
+			}
+			o.Timeout = d
 			return nil
 		})
-	case "--max-time":
-		return processMaxTimeFlag(tokens, i, tokenLen, flagName, o)
+	case "--connect-timeout":
+		return argSetter(tokens, i, flag, func(v string) error {
+			d, err := parseSeconds(v)
+			if err != nil {
+				return err
+			}
+			o.ConnectTimeout = d
+			return nil
+		})
 	case "--max-redirs":
-		return processMaxRedirsFlag(tokens, i, tokenLen, flagName, o)
+		return argSetter(tokens, i, flag, func(v string) error {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return fmt.Errorf("invalid max redirects: %v", err)
+			}
+			o.MaxRedirects = n
+			return nil
+		})
+	case "--retry":
+		return argSetter(tokens, i, flag, func(v string) error {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return fmt.Errorf("invalid retry count: %v", err)
+			}
+			if o.RetryConfig == nil {
+				o.RetryConfig = &options.RetryConfig{}
+			}
+			o.RetryConfig.MaxRetries = n
+			return nil
+		})
 	default:
-		return 0, fmt.Errorf("not handled")
+		return 0, false, nil
 	}
 }
 
-// processFlagWithArg handles flags that require a single argument
-func processFlagWithArg(tokens []tokenizer.Token, i int, tokenLen int, flagName string, setter func(string) error) (int, error) {
-	i++
-	if i >= tokenLen {
-		return 0, fmt.Errorf("expected value after %s", flagName)
-	}
-	err := setter(tokens[i].Value)
+// argSetter consumes the next token as the flag's argument and applies setter.
+func argSetter(tokens []tokenizer.Token, i int, flag string, setter func(string) error) (int, bool, error) {
+	v, next, err := nextArg(tokens, i, flag)
 	if err != nil {
-		return 0, err
+		return 0, true, err
 	}
-	return i + 1, nil
+	if err := setter(v); err != nil {
+		return 0, true, err
+	}
+	return next, true, nil
 }
 
-// processHeaderFlag handles -H/--header flag
-func processHeaderFlag(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions) (int, error) {
-	i++
-	if i >= tokenLen {
-		return 0, fmt.Errorf("expected header after %s", flagName)
-	}
-	headerLine := tokens[i].Value
-	idx := strings.Index(headerLine, ":")
-	if idx <= 0 {
-		return 0, fmt.Errorf("invalid header format: %s", headerLine)
-	}
-	key := strings.TrimSpace(headerLine[:idx])
-	value := strings.TrimSpace(headerLine[idx+1:])
-	o.Headers.Add(key, value)
-	return i + 1, nil
-}
-
-// processFormFlag handles -F/--form flag
-func processFormFlag(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions, formFields *url.Values) (int, error) {
-	i++
-	if i >= tokenLen {
-		return 0, fmt.Errorf("expected form data after %s", flagName)
-	}
-	formData := tokens[i].Value
-	idx := strings.Index(formData, "=")
-	if idx <= 0 {
-		return 0, fmt.Errorf("invalid form data: %s", formData)
-	}
-	key := formData[:idx]
-	value := formData[idx+1:]
-
-	// Check if value starts with '@' indicating a file upload
-	if strings.HasPrefix(value, "@") {
-		filePath := value[1:]
-		fileName := filePath
-		if lastSlash := strings.LastIndex(filePath, "/"); lastSlash != -1 {
-			fileName = filePath[lastSlash+1:]
-		}
-		o.FileUpload = &options.FileUpload{
-			FieldName: key,
-			FileName:  fileName,
-			FilePath:  filePath,
-		}
-	} else {
-		formFields.Add(key, value)
-	}
-
-	if o.Method == "GET" {
-		o.Method = "POST"
-	}
-	return i + 1, nil
-}
-
-// processUserFlag handles -u/--user flag
-func processUserFlag(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions) (int, error) {
-	i++
-	if i >= tokenLen {
-		return 0, fmt.Errorf("expected credentials after %s", flagName)
-	}
-	creds := tokens[i].Value
-	parts := strings.SplitN(creds, ":", 2)
-	if len(parts) != 2 {
-		return 0, fmt.Errorf("invalid credentials format: %s", creds)
-	}
-	o.SetBasicAuth(parts[0], parts[1])
-	return i + 1, nil
-}
-
-// processCookieFlag handles -b/--cookie flag
-func processCookieFlag(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions) (int, error) {
-	i++
-	if i >= tokenLen {
-		return 0, fmt.Errorf("expected cookie data after %s", flagName)
-	}
-	cookieData := tokens[i].Value
-	if strings.Contains(cookieData, "=") {
-		// Inline cookies
-		cookies := parseCookies(cookieData)
-		o.Cookies = append(o.Cookies, cookies...)
-	} else {
-		// Cookie file
-		fileCookies, err := readCookiesFromFile(cookieData)
-		if err != nil {
-			return 0, fmt.Errorf("error reading cookies from file: %v", err)
-		}
-		o.Cookies = append(o.Cookies, fileCookies...)
-	}
-	return i + 1, nil
-}
-
-// processMaxTimeFlag handles --max-time flag
-func processMaxTimeFlag(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions) (int, error) {
-	i++
-	if i >= tokenLen {
-		return 0, fmt.Errorf("expected time after %s", flagName)
-	}
-	timeout, err := time.ParseDuration(tokens[i].Value + "s")
-	if err != nil {
-		return 0, err
-	}
-	o.Timeout = timeout
-	return i + 1, nil
-}
-
-// processMaxRedirsFlag handles --max-redirs flag
-func processMaxRedirsFlag(tokens []tokenizer.Token, i int, tokenLen int, flagName string, o *options.RequestOptions) (int, error) {
-	i++
-	if i >= tokenLen {
-		return 0, fmt.Errorf("expected number after %s", flagName)
-	}
-	maxRedirs, err := parseInt(tokens[i].Value)
-	if err != nil {
-		return 0, fmt.Errorf("invalid max redirects: %v", err)
-	}
-	o.MaxRedirects = maxRedirs
-	return i + 1, nil
-}
-
-// processPositionalArg handles positional arguments (mainly URL)
-func processPositionalArg(tokens []tokenizer.Token, i int, o *options.RequestOptions) (int, error) {
-	token := tokens[i]
-	if o.URL == "" && strings.HasPrefix(token.Value, "http") {
-		o.URL = token.Value
+// processPositionalArg handles positional arguments (the URL).
+func processPositionalArg(tokens []tokenizer.Token, i int, st *parseState) (int, error) {
+	v := tokens[i].Value
+	if st.o.URL == "" {
+		st.o.URL = v
 		return i + 1, nil
 	}
-	return 0, fmt.Errorf("unexpected token: %s", token.Value)
+	return 0, fmt.Errorf("unexpected argument: %s", v)
 }
 
-// finalizeRequestOptions performs post-processing on request options
-func finalizeRequestOptions(o *options.RequestOptions, dataFields []string, formFields url.Values) error {
-	// Ensure URL is provided
-	if o.URL == "" {
-		return fmt.Errorf("no URL provided")
-	}
+// finalizeRequestOptions performs post-processing once all tokens are parsed.
+func finalizeRequestOptions(st *parseState) error {
+	o := st.o
 
-	// Parse URL and extract query parameters
-	err := parseAndSetURL(o)
-	if err != nil {
+	if err := normalizeURL(o); err != nil {
 		return err
 	}
 
-	// Set body data
-	if len(dataFields) > 0 {
-		o.Body = strings.Join(dataFields, "&")
-		if o.Headers.Get("Content-Type") == "" {
-			o.Headers.Set("Content-Type", "application/x-www-form-urlencoded")
-		}
+	applyData(st)
+
+	if len(st.formFields) > 0 {
+		o.Form = st.formFields
 	}
 
-	// Set form data
-	if len(formFields) > 0 {
-		o.Form = formFields
+	if st.remoteName && o.OutputFile == "" {
+		o.OutputFile = remoteFilename(o.URL)
 	}
 
-	// Apply compression headers
-	if o.Compress {
-		o.Headers.Set("Accept-Encoding", "deflate, gzip")
+	// curl follows up to 50 redirects with -L; default to a sane bound when the
+	// user enabled following but did not set --max-redirs.
+	if o.FollowRedirects && o.MaxRedirects == 0 {
+		o.MaxRedirects = 30
 	}
 
-	// Apply user agent
-	if o.UserAgent != "" {
-		o.Headers.Set("User-Agent", o.UserAgent)
-	}
-
-	// Apply referer
-	if o.Referer != "" {
-		o.Headers.Set("Referer", o.Referer)
-	}
-
-	// Setup TLS config if needed
 	if o.CertFile != "" || o.KeyFile != "" || o.CAFile != "" || o.Insecure {
 		tlsConfig, err := createTLSConfig(o)
 		if err != nil {
@@ -522,42 +530,113 @@ func finalizeRequestOptions(o *options.RequestOptions, dataFields []string, form
 	return nil
 }
 
-// parseAndSetURL parses the URL and extracts query parameters
-func parseAndSetURL(o *options.RequestOptions) error {
-	parsedURL, err := url.Parse(o.URL)
+// applyData routes accumulated -d data either to the query string (-G) or the
+// request body.
+func applyData(st *parseState) {
+	o := st.o
+	if len(st.data) == 0 {
+		return
+	}
+	joined := strings.Join(st.data, "&")
+	if st.getMode {
+		sep := "?"
+		if strings.Contains(o.URL, "?") {
+			sep = "&"
+		}
+		o.URL += sep + joined
+		o.Method = "GET"
+		return
+	}
+	o.Body = joined
+	if o.Headers.Get("Content-Type") == "" {
+		o.Headers.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+}
+
+// normalizeURL validates the URL and, when no scheme is present, defaults to
+// http:// (matching curl). It preserves userinfo, port, path, query, and
+// fragment rather than reconstructing the URL lossily.
+func normalizeURL(o *options.RequestOptions) error {
+	raw := strings.TrimSpace(o.URL)
+	if raw == "" {
+		return fmt.Errorf("no URL provided")
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	u, err := url.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("invalid URL: %v", err)
 	}
-	o.QueryParams = parsedURL.Query()
-	o.URL = parsedURL.Scheme + "://" + parsedURL.Host + parsedURL.Path
+	if u.Host == "" {
+		return fmt.Errorf("invalid URL: missing host in %q", o.URL)
+	}
+	o.URL = u.String()
 	return nil
 }
 
-// Helper function to expand environment variables within a string
+// remoteFilename derives an output filename from the URL path for -O.
+func remoteFilename(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "curl_response"
+	}
+	name := path.Base(u.Path)
+	if name == "" || name == "/" || name == "." {
+		return "curl_response"
+	}
+	return name
+}
+
+func setPostIfDefault(o *options.RequestOptions) {
+	if o.Method == "GET" {
+		o.Method = "POST"
+	}
+}
+
+func splitList(v string) []string {
+	parts := strings.Split(v, ",")
+	out := parts[:0]
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// parseSeconds parses a curl duration expressed in (possibly fractional) seconds.
+func parseSeconds(v string) (time.Duration, error) {
+	secs, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration %q: %v", v, err)
+	}
+	return time.Duration(secs * float64(time.Second)), nil
+}
+
+// expandVariables expands environment variables within a string (used by
+// ArgsToOptions only; the Curl* entry points expand before conversion).
 func expandVariables(s string) string {
 	return os.ExpandEnv(s)
 }
 
-// Helper function to parse cookies from a string
+// parseCookies parses cookies from a "name=value; name2=value2" string.
 func parseCookies(cookieStr string) []*http.Cookie {
 	cookies := []*http.Cookie{}
-	parts := strings.Split(cookieStr, ";")
-	for _, part := range parts {
+	for _, part := range strings.Split(cookieStr, ";") {
 		idx := strings.Index(part, "=")
 		if idx <= 0 {
 			continue
 		}
-		name := strings.TrimSpace(part[:idx])
-		value := strings.TrimSpace(part[idx+1:])
 		cookies = append(cookies, &http.Cookie{
-			Name:  name,
-			Value: value,
+			Name:  strings.TrimSpace(part[:idx]),
+			Value: strings.TrimSpace(part[idx+1:]),
 		})
 	}
 	return cookies
 }
 
-// Helper function to read cookies from a file
+// readCookiesFromFile reads cookies from a file in "name=value;" form.
 func readCookiesFromFile(filename string) ([]*http.Cookie, error) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
@@ -566,32 +645,20 @@ func readCookiesFromFile(filename string) ([]*http.Cookie, error) {
 	return parseCookies(string(content)), nil
 }
 
-// Helper function to create TLS configuration
+// createTLSConfig builds a *tls.Config from the certificate-related options.
 func createTLSConfig(o *options.RequestOptions) (*tls.Config, error) {
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: o.Insecure,
+		InsecureSkipVerify: o.Insecure, //nolint:gosec // honors curl -k by design
 	}
 
-	// Apply TLS version constraints (curl-compatible)
 	if o.TLSMinVersion != 0 {
 		tlsConfig.MinVersion = o.TLSMinVersion
 	}
 	if o.TLSMaxVersion != 0 {
 		tlsConfig.MaxVersion = o.TLSMaxVersion
 	}
-
-	// Apply cipher suites (curl-compatible)
 	if len(o.CipherSuites) > 0 {
 		tlsConfig.CipherSuites = o.CipherSuites
-	}
-
-	// Apply TLS 1.3 cipher suites (Go 1.21+)
-	// Note: In older Go versions, TLS 1.3 cipher suites are not configurable
-	// and this field will be ignored by the TLS library
-	if len(o.TLS13CipherSuites) > 0 {
-		// This is a no-op in Go < 1.21, but safe to set
-		// In Go 1.21+, this would be: tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, o.TLS13CipherSuites...)
-		// For now, we just document that TLS 1.3 ciphers are handled by Go's defaults
 	}
 
 	if o.CertFile != "" && o.KeyFile != "" {
@@ -616,9 +683,4 @@ func createTLSConfig(o *options.RequestOptions) (*tls.Config, error) {
 	}
 
 	return tlsConfig, nil
-}
-
-// Helper function to parse integer values
-func parseInt(s string) (int, error) {
-	return strconv.Atoi(s)
 }

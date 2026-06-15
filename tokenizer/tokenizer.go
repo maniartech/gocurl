@@ -1,10 +1,12 @@
-// internal/parser/tokenizer.go
-
+// Package tokenizer splits a curl command string into shell-style tokens,
+// respecting single/double quotes and backslash escapes. Surrounding quotes are
+// stripped (their job is grouping, not content), and variable references such as
+// $VAR / ${VAR} are left intact within a token so callers can expand them in a
+// single, well-defined step.
 package tokenizer
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 )
 
@@ -13,6 +15,9 @@ type TokenType int
 const (
 	TokenFlag TokenType = iota
 	TokenValue
+	// TokenVariable is retained for backward compatibility. The tokenizer no
+	// longer splits variables into separate tokens; expansion is performed on
+	// whole tokens by the caller.
 	TokenVariable
 )
 
@@ -29,97 +34,96 @@ func NewTokenizer() *Tokenizer {
 	return &Tokenizer{}
 }
 
+// Tokenize splits command into tokens. Each shell word becomes exactly one
+// token; surrounding quotes are removed and escapes are resolved.
 func (t *Tokenizer) Tokenize(command string) error {
-	// Updated regex to match variables like $VAR, ${VAR}, $VAR_NAME, ${VAR_NAME}, etc.
-	// This pattern allows alphanumeric characters, underscores, and hyphens in variable names
-	varRegex := regexp.MustCompile(`\$(\w+)|\$\{(\w+)\}`)
-
-	// Split the command, respecting quotes
 	fields, err := splitRespectQuotes(command)
 	if err != nil {
 		return err
 	}
 
-	for _, field := range fields {
-		if strings.HasPrefix(field, "-") {
-			t.tokens = append(t.tokens, Token{Type: TokenFlag, Value: field})
+	for _, f := range fields {
+		if !f.quoted && len(f.value) > 1 && strings.HasPrefix(f.value, "-") {
+			t.tokens = append(t.tokens, Token{Type: TokenFlag, Value: f.value})
 		} else {
-			// Check for variables in the field
-			vars := varRegex.FindAllStringSubmatchIndex(field, -1)
-			if len(vars) > 0 {
-				// If variables are found, split the field and tokenize each part
-				lastIndex := 0
-				for _, match := range vars {
-					if match[0] > lastIndex {
-						// Add non-variable part as TokenValue
-						t.tokens = append(t.tokens, Token{Type: TokenValue, Value: field[lastIndex:match[0]]})
-					}
-					// Add variable as TokenVariable
-					var varName string
-					if match[2] != -1 {
-						varName = field[match[2]:match[3]]
-					} else {
-						varName = field[match[4]:match[5]]
-					}
-					t.tokens = append(t.tokens, Token{Type: TokenVariable, Value: varName})
-					lastIndex = match[1]
-				}
-				if lastIndex < len(field) {
-					// Add remaining part as TokenValue
-					t.tokens = append(t.tokens, Token{Type: TokenValue, Value: field[lastIndex:]})
-				}
-			} else {
-				// If no variables, add entire field as TokenValue
-				t.tokens = append(t.tokens, Token{Type: TokenValue, Value: field})
-			}
+			t.tokens = append(t.tokens, Token{Type: TokenValue, Value: f.value})
 		}
 	}
 	return nil
 }
 
-// Helper function to split the command respecting quotes
-func splitRespectQuotes(s string) ([]string, error) {
-	var result []string
+// tokField is a single split field plus whether it began inside a quote (so a
+// leading '-' is treated as a literal value rather than a flag).
+type tokField struct {
+	value  string
+	quoted bool
+}
+
+// splitRespectQuotes splits s on unquoted whitespace, stripping quote
+// delimiters and resolving backslash escapes. Single quotes preserve their
+// contents literally; double quotes allow backslash escapes.
+func splitRespectQuotes(s string) ([]tokField, error) {
+	var result []tokField
 	var current strings.Builder
+	started := false
+	startedQuoted := false
 	inQuotes := false
 	quoteChar := rune(0)
 	escaped := false
 
-	for i, char := range s {
-		if escaped {
+	flush := func() {
+		if started {
+			result = append(result, tokField{value: current.String(), quoted: startedQuoted})
+			current.Reset()
+			started = false
+			startedQuoted = false
+		}
+	}
+
+	for _, char := range s {
+		switch {
+		case escaped:
 			current.WriteRune(char)
 			escaped = false
-		} else if char == '\\' {
-			current.WriteRune(char)
+		case inQuotes && quoteChar == '\'':
+			// Single quotes: literal until the closing single quote.
+			if char == '\'' {
+				inQuotes, quoteChar = false, 0
+			} else {
+				current.WriteRune(char)
+			}
+		case char == '\\' && (!inQuotes || quoteChar == '"'):
+			// Backslash escapes the next rune outside quotes and in double quotes.
 			escaped = true
-		} else if char == '\'' || char == '"' {
+		case char == '\'' || char == '"':
 			if !inQuotes {
-				inQuotes = true
-				quoteChar = char
+				inQuotes, quoteChar = true, char
+				if !started {
+					startedQuoted = true
+				}
+				started = true
 			} else if char == quoteChar {
-				inQuotes = false
-				quoteChar = rune(0)
+				inQuotes, quoteChar = false, 0
+			} else {
+				current.WriteRune(char)
 			}
+		case (char == ' ' || char == '\t') && !inQuotes:
+			flush()
+		default:
 			current.WriteRune(char)
-		} else if char == ' ' && !inQuotes {
-			if current.Len() > 0 {
-				result = append(result, current.String())
-				current.Reset()
-			}
-		} else {
-			current.WriteRune(char)
-		}
-
-		// Check for unmatched quote at the end of the string
-		if i == len(s)-1 && inQuotes {
-			return nil, fmt.Errorf("unmatched %c quote", quoteChar)
+			started = true
 		}
 	}
 
-	if current.Len() > 0 {
-		result = append(result, current.String())
+	if inQuotes {
+		return nil, fmt.Errorf("unmatched %c quote", quoteChar)
 	}
-
+	if escaped {
+		// Trailing backslash: keep it literal.
+		current.WriteRune('\\')
+		started = true
+	}
+	flush()
 	return result, nil
 }
 
