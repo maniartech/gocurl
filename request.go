@@ -134,8 +134,8 @@ func Body(b []byte) RequestOption {
 	}
 }
 
-// BodyReader sets a request body from a reader. For M1 it is buffered; streaming
-// bodies arrive with the BodySource model (Spec 05).
+// BodyReader sets a request body from a reader. It is buffered; for true
+// streaming (and retry replay) use Stream with a BodySource.
 func BodyReader(r io.Reader) RequestOption {
 	return func(o *options.RequestOptions) error {
 		data, err := io.ReadAll(r)
@@ -143,6 +143,16 @@ func BodyReader(r io.Reader) RequestOption {
 			return fmt.Errorf("BodyReader: %w", err)
 		}
 		o.Body = string(data)
+		return nil
+	}
+}
+
+// Stream sets a streaming BodySource on a NewRequest (e.g. FileBody, ReaderBody,
+// MultipartBody), overriding any raw body.
+func Stream(src options.BodySource) RequestOption {
+	return func(o *options.RequestOptions) error {
+		o.BodyStream = src
+		o.Body = ""
 		return nil
 	}
 }
@@ -184,7 +194,22 @@ func (r *Request) WithQuery(key, value string) *Request {
 func (r *Request) WithBody(b []byte) *Request {
 	c := r.clone()
 	c.opts.Body = string(b)
+	c.opts.BodyStream = nil
 	return c
+}
+
+// WithBodySource returns a copy of the request with a streaming body source,
+// overriding any raw body.
+func (r *Request) WithBodySource(src options.BodySource) *Request {
+	c := r.clone()
+	c.opts.BodyStream = src
+	c.opts.Body = ""
+	return c
+}
+
+// WithBodyFile returns a copy of the request that streams its body from a file.
+func (r *Request) WithBodyFile(path string) *Request {
+	return r.WithBodySource(FileBody(path))
 }
 
 // WithVars returns a copy of the request re-parsed with the given variables.

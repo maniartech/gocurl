@@ -273,6 +273,18 @@ func CreateRequest(ctx context.Context, opts *options.RequestOptions) (*http.Req
 		return nil, err
 	}
 
+	// For a streaming BodySource, set Content-Length when known and a GetBody so
+	// retries/redirects can replay a rewindable body without buffering it.
+	if opts.BodyStream != nil {
+		if n, ok := opts.BodyStream.Len(); ok {
+			req.ContentLength = n
+		}
+		if opts.BodyStream.Rewindable() {
+			bs := opts.BodyStream
+			req.GetBody = func() (io.ReadCloser, error) { return bs.Open() }
+		}
+	}
+
 	// Apply all request configurations
 	applyHeaders(req, opts, contentType)
 	applyAuth(req, opts)
@@ -310,6 +322,18 @@ func buildURL(opts *options.RequestOptions) string {
 
 // createRequestBody creates the request body and determines content type
 func createRequestBody(opts *options.RequestOptions) (io.Reader, string, error) {
+	if opts.BodyStream != nil {
+		rc, err := opts.BodyStream.Open()
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to open request body: %w", err)
+		}
+		contentType := ""
+		if ct, ok := opts.BodyStream.(options.ContentTyper); ok {
+			contentType = ct.ContentType()
+		}
+		return rc, contentType, nil
+	}
+
 	if opts.Body != "" {
 		return strings.NewReader(opts.Body), "", nil
 	}
