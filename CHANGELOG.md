@@ -7,6 +7,21 @@ a tagged release.
 
 ## [Unreleased]
 
+### Added — transport & connection management (Milestone 2)
+- Config-driven, per-Client owned transport with tunable pooling and the timeout taxonomy:
+  `WithMaxIdleConns`, `WithMaxIdleConnsPerHost`, `WithMaxConnsPerHost` (0 = unlimited),
+  `WithIdleConnTimeout`, `WithTLSHandshakeTimeout`, `WithResponseHeaderTimeout`,
+  `WithExpectContinueTimeout` (connect timeout via `WithConnectTimeout`'s dialer).
+- `RedirectPolicy{Follow, Max, Allow}` + `WithRedirectPolicy` — the `Allow` hook authorizes
+  each redirect (works on a shared Client via the request-context redirect seam; it is the
+  seam the SSRF guard will use).
+- `WithHTTP2(bool)` (default on) and `WithHTTP2Only(allowCleartext bool)` for h2/h2c.
+  HTTP/3 (QUIC) is intentionally out of scope.
+
+### Fixed
+- `retryLoop` no longer drops the error (or closes the returned response body) once retries
+  are exhausted — it propagates the last error and preserves the response.
+
 ### Added — reusable Client (production foundation, Milestone 1)
 - `Client` (`New(opts ...Option)`) — a reusable, concurrency-safe HTTP client that owns its
   pooled transport, for the parse-once/execute-many model. `Prepare`/`PrepareNoEnv`/

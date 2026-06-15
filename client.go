@@ -51,13 +51,9 @@ func New(opts ...Option) (*Client, error) {
 		}
 	}
 
-	transport := cfg.transport
-	if transport == nil {
-		rt, err := buildOwnedTransport(cfg.baseOptions())
-		if err != nil {
-			return nil, err
-		}
-		transport = rt
+	transport, err := cfg.buildTransport()
+	if err != nil {
+		return nil, err
 	}
 
 	hc := &http.Client{
@@ -77,16 +73,18 @@ func New(opts ...Option) (*Client, error) {
 }
 
 // redirectSettings carries per-request redirect policy through the request
-// context so a SHARED http.Client can honor per-request -L/--max-redirs.
+// context so a SHARED http.Client can honor per-request -L/--max-redirs and an
+// optional per-redirect authorization hook.
 type redirectSettings struct {
 	follow bool
 	max    int
+	allow  func(req *http.Request, via []*http.Request) error
 }
 
 type redirectCtxKey struct{}
 
-func withRedirectSettings(ctx context.Context, follow bool, max int) context.Context {
-	return context.WithValue(ctx, redirectCtxKey{}, redirectSettings{follow: follow, max: max})
+func withRedirectSettings(ctx context.Context, rs redirectSettings) context.Context {
+	return context.WithValue(ctx, redirectCtxKey{}, rs)
 }
 
 func redirectFromContext(req *http.Request, via []*http.Request) error {
@@ -96,6 +94,9 @@ func redirectFromContext(req *http.Request, via []*http.Request) error {
 	}
 	if rs.max > 0 && len(via) >= rs.max {
 		return fmt.Errorf("stopped after %d redirects", rs.max)
+	}
+	if rs.allow != nil {
+		return rs.allow(req, via)
 	}
 	return nil
 }
@@ -157,7 +158,11 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 	}
 
-	ctx = withRedirectSettings(ctx, opts.FollowRedirects, opts.MaxRedirects)
+	ctx = withRedirectSettings(ctx, redirectSettings{
+		follow: opts.FollowRedirects,
+		max:    opts.MaxRedirects,
+		allow:  c.cfg.redirectAllow,
+	})
 
 	httpReq, err := CreateRequest(ctx, opts)
 	if err != nil {

@@ -81,8 +81,8 @@ func retryLoop(client options.HTTPClient, req *http.Request, opts *options.Reque
 	for attempt := 0; attempt <= retries; attempt++ {
 		// Check context before each retry attempt
 		if attempt > 0 {
-			if err := checkContextDuringRetry(req, resp, attempt, retries); err != nil {
-				return nil, err
+			if cerr := checkContextDuringRetry(req, resp, attempt, retries); cerr != nil {
+				return nil, cerr
 			}
 		}
 
@@ -95,28 +95,28 @@ func retryLoop(client options.HTTPClient, req *http.Request, opts *options.Reque
 				attempt, retries, err)
 		}
 
-		// Check if retry is needed
+		// Success or a non-retryable outcome: return as-is.
 		if !needsRetry(resp, err, opts) {
-			if err != nil && attempt == retries {
-				return nil, fmt.Errorf("request failed after %d retries: %w", retries, err)
-			}
 			return resp, err
 		}
 
-		// Close response body before retry
+		// Retry is warranted but attempts are exhausted: return the last result,
+		// PROPAGATING any error. (Previously the error was dropped here, and the
+		// final response body was closed before returning.)
+		if attempt == retries {
+			return resp, err
+		}
+
+		// Another attempt remains: discard this response body and back off.
 		if resp != nil {
 			resp.Body.Close()
 		}
-
-		// Sleep before next attempt (unless this is the last attempt)
-		if attempt < retries {
-			if err := sleepWithContext(req, opts, attempt); err != nil {
-				return nil, err
-			}
+		if serr := sleepWithContext(req, opts, attempt); serr != nil {
+			return nil, serr
 		}
 	}
 
-	return resp, nil
+	return resp, err
 }
 
 // checkContextDuringRetry checks if context was cancelled during retry loop

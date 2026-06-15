@@ -3,6 +3,7 @@ package gocurl
 import (
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -61,21 +62,55 @@ func getRoundTripper(opts *options.RequestOptions) (http.RoundTripper, error) {
 	return t, nil
 }
 
-// buildOwnedTransport builds a fresh (uncached) round tripper for a Client that
-// owns its transport — so closing one Client never affects another. It mirrors
-// getRoundTripper but skips the process-global cache.
-func buildOwnedTransport(opts *options.RequestOptions) (http.RoundTripper, error) {
-	tlsConfig, err := LoadTLSConfig(opts)
+// buildTransport builds the Client's OWNED round tripper from its config — so
+// closing one Client never affects another. Transport tuning (idle conns,
+// timeouts, max conns per host, HTTP version) comes from the config; TLS/proxy
+// come from the projected base options.
+func (c *config) buildTransport() (http.RoundTripper, error) {
+	if c.transport != nil {
+		return c.transport, nil // explicit WithTransport override
+	}
+
+	base := c.baseOptions()
+	tlsConfig, err := LoadTLSConfig(base)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load TLS config: %w", err)
 	}
-	if opts.Proxy != "" {
-		return createProxyTransport(opts, tlsConfig)
+
+	if c.proxy != "" {
+		return createProxyTransport(base, tlsConfig)
 	}
-	if opts.HTTP2Only {
-		return &http2.Transport{TLSClientConfig: tlsConfig}, nil
+
+	if c.http2Only {
+		return &http2.Transport{
+			TLSClientConfig: tlsConfig,
+			AllowHTTP:       c.h2c,
+		}, nil
 	}
-	return newTransport(opts, tlsConfig)
+
+	dialer := &net.Dialer{Timeout: c.connectTimeout, KeepAlive: 30 * time.Second}
+	t := &http.Transport{
+		TLSClientConfig:       tlsConfig,
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           dialer.DialContext,
+		ForceAttemptHTTP2:     c.http2,
+		MaxIdleConns:          c.maxIdleConns,
+		MaxIdleConnsPerHost:   c.maxIdleConnsPerHost,
+		MaxConnsPerHost:       c.maxConnsPerHost,
+		IdleConnTimeout:       c.idleConnTimeout,
+		TLSHandshakeTimeout:   c.tlsHandshakeTimeout,
+		ResponseHeaderTimeout: c.responseHeaderTimeout,
+		ExpectContinueTimeout: c.expectContinueTimeout,
+		// Decompress manually (curl semantics: only when --compressed) so the
+		// Client's decompression path owns it.
+		DisableCompression: true,
+	}
+	if c.http2 {
+		if err := http2.ConfigureTransport(t); err != nil {
+			return nil, fmt.Errorf("failed to configure HTTP/2: %w", err)
+		}
+	}
+	return t, nil
 }
 
 // newTransport builds an idle-tuned *http.Transport, configuring HTTP/2 upgrade
