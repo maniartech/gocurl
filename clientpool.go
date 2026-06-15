@@ -61,6 +61,23 @@ func getRoundTripper(opts *options.RequestOptions) (http.RoundTripper, error) {
 	return t, nil
 }
 
+// buildOwnedTransport builds a fresh (uncached) round tripper for a Client that
+// owns its transport — so closing one Client never affects another. It mirrors
+// getRoundTripper but skips the process-global cache.
+func buildOwnedTransport(opts *options.RequestOptions) (http.RoundTripper, error) {
+	tlsConfig, err := LoadTLSConfig(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load TLS config: %w", err)
+	}
+	if opts.Proxy != "" {
+		return createProxyTransport(opts, tlsConfig)
+	}
+	if opts.HTTP2Only {
+		return &http2.Transport{TLSClientConfig: tlsConfig}, nil
+	}
+	return newTransport(opts, tlsConfig)
+}
+
 // newTransport builds an idle-tuned *http.Transport, configuring HTTP/2 upgrade
 // when requested.
 func newTransport(opts *options.RequestOptions, tlsConfig *tls.Config) (*http.Transport, error) {

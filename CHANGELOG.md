@@ -7,6 +7,26 @@ a tagged release.
 
 ## [Unreleased]
 
+### Added — reusable Client (production foundation, Milestone 1)
+- `Client` (`New(opts ...Option)`) — a reusable, concurrency-safe HTTP client that owns its
+  pooled transport, for the parse-once/execute-many model. `Prepare`/`PrepareNoEnv`/
+  `PrepareWithVars` parse a curl command once into an immutable `Request`; `Do(ctx, *Request)`
+  executes it (streaming the live body), with `Curl`/`CurlString`/`CurlBytes`/`CurlJSON`/
+  `CurlDownload` convenience methods, `Close()`, and `Shutdown(ctx)` (drains in-flight).
+- Functional options: `WithTimeout`, `WithConnectTimeout`, `WithFollowRedirects`,
+  `WithMaxRedirects`, `WithProxy`, `WithInsecure`, `WithUserAgent`, `WithDefaultHeader`,
+  `WithCookieFile`, `WithMiddleware`, `WithTransport`.
+- `Handler`/`Middleware` composition model (`middleware.go`) with a `FromMiddlewareFunc`
+  adapter for the legacy `middlewares.MiddlewareFunc`.
+- Programmatic `NewRequest(method, url, ...RequestOption)` with `Header`/`Query`/`Body`/
+  `BodyReader` option constructors and immutable `Request` builders (`WithHeader`,
+  `AddHeader`, `WithQuery`, `WithBody`, `WithVars`, `Clone`).
+- Per-request redirect policy works on a shared Client (carried via request context).
+
+### Removed
+- Deprecated `Request()`/`RequestWithContext()` helpers (the name `Request` is now the
+  prepared-request type). Use `Curl`/`CurlWithVars` or a `Client` + `Prepare`/`Do`.
+
 ### Changed
 - Repositioned the project around its real value: pasting curl commands from API
   docs directly into Go. Rewrote the README and added `VISION.md`; removed

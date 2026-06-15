@@ -411,41 +411,9 @@ type Response struct {
 	bodyRead  bool
 }
 
-// Request executes a curl command with optional variable substitution (DEPRECATED)
-// Use Curl() or CurlWithVars() instead
-func Request(command interface{}, vars Variables) (*Response, error) {
-	return RequestWithContext(context.Background(), command, vars)
-}
-
-// RequestWithContext executes a curl command with context (DEPRECATED)
-// Use Curl() or CurlWithVars() instead
-func RequestWithContext(ctx context.Context, command interface{}, vars Variables) (*Response, error) {
-	var resp *http.Response
-	var err error
-
-	switch cmd := command.(type) {
-	case string:
-		if vars != nil {
-			resp, err = CurlCommandWithVars(ctx, vars, cmd)
-		} else {
-			resp, err = CurlCommand(ctx, cmd)
-		}
-	case []string:
-		if vars != nil {
-			resp, err = CurlArgsWithVars(ctx, vars, cmd...)
-		} else {
-			resp, err = CurlArgs(ctx, cmd...)
-		}
-	default:
-		return nil, fmt.Errorf("command must be string or []string, got %T", command)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &Response{Response: resp}, nil
-}
+// NOTE: the former Request()/RequestWithContext() helpers were removed — the name
+// Request is now the prepared-request type (see request.go). Use Curl/CurlWithVars
+// for the one-shot API, or a Client + Prepare/Do for the reusable API.
 
 // Execute runs a request with pre-built RequestOptions (DEPRECATED)
 func Execute(ctx context.Context, opts *options.RequestOptions) (*Response, error) {
