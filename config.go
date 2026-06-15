@@ -23,6 +23,10 @@ type config struct {
 	proxy    string
 	insecure bool
 
+	// failOnStatus mirrors curl -f/--fail: a >=400 response becomes a typed
+	// ServerStatusError (the response is still returned). Default off.
+	failOnStatus bool
+
 	userAgent      string
 	defaultHeaders http.Header
 	cookieFile     string
@@ -145,6 +149,17 @@ func WithProxy(proxyURL string) Option {
 func WithInsecure(insecure bool) Option {
 	return func(c *config) error {
 		c.insecure = insecure
+		return nil
+	}
+}
+
+// WithFailOnStatus enables curl -f/--fail behavior: a response with status >= 400
+// is returned as a ServerStatusError. The live *http.Response is still returned
+// alongside the error so the caller can read the error body. Off by default — a
+// non-2xx status is normally not an error.
+func WithFailOnStatus(fail bool) Option {
+	return func(c *config) error {
+		c.failOnStatus = fail
 		return nil
 	}
 }

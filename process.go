@@ -82,7 +82,7 @@ func doRequest(ctx context.Context, opts *options.RequestOptions) (*http.Respons
 
 	resp, err := executeWithRetries(httpClient, req, opts)
 	if err != nil {
-		return nil, err
+		return nil, wrapTransportError(opts.URL, err)
 	}
 
 	printResponseVerbose(opts, resp)
@@ -95,6 +95,17 @@ func doRequest(ctx context.Context, opts *options.RequestOptions) (*http.Respons
 	}
 
 	return resp, nil
+}
+
+// failOnStatus implements the opt-in curl -f/--fail policy. With FailOnError set,
+// a response with StatusCode >= 400 yields a ServerStatusError; the caller still
+// receives the live *http.Response so it may read the error body. Without the
+// opt-in, a non-2xx status is NOT an error (the default contract).
+func failOnStatus(resp *http.Response, opts *options.RequestOptions) error {
+	if resp == nil || !opts.FailOnError || resp.StatusCode < 400 {
+		return nil
+	}
+	return ServerStatusError(opts.URL, resp.StatusCode)
 }
 
 // readBodyWithLimit reads body fully, enforcing an optional size limit.

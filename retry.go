@@ -108,8 +108,14 @@ func retryLoop(client options.HTTPClient, req *http.Request, opts *options.Reque
 
 		// Retry is warranted but attempts are exhausted: return the last result,
 		// PROPAGATING any error. (Previously the error was dropped here, and the
-		// final response body was closed before returning.)
+		// final response body was closed before returning.) When retries were
+		// actually configured and the final attempt errored, surface a typed
+		// KindRetryExhausted error that chains the last attempt's classified
+		// error (so errors.Is(err, ErrTimeout) still resolves).
 		if attempt == retries {
+			if err != nil && retries > 0 {
+				return resp, RetryError(opts.URL, attempt+1, classifyToError(err))
+			}
 			return resp, err
 		}
 

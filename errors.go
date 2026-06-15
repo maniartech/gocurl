@@ -1,24 +1,49 @@
 package gocurl
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net"
 	"strings"
 )
 
-// GocurlError provides structured error information with context
+// GocurlError provides structured error information with context. It is the
+// single concrete error type gocurl returns; callers branch on Kind (the
+// machine-readable discriminator) or use errors.Is with the Err* sentinels,
+// and errors.As to recover this type for full detail.
+//
+// See specs/08-error-model.md.
 type GocurlError struct {
-	Op      string // Operation: "parse", "request", "response", "retry", etc.
+	Op      string // Operation: "parse", "request", "response", "retry", etc. (legacy/message)
+	Kind    Kind   // machine-readable classification
 	Command string // Command snippet (sanitized)
 	URL     string // Request URL (sanitized)
+	Status  int    // HTTP status when Kind == KindServerStatus, else 0
+	Attempt int    // attempts made when Kind == KindRetryExhausted, else 0
 	Err     error  // Underlying error
 }
 
-// Error implements the error interface
+// Error implements the error interface. The message shape is backward
+// compatible (op: url=… cmd=… underlying); the status is appended to the op
+// segment for KindServerStatus. The joined message is run through
+// scrubErrorString so credentials leaking in from wrapped stdlib errors never
+// appear.
 func (e *GocurlError) Error() string {
 	var parts []string
 
-	if e.Op != "" {
-		parts = append(parts, e.Op)
+	op := e.Op
+	if op == "" && e.Kind != KindUnknown {
+		op = e.Kind.String()
+	}
+	if e.Kind == KindServerStatus && e.Status != 0 {
+		if op == "" {
+			op = "server status"
+		}
+		op = fmt.Sprintf("%s (%d)", op, e.Status)
+	}
+	if op != "" {
+		parts = append(parts, op)
 	}
 
 	if e.URL != "" {
@@ -38,7 +63,7 @@ func (e *GocurlError) Error() string {
 		parts = append(parts, e.Err.Error())
 	}
 
-	return strings.Join(parts, ": ")
+	return scrubErrorString(strings.Join(parts, ": "))
 }
 
 // Unwrap allows errors.Is and errors.As to work
@@ -46,48 +71,192 @@ func (e *GocurlError) Unwrap() error {
 	return e.Err
 }
 
-// ParseError creates a parsing error
+// Is reports whether target is the kindSentinel matching this error's Kind.
+// errors.Is walks the Unwrap chain for us, so a retry-exhausted error wrapping a
+// timeout still matches errors.Is(err, ErrTimeout), and errors.Is(err,
+// context.DeadlineExceeded) keeps resolving through the wrapped error.
+func (e *GocurlError) Is(target error) bool {
+	if ks, ok := target.(*kindSentinel); ok {
+		return e.Kind == ks.kind
+	}
+	return false
+}
+
+// Timeout reports whether the error was caused by a deadline/timeout. It is
+// nil-Err safe and consults a wrapped net.Error / context.DeadlineExceeded.
+func (e *GocurlError) Timeout() bool {
+	if e == nil {
+		return false
+	}
+	if e.Kind == KindTimeout {
+		return true
+	}
+	if e.Err == nil {
+		return false
+	}
+	if errors.Is(e.Err, context.DeadlineExceeded) {
+		return true
+	}
+	var ne net.Error
+	if errors.As(e.Err, &ne) {
+		return ne.Timeout()
+	}
+	return false
+}
+
+// Temporary reports whether the failure is plausibly transient. Advisory and
+// conservative; it is NOT a retry decision on its own (idempotency still
+// governs retries — see Spec 04).
+func (e *GocurlError) Temporary() bool {
+	if e == nil {
+		return false
+	}
+	switch e.Kind {
+	case KindConnect, KindTimeout:
+		return true
+	case KindServerStatus:
+		return shouldRetry(e.Status, nil)
+	case KindRetryExhausted:
+		var inner *GocurlError
+		if errors.As(e.Err, &inner) && inner != e {
+			return inner.Temporary()
+		}
+	}
+	return false
+}
+
+// Retryable reports whether gocurl's resilience layer considers this error safe
+// to retry for an idempotent request: connect and timeout always, server-status
+// only for the retryable status codes. TLS and retry-exhausted are terminal.
+func (e *GocurlError) Retryable() bool {
+	if e == nil {
+		return false
+	}
+	switch e.Kind {
+	case KindConnect, KindTimeout:
+		return true
+	case KindServerStatus:
+		return shouldRetry(e.Status, nil)
+	}
+	return false
+}
+
+// ParseError creates a parsing error (Kind == KindParse).
 func ParseError(command string, err error) error {
 	return &GocurlError{
 		Op:      "parse",
+		Kind:    KindParse,
 		Command: sanitizeCommand(command),
 		Err:     err,
 	}
 }
 
-// RequestError creates a request execution error
+// RequestError creates a request execution error. The wrapped transport error
+// is classified (KindConnect/KindTLS/KindTimeout/KindCanceled) rather than
+// blindly tagged, while the Op stays "request" for message compatibility.
 func RequestError(url string, err error) error {
 	return &GocurlError{
-		Op:  "request",
-		URL: sanitizeURL(url),
-		Err: err,
+		Op:   "request",
+		Kind: classifyTransportError(err),
+		URL:  sanitizeURL(url),
+		Err:  err,
 	}
 }
 
-// ResponseError creates a response reading error
+// ResponseError creates a response reading error (Kind == KindBodyRead).
 func ResponseError(url string, err error) error {
 	return &GocurlError{
-		Op:  "response",
-		URL: sanitizeURL(url),
-		Err: err,
+		Op:   "response",
+		Kind: KindBodyRead,
+		URL:  sanitizeURL(url),
+		Err:  err,
 	}
 }
 
-// RetryError creates a retry exhaustion error
+// RetryError creates a retry exhaustion error (Kind == KindRetryExhausted). It
+// chains the last attempt's (already classified) error so errors.Is(err,
+// ErrTimeout) and friends still resolve through the wrapper.
 func RetryError(url string, attempts int, err error) error {
 	return &GocurlError{
-		Op:  fmt.Sprintf("retry (after %d attempts)", attempts),
-		URL: sanitizeURL(url),
-		Err: err,
+		Op:      fmt.Sprintf("retry (after %d attempts)", attempts),
+		Kind:    KindRetryExhausted,
+		URL:     sanitizeURL(url),
+		Attempt: attempts,
+		Err:     err,
 	}
 }
 
-// ValidationError creates an input validation error
+// ValidationError creates an input validation error (Kind == KindValidation).
 func ValidationError(field string, err error) error {
 	return &GocurlError{
 		Op:      "validate",
+		Kind:    KindValidation,
 		Command: field,
 		Err:     err,
+	}
+}
+
+// ServerStatusError reports a non-2xx HTTP response surfaced as an error. It is
+// only produced when fail-on-status is enabled (WithFailOnStatus / -f); the
+// engine still returns the *http.Response alongside it so the caller may read
+// the error body.
+func ServerStatusError(url string, status int) error {
+	return &GocurlError{
+		Op:     "server status",
+		Kind:   KindServerStatus,
+		URL:    sanitizeURL(url),
+		Status: status,
+	}
+}
+
+// BodyReadError reports a failure reading/decoding the response body, including
+// the over-limit (truncation) case (Kind == KindBodyRead).
+func BodyReadError(url string, err error) error {
+	return &GocurlError{
+		Op:   "body read",
+		Kind: KindBodyRead,
+		URL:  sanitizeURL(url),
+		Err:  err,
+	}
+}
+
+// ConnectError reports a dial/DNS/proxy-connect failure (Kind == KindConnect).
+func ConnectError(url string, err error) error {
+	return &GocurlError{
+		Op:   "connect",
+		Kind: KindConnect,
+		URL:  sanitizeURL(url),
+		Err:  err,
+	}
+}
+
+// TLSError reports a TLS handshake/verification/pin failure (Kind == KindTLS).
+func TLSError(url string, err error) error {
+	return &GocurlError{
+		Op:   "tls",
+		Kind: KindTLS,
+		URL:  sanitizeURL(url),
+		Err:  err,
+	}
+}
+
+// TimeoutError reports a deadline exceeded (Kind == KindTimeout).
+func TimeoutError(url string, err error) error {
+	return &GocurlError{
+		Op:   "timeout",
+		Kind: KindTimeout,
+		URL:  sanitizeURL(url),
+		Err:  err,
+	}
+}
+
+// CanceledError reports a context cancellation by the caller (Kind == KindCanceled).
+func CanceledError(url string, err error) error {
+	return &GocurlError{
+		Op:   "canceled",
+		Kind: KindCanceled,
+		URL:  sanitizeURL(url),
+		Err:  err,
 	}
 }
 

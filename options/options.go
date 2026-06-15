@@ -106,6 +106,12 @@ type RequestOptions struct {
 	FollowRedirects bool `json:"follow_redirects,omitempty"`
 	MaxRedirects    int  `json:"max_redirects,omitempty"`
 
+	// FailOnError mirrors curl -f/--fail: when true, a response with status >= 400
+	// is returned as a ServerStatusError (the response is still returned so the
+	// caller may read the error body). Default false — a non-2xx status is not an
+	// error. See specs/08-error-model.md.
+	FailOnError bool `json:"fail_on_error,omitempty"`
+
 	// Compression
 	Compress           bool     `json:"compress,omitempty"`
 	CompressionMethods []string `json:"compression_methods,omitempty"` // Specific methods: gzip, deflate, br
