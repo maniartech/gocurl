@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/maniartech/gocurl"
 )
 
 // OutputOptions controls how the response is formatted
@@ -56,30 +58,35 @@ func formatVerboseOutput(resp *http.Response, body []byte) string {
 	// Request line
 	sb.WriteString(fmt.Sprintf("> %s %s %s\n", resp.Request.Method, resp.Request.URL.Path, resp.Request.Proto))
 
-	// Request headers
+	// Request headers (sensitive values redacted, like the library's -v output).
 	sb.WriteString("> Host: " + resp.Request.URL.Host + "\n")
-	for key, values := range resp.Request.Header {
-		for _, value := range values {
-			sb.WriteString(fmt.Sprintf("> %s: %s\n", key, value))
-		}
-	}
+	writeRedactedHeaders(&sb, "> ", resp.Request.Header)
 	sb.WriteString(">\n")
 
 	// Response line
 	sb.WriteString(fmt.Sprintf("< %s %s\n", resp.Proto, resp.Status))
 
-	// Response headers
-	for key, values := range resp.Header {
-		for _, value := range values {
-			sb.WriteString(fmt.Sprintf("< %s: %s\n", key, value))
-		}
-	}
+	// Response headers (Set-Cookie etc. redacted).
+	writeRedactedHeaders(&sb, "< ", resp.Header)
 	sb.WriteString("<\n")
 
 	// Body
 	sb.WriteString(string(body))
 
 	return sb.String()
+}
+
+// writeRedactedHeaders writes headers with sensitive values redacted, matching
+// the library's verbose redaction (Authorization, Cookie, API keys, etc.).
+func writeRedactedHeaders(sb *strings.Builder, prefix string, h http.Header) {
+	for key, values := range h {
+		for _, value := range values {
+			if gocurl.IsSensitiveHeader(key) {
+				value = "[REDACTED]"
+			}
+			sb.WriteString(fmt.Sprintf("%s%s: %s\n", prefix, key, value))
+		}
+	}
 }
 
 // formatHeaderOutput formats output like curl -i

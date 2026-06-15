@@ -2,7 +2,6 @@ package gocurl
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -519,13 +518,10 @@ func finalizeRequestOptions(st *parseState) error {
 		o.MaxRedirects = 30
 	}
 
-	if o.CertFile != "" || o.KeyFile != "" || o.CAFile != "" || o.Insecure {
-		tlsConfig, err := createTLSConfig(o)
-		if err != nil {
-			return fmt.Errorf("error creating TLS config: %v", err)
-		}
-		o.TLSConfig = tlsConfig
-	}
+	// TLS configuration (certs, CA, version, ciphers, insecure) is built lazily
+	// and authoritatively in LoadTLSConfig from these option fields — see
+	// security.go. We intentionally do NOT pre-build o.TLSConfig here so there is
+	// a single source of truth.
 
 	return nil
 }
@@ -643,44 +639,4 @@ func readCookiesFromFile(filename string) ([]*http.Cookie, error) {
 		return nil, err
 	}
 	return parseCookies(string(content)), nil
-}
-
-// createTLSConfig builds a *tls.Config from the certificate-related options.
-func createTLSConfig(o *options.RequestOptions) (*tls.Config, error) {
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: o.Insecure, //nolint:gosec // honors curl -k by design
-	}
-
-	if o.TLSMinVersion != 0 {
-		tlsConfig.MinVersion = o.TLSMinVersion
-	}
-	if o.TLSMaxVersion != 0 {
-		tlsConfig.MaxVersion = o.TLSMaxVersion
-	}
-	if len(o.CipherSuites) > 0 {
-		tlsConfig.CipherSuites = o.CipherSuites
-	}
-
-	if o.CertFile != "" && o.KeyFile != "" {
-		cert, err := tls.LoadX509KeyPair(o.CertFile, o.KeyFile)
-		if err != nil {
-			return nil, err
-		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
-	}
-
-	if o.CAFile != "" {
-		caCert, err := os.ReadFile(o.CAFile)
-		if err != nil {
-			return nil, err
-		}
-		caCertPool := tlsConfig.RootCAs
-		if caCertPool == nil {
-			caCertPool = x509.NewCertPool()
-			tlsConfig.RootCAs = caCertPool
-		}
-		caCertPool.AppendCertsFromPEM(caCert)
-	}
-
-	return tlsConfig, nil
 }
