@@ -1,12 +1,336 @@
 package gocurl
 
-import "net/http"
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"sync"
 
-// HTTPClient is an interface for making HTTP requests
-// This allows for mocking and custom client implementations
+	"github.com/maniartech/gocurl/options"
+)
+
+// HTTPClient is an interface for making HTTP requests.
+// This allows for mocking and custom client implementations. It remains the
+// low-level injection seam (see WithTransport); Client is the high-level,
+// configure-once/reuse type built on top of it.
 type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
 // Ensure *http.Client implements HTTPClient
 var _ HTTPClient = (*http.Client)(nil)
+
+// Client is a reusable, concurrency-safe HTTP client. Configure it once with
+// functional Options, then execute prepared Requests many times — connections
+// are pooled and reused across calls. A Client owns its transport, so closing
+// one Client never affects another.
+//
+// See specs/01-client-api.md.
+type Client struct {
+	cfg        *config
+	httpClient *http.Client
+	mw         []Middleware
+
+	mu       sync.Mutex
+	inflight sync.WaitGroup
+	closed   bool
+}
+
+// New constructs a Client from functional Options.
+func New(opts ...Option) (*Client, error) {
+	cfg := defaultConfig()
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	transport := cfg.transport
+	if transport == nil {
+		rt, err := buildOwnedTransport(cfg.baseOptions())
+		if err != nil {
+			return nil, err
+		}
+		transport = rt
+	}
+
+	hc := &http.Client{
+		Transport:     transport,
+		Timeout:       cfg.timeout,
+		CheckRedirect: redirectFromContext,
+	}
+	if cfg.cookieFile != "" {
+		jar, err := NewPersistentCookieJar(cfg.cookieFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cookie jar: %w", err)
+		}
+		hc.Jar = jar
+	}
+
+	return &Client{cfg: cfg, httpClient: hc, mw: cfg.middleware}, nil
+}
+
+// redirectSettings carries per-request redirect policy through the request
+// context so a SHARED http.Client can honor per-request -L/--max-redirs.
+type redirectSettings struct {
+	follow bool
+	max    int
+}
+
+type redirectCtxKey struct{}
+
+func withRedirectSettings(ctx context.Context, follow bool, max int) context.Context {
+	return context.WithValue(ctx, redirectCtxKey{}, redirectSettings{follow: follow, max: max})
+}
+
+func redirectFromContext(req *http.Request, via []*http.Request) error {
+	rs, _ := req.Context().Value(redirectCtxKey{}).(redirectSettings)
+	if !rs.follow {
+		return http.ErrUseLastResponse
+	}
+	if rs.max > 0 && len(via) >= rs.max {
+		return fmt.Errorf("stopped after %d redirects", rs.max)
+	}
+	return nil
+}
+
+// effectiveOptions merges the Client's request-level defaults onto a copy of the
+// prepared request's options. Connection-level settings (TLS/proxy) come from
+// the Client's transport and are not taken from the request here.
+func (c *Client) effectiveOptions(req *Request) *options.RequestOptions {
+	o := req.opts.Clone()
+	if o.UserAgent == "" && c.cfg.userAgent != "" {
+		o.UserAgent = c.cfg.userAgent
+	}
+	if !o.FollowRedirects && c.cfg.followRedirects {
+		o.FollowRedirects = true
+		o.MaxRedirects = c.cfg.maxRedirects
+	}
+	for key, values := range c.cfg.defaultHeaders {
+		if o.Headers == nil {
+			o.Headers = http.Header{}
+		}
+		if o.Headers.Get(key) == "" {
+			for _, v := range values {
+				o.Headers.Add(key, v)
+			}
+		}
+	}
+	return o
+}
+
+// Do executes a prepared Request and returns the live response. The caller owns
+// resp.Body and must Close it. The body is streamed (never buffered or written
+// to stdout by the Client).
+func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil, fmt.Errorf("client is closed")
+	}
+	c.inflight.Add(1)
+	c.mu.Unlock()
+	defer c.inflight.Done()
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	opts := c.effectiveOptions(req)
+	if err := ValidateOptions(opts); err != nil {
+		return nil, err
+	}
+
+	// Honor a per-request --max-time via the context (the shared http.Client's
+	// Timeout is the Client-wide ceiling).
+	var cancel context.CancelFunc
+	if opts.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
+	}
+
+	ctx = withRedirectSettings(ctx, opts.FollowRedirects, opts.MaxRedirects)
+
+	httpReq, err := CreateRequest(ctx, opts)
+	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
+		return nil, err
+	}
+
+	// Legacy request-mutating middleware on the prepared request still runs.
+	httpReq, err = ApplyMiddleware(httpReq, opts.Middleware)
+	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
+		return nil, err
+	}
+
+	// Base handler: the existing retry engine over the Client's owned http.Client.
+	base := Handler(func(hr *http.Request) (*http.Response, error) {
+		return executeWithRetries(c.httpClient, hr, opts)
+	})
+	resp, err := chain(base, c.mw...)(httpReq)
+	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
+		return nil, err
+	}
+
+	printResponseVerbose(opts, resp)
+
+	if opts.Compress {
+		if derr := DecompressResponse(resp); derr != nil {
+			resp.Body.Close()
+			if cancel != nil {
+				cancel()
+			}
+			return nil, fmt.Errorf("failed to decompress response: %w", derr)
+		}
+	}
+
+	body := resp.Body
+	if opts.ResponseBodyLimit > 0 {
+		body = newLimitedBody(body, opts.ResponseBodyLimit)
+	}
+	// Ensure a per-request context (--max-time) is cancelled once the body is
+	// fully consumed/closed, without truncating the stream early.
+	resp.Body = &cancelOnCloseBody{ReadCloser: body, cancel: cancel}
+	return resp, nil
+}
+
+// cancelOnCloseBody calls cancel when the body is closed, releasing a per-request
+// timeout context without cutting the stream short.
+type cancelOnCloseBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b *cancelOnCloseBody) Close() error {
+	err := b.ReadCloser.Close()
+	if b.cancel != nil {
+		b.cancel()
+	}
+	return err
+}
+
+// Close releases idle connections held by the Client's transport. It does NOT
+// abort in-flight requests; use Shutdown to drain them first.
+func (c *Client) Close() error {
+	c.mu.Lock()
+	c.closed = true
+	c.mu.Unlock()
+	if t, ok := c.httpClient.Transport.(interface{ CloseIdleConnections() }); ok {
+		t.CloseIdleConnections()
+	} else {
+		c.httpClient.CloseIdleConnections()
+	}
+	return nil
+}
+
+// Shutdown marks the Client closed, waits for in-flight requests to finish (or
+// the context to expire), then releases idle connections.
+func (c *Client) Shutdown(ctx context.Context) error {
+	c.mu.Lock()
+	c.closed = true
+	c.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		c.inflight.Wait()
+		close(done)
+	}()
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-done:
+		c.httpClient.CloseIdleConnections()
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// --- Convenience methods (mirror the package-level Curl* helpers) ---
+
+// Curl prepares (parsing env vars) and executes a curl command in one call.
+func (c *Client) Curl(ctx context.Context, command string) (*http.Response, error) {
+	req, err := c.Prepare(command)
+	if err != nil {
+		return nil, err
+	}
+	return c.Do(ctx, req)
+}
+
+// CurlString executes a curl command and returns the body as a string.
+func (c *Client) CurlString(ctx context.Context, command string) (string, *http.Response, error) {
+	resp, err := c.Curl(ctx, command)
+	if err != nil {
+		return "", nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", resp, fmt.Errorf("failed to read response body: %w", err)
+	}
+	return string(b), resp, nil
+}
+
+// CurlBytes executes a curl command and returns the body as bytes.
+func (c *Client) CurlBytes(ctx context.Context, command string) ([]byte, *http.Response, error) {
+	resp, err := c.Curl(ctx, command)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp, fmt.Errorf("failed to read response body: %w", err)
+	}
+	return b, resp, nil
+}
+
+// CurlJSON executes a curl command and decodes the JSON response into v.
+func (c *Client) CurlJSON(ctx context.Context, v interface{}, command string) (*http.Response, error) {
+	resp, err := c.Curl(ctx, command)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return resp, fmt.Errorf("failed to decode JSON: %w", err)
+	}
+	return resp, nil
+}
+
+// CurlDownload executes a curl command and streams the body to filePath.
+func (c *Client) CurlDownload(ctx context.Context, filePath, command string) (int64, *http.Response, error) {
+	resp, err := c.Curl(ctx, command)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	f, err := os.Create(filePath)
+	if err != nil {
+		return 0, resp, fmt.Errorf("failed to create file: %w", err)
+	}
+	defer f.Close()
+	n, err := io.Copy(f, resp.Body)
+	if err != nil {
+		return n, resp, fmt.Errorf("failed to write to file: %w", err)
+	}
+	return n, resp, nil
+}

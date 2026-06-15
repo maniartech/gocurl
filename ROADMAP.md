@@ -47,28 +47,36 @@ decisions in [specs/README.md](specs/README.md#decisions-to-ratify-before-implem
 
 ---
 
-## Milestone 1 — Client / Request / Middleware foundation *(the keystone)*
+## Milestone 1 — Client / Request / Middleware foundation *(the keystone)* — **DONE**
 
 Specs 01, 02, 12. Establishes parse-once/execute-many without breaking the current API.
+Decisions A–G were adopted on the recommended defaults (user approved "go ahead"); the
+implemented code is now the source of truth for those choices.
 
-- [ ] **M1-T1 — `Handler`/`Middleware` types + `chain` + legacy adapter** (Spec 12).
-  deps: M0. *DoD: types exported; composition-order test; `FromMiddlewareFunc` test proving
-  `opts.Middleware` still runs.*
-- [ ] **M1-T2 — `config` + functional `Option` set** (Spec 01). deps: M1-T1. *DoD: options
-  compile; invalid options return errors; default-config test matches the M0-T4 table.*
-- [ ] **M1-T3 — `Client` (`New`, fields, concurrency-safe), `Do(ctx, *Request)`** routing
-  through the middleware chain to the existing `doRequest` engine. deps: M1-T2. *DoD:
-  `Do` streams the live body; race test with concurrent `Do` on one Client.*
-- [ ] **M1-T4 — Immutable `Request` + `Prepare`/`PrepareNoEnv`/`PrepareWithVars` + builder
-  methods** (Spec 02, per ratified A1–A4). deps: M1-T3. *DoD: `Prepare` parses once;
-  builder methods return clones (no shared-state mutation, race-tested); env semantics
-  per A1.*
-- [ ] **M1-T5 — Default `Client` + repoint package `Curl*` wrappers** (Spec 01). deps:
-  M1-T3. *DoD: existing `Curl*`/`tests/` suite passes unchanged; an `export_test.go` reset
-  hook exists (E5).*
-- [ ] **M1-T6 — `Shutdown(ctx)`/`Close()` + per-Client transport ownership** (Spec 01/03,
-  E1/E2). deps: M1-T3. *DoD: in-flight drain test; closing one Client does not affect
-  another; no goroutine/conn leak (Spec 09 leak check).*
+- [x] **M1-T1 — `Handler`/`Middleware` types + `chain` + legacy adapter** (`middleware.go`).
+  *DoD met: outermost-first composition test; `FromMiddlewareFunc` success + error tests.*
+- [x] **M1-T2 — `config` + functional `Option` set** (`config.go`). *DoD met: every option
+  + error path tested; defaults asserted; options 100% covered.*
+- [x] **M1-T3 — `Client` (`New`, concurrency-safe), `Do(ctx, *Request)`** through the
+  middleware chain to the existing retry engine. *DoD met: streams live body; concurrent
+  `Do` race test green; per-request redirect honored on a SHARED client via request-context.*
+- [x] **M1-T4 — Immutable `Request` + `Prepare`/`PrepareNoEnv`/`PrepareWithVars` + builders**
+  (`request.go`). *DoD met: parse-once; builder methods return clones (immutability tested);
+  `WithVars` re-bind; programmatic `NewRequest` + option ctors.*
+- [~] **M1-T5 — Default Client / package wrappers.** **Deviation (intentional):** the
+  package-level `Curl*` funcs were NOT repointed onto a single shared `Client`, because a
+  configured Client has a fixed transport and that would regress per-command TLS/proxy/
+  `--insecure` flags. They keep their existing per-config pooled engine (no regression); the
+  new `Client` is the explicit configure-once/reuse surface. *(`CloseDefault`/E5 test hook
+  not needed since no shared default Client was introduced.)*
+- [x] **M1-T6 — `Shutdown(ctx)`/`Close()` + per-Client transport ownership** (E1/E2). *DoD
+  met: `buildOwnedTransport` gives each Client its own transport; Shutdown drains in-flight
+  (timeout test); Close marks closed and frees idle conns.*
+
+> Tests added: `middleware_test.go`, `config_test.go`, `request_internal_test.go`,
+> `client_internal_test.go`, `m1_coverage_test.go` (whitebox, realistic paths at/near 100%),
+> and `tests/client_blackbox_test.go` (use-cases: prepare-once/execute-many, concurrent
+> reuse under -race, per-tenant `WithVars`, configured follow-redirects).
 
 ---
 

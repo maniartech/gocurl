@@ -109,7 +109,7 @@ func TestConcurrentRequestAPI(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
-				resp, err := gocurl.Request("curl ${url}", vars)
+				resp, err := gocurl.CurlWithVars(context.Background(), vars, "curl ${url}")
 				if err != nil {
 					errors <- err
 					return

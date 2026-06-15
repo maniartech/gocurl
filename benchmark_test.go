@@ -1,6 +1,7 @@
 package gocurl_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/maniartech/gocurl"
@@ -61,7 +62,7 @@ func BenchmarkRequestAPI(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		resp, err := gocurl.Request("curl ${url}", vars)
+		resp, err := gocurl.CurlWithVars(context.Background(), vars, "curl ${url}")
 		if err != nil {
 			b.Fatal(err)
 		}
