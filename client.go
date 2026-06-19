@@ -33,6 +33,7 @@ type Client struct {
 	cfg        *config
 	httpClient *http.Client
 	mw         []Middleware
+	obs        *obs
 
 	mu       sync.Mutex
 	inflight sync.WaitGroup
@@ -69,7 +70,7 @@ func New(opts ...Option) (*Client, error) {
 		hc.Jar = jar
 	}
 
-	return &Client{cfg: cfg, httpClient: hc, mw: cfg.middleware}, nil
+	return &Client{cfg: cfg, httpClient: hc, mw: cfg.middleware, obs: resolveObs(cfg)}, nil
 }
 
 // redirectSettings carries per-request redirect policy through the request
@@ -223,10 +224,16 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	base := Handler(func(hr *http.Request) (*http.Response, error) {
 		return executeWithRetries(c.httpClient, hr, opts, policy, newRand())
 	})
-	// Compose: circuit breaker -> rate limiter -> user middleware -> retry loop.
-	// chain makes the first middleware outermost, so an open circuit fast-fails
-	// before the limiter blocks, and breaker/limiter see only the final outcome.
-	allMW := append(append([]Middleware{}, c.cfg.systemMiddleware()...), c.mw...)
+	// Compose, outermost-first: instrumentation -> circuit breaker -> rate limiter
+	// -> user middleware -> retry loop. Instrumentation is outermost so its span
+	// and latency bracket the breaker fast-fail and limiter wait too; it is only
+	// present when a sink/hook is configured (zero overhead otherwise).
+	var allMW []Middleware
+	if c.obs.active {
+		allMW = append(allMW, c.obs.instrument)
+	}
+	allMW = append(allMW, c.cfg.systemMiddleware()...)
+	allMW = append(allMW, c.mw...)
 	resp, err := chain(base, allMW...)(httpReq)
 	if err != nil {
 		if cancel != nil {

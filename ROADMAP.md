@@ -190,11 +190,24 @@ Spec 04. deps: M3 (replay), M4 (classification), M1-T1 (middleware).
 
 Spec 06. deps: M1-T1, M4.
 
-- [ ] **M6-T1 — Vendor-neutral `Tracer`/`Metrics`/`Logger` interfaces + lifecycle hooks**;
-  consume `Kind` (C1). *DoD: no vendor import in core; hooks fire in order (test).*
-- [ ] **M6-T2 — Request-ID/trace propagation** (build on `RequestID`). *DoD: propagation test.*
-- [ ] **M6-T3 — OTel adapter + Prometheus-friendly metrics adapter in subpackages.** *DoD:
-  adapters compile behind their own go files; example test.*
+- [x] **M6-T1 — Vendor-neutral `Tracer`/`Metrics`/`Logger` interfaces + lifecycle hooks**;
+  consume `Kind` (C1). *DoD: no vendor import in core; hooks fire in order (test).* —
+  `observability.go`: `Logger`/`Level`/`Field`, `Tracer`/`Span`, `Metrics`, `Hooks`,
+  `RequestInfo`/`ResultInfo` (reuse M4 `Kind`); `WithTracer`/`WithMetrics`/`WithLogger`/
+  `WithHooks`/`WithRequestIDFunc`; no-op sinks; per-sink panic recovery; instrumentation
+  middleware OUTERMOST in `Client.Do`, installed only when a sink/hook is configured
+  (zero overhead disabled — benchmarks `BenchmarkDo_No/FullObservability`). `go list -deps`
+  confirms no vendor import in core. Redaction unified on `errors.go IsSensitiveHeader`
+  (`x-auth-token`/`auth-token` merged); `verbose.go` dedup removed.
+- [x] **M6-T2 — Request-ID/trace propagation** (build on `RequestID`). *DoD: propagation test.* —
+  request-id kept/generated once, preserved across retry clones, surfaced as span attr +
+  log field; per-retry observability (IncRetry/OnRetry/span event) threaded via request
+  context so `retry.go` stays decoupled.
+- [x] **M6-T3 — OTel adapter + Prometheus-friendly metrics adapter in subpackages.** *DoD:
+  adapters compile behind their own go files; example test.* — `observability/prometheus`
+  (5 collectors against a `Registerer`, concurrency-safe, end-to-end test through a real
+  `Client`) and `observability/otel` (`Tracer`/`Span` + W3C `traceparent` `PropagationMiddleware`)
+  as SEPARATE modules so the core stays dependency-free.
 
 ---
 

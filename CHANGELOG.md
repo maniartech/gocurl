@@ -7,6 +7,29 @@ a tagged release.
 
 ## [Unreleased]
 
+### Added — observability: tracing, metrics, logging, hooks (Milestone 6)
+- Vendor-neutral, dependency-free primitives in the core package: `Tracer`/`Span`, `Metrics`,
+  `Logger`/`Level`/`Field`, and lifecycle `Hooks` (`OnRequest`/`OnRetry`/`OnResponse`/`OnError`),
+  wired via `WithTracer`/`WithMetrics`/`WithLogger`/`WithHooks`/`WithRequestIDFunc`. Error
+  classification reuses the M4 `Kind` taxonomy (no parallel enum).
+- An internal instrumentation middleware brackets the whole logical request (one span, one
+  latency observation, one request count; one `IncRetry` per retry beyond the first; balanced
+  in-flight gauge). It is the outermost middleware (so its span/latency also cover circuit-breaker
+  fast-fails and rate-limiter waits) and is installed **only when a sink/hook is configured** —
+  the disabled path adds no allocations (`BenchmarkDo_NoObservability` vs `…FullObservability`).
+- A panic in any user-supplied sink/hook is recovered and can never take down a request.
+- Request-id is kept (existing `X-Request-ID`/`opts.RequestID`) or generated once via
+  `WithRequestIDFunc`, preserved across retry clones, and surfaced as a span attribute and log
+  field. Redaction is unified on `errors.go`'s `IsSensitiveHeader` (now including
+  `x-auth-token`/`auth-token`); `verbose.go`'s duplicate list was removed.
+- New adapter modules (kept out of the core's dependency graph): `observability/prometheus`
+  (registers `gocurl_requests_total`, `gocurl_in_flight`, `gocurl_request_duration_seconds`,
+  `gocurl_retries_total`, `gocurl_errors_total{kind}`) and `observability/otel` (`Tracer`/`Span`
+  + a W3C `traceparent` propagation middleware).
+
+### Changed
+- `NewRequest` now skips nil `RequestOption`s (matching `New`'s tolerance of nil `Option`s).
+
 ### Added — resilience: retries, circuit breaker, rate limiter (Milestone 5)
 - Idempotency-aware `RetryPolicy` (`WithRetry` / `WithRetryAttempts`, per-request
   `Request.WithRetryPolicy`): retries only the idempotent method set

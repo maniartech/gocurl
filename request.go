@@ -102,6 +102,9 @@ func NewRequest(method, rawURL string, opts ...RequestOption) (*Request, error) 
 		return nil, err
 	}
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		if err := opt(o); err != nil {
 			return nil, err
 		}

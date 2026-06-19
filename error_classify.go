@@ -181,6 +181,17 @@ func isTLSError(err error) bool {
 		strings.Contains(s, "certificate")
 }
 
+// classifyKind returns the Kind of err, classifying a raw (not-yet-wrapped)
+// transport error when the chain has not produced a typed GocurlError. This is
+// used by instrumentation, which runs inside the middleware chain — before
+// wrapTransportError classifies the error at the Client.Do boundary.
+func classifyKind(err error) Kind {
+	if k := KindOf(err); k != KindUnknown {
+		return k
+	}
+	return classifyTransportError(err)
+}
+
 // classifyToError wraps a transport error into a typed GocurlError carrying its
 // classified Kind (without a URL — used as the inner error of a retry-exhausted
 // wrapper, which supplies the URL). Errors already typed pass through unchanged.

@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/maniartech/gocurl/options"
 )
@@ -85,8 +84,8 @@ func printRequestVerbose(opts *options.RequestOptions, req *http.Request) {
 	// Print other headers (with sensitive data redaction)
 	for name, values := range req.Header {
 		for _, value := range values {
-			// Redact sensitive headers
-			if isSensitiveHeader(name) {
+			// Redact sensitive headers (single source of truth: errors.go).
+			if IsSensitiveHeader(name) {
 				value = "[REDACTED]"
 			}
 			fmt.Fprintf(w, "> %s: %s\r\n", name, value)
@@ -119,8 +118,8 @@ func printResponseVerbose(opts *options.RequestOptions, resp *http.Response) {
 	// Print response headers
 	for name, values := range resp.Header {
 		for _, value := range values {
-			// Redact sensitive response headers (like Set-Cookie)
-			if isSensitiveHeader(name) {
+			// Redact sensitive response headers (like Set-Cookie).
+			if IsSensitiveHeader(name) {
 				value = "[REDACTED]"
 			}
 			fmt.Fprintf(w, "< %s: %s\r\n", name, value)
@@ -143,26 +142,4 @@ func printConnectionClose(opts *options.RequestOptions) {
 	}
 
 	fmt.Fprintf(w, "* Connection #0 to host left intact\n")
-}
-
-// isSensitiveHeader checks if a header contains sensitive data
-func isSensitiveHeader(name string) bool {
-	sensitive := []string{
-		"authorization",
-		"cookie",
-		"set-cookie",
-		"x-api-key",
-		"api-key",
-		"x-auth-token",
-		"auth-token",
-	}
-
-	lowerName := strings.ToLower(name)
-	for _, s := range sensitive {
-		if lowerName == s {
-			return true
-		}
-	}
-
-	return false
 }
