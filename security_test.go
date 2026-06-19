@@ -59,7 +59,11 @@ func TestLoadTLSConfig(t *testing.T) {
 			expectError: false,
 			validate: func(t *testing.T, cfg *tls.Config) {
 				assert.NotNil(t, cfg.VerifyPeerCertificate)
-				assert.True(t, cfg.InsecureSkipVerify, "Must set InsecureSkipVerify when using custom verification")
+				// Hardened (Spec 07 §1): pinning must NOT disable chain verification.
+				// The pin is checked IN ADDITION to the chain, so a bad pin against a
+				// valid chain fails closed. InsecureSkipVerify is only set when the
+				// caller also passes --insecure.
+				assert.False(t, cfg.InsecureSkipVerify, "pinning must keep chain verification on")
 			},
 		},
 	}

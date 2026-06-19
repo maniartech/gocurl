@@ -1,6 +1,7 @@
 package gocurl
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"time"
@@ -74,6 +75,13 @@ type config struct {
 	logger        Logger
 	hooks         Hooks
 	requestIDFunc func() string
+
+	// Security (Spec 07). ssrfPolicy (opt-in) guards the initial request and every
+	// redirect hop. allowInsecureAuth opts out of the plaintext-auth check.
+	// tlsConfig is a caller-supplied *tls.Config merged by LoadTLSConfig.
+	ssrfPolicy        *SSRFPolicy
+	allowInsecureAuth bool
+	tlsConfig         *tls.Config
 }
 
 // defaultConfig returns the baseline configuration. These defaults intentionally
@@ -103,6 +111,11 @@ func defaultConfig() *config {
 // outermost so an open circuit fast-fails before the limiter blocks on a token.
 func (c *config) systemMiddleware() []Middleware {
 	var mw []Middleware
+	// SSRF pre-flight is outermost among framework middleware so a blocked target
+	// fails before spending a breaker probe or a limiter token.
+	if c.ssrfPolicy != nil {
+		mw = append(mw, SSRFGuard(*c.ssrfPolicy))
+	}
 	if c.breaker != nil {
 		mw = append(mw, c.breaker)
 	}
@@ -119,6 +132,7 @@ func (c *config) baseOptions() *options.RequestOptions {
 	o.Proxy = c.proxy
 	o.Insecure = c.insecure
 	o.ConnectTimeout = c.connectTimeout
+	o.TLSConfig = c.tlsConfig // merged by LoadTLSConfig when non-nil
 	return o
 }
 
@@ -457,6 +471,39 @@ func WithRateLimit(rps float64, burst int) Option {
 			return fmt.Errorf("WithRateLimit: burst must be >= 1")
 		}
 		c.limiter = RateLimiter(NewTokenBucket(rps, burst))
+		return nil
+	}
+}
+
+// --- Security options (Spec 07) ---
+
+// WithSSRFGuard enables the opt-in SSRF guard with the given policy. It blocks
+// the initial request and every redirect hop whose host resolves to a
+// policy-blocked address (loopback/link-local/private/cloud-metadata) unless
+// allow-listed. Use DefaultSSRFPolicy() for the recommended setting.
+func WithSSRFGuard(policy SSRFPolicy) Option {
+	return func(c *config) error {
+		c.ssrfPolicy = &policy
+		return nil
+	}
+}
+
+// WithAllowInsecureAuth opts out of the fail-closed plaintext-auth check, so
+// BasicAuth / a bearer token may be sent over cleartext http:// (equivalent to
+// GOCURL_ALLOW_INSECURE_AUTH=1). Off by default.
+func WithAllowInsecureAuth(allow bool) Option {
+	return func(c *config) error {
+		c.allowInsecureAuth = allow
+		return nil
+	}
+}
+
+// WithTLSConfig supplies a *tls.Config that LoadTLSConfig merges over the secure
+// defaults for every request (curl flags still apply on top). Use for custom
+// root pools, client certs, or pinning beyond the curl-flag surface.
+func WithTLSConfig(cfg *tls.Config) Option {
+	return func(c *config) error {
+		c.tlsConfig = cfg
 		return nil
 	}
 }

@@ -123,6 +123,9 @@ func TestBlackbox_GetModeQuery(t *testing.T) {
 
 func TestBlackbox_BasicAuth(t *testing.T) {
 	es := newEchoServer(t)
+	// httptest serves over http://; exercise basic-auth mechanics by opting out of
+	// the fail-closed plaintext-auth policy (Spec 07).
+	t.Setenv("GOCURL_ALLOW_INSECURE_AUTH", "1")
 	mustString(t, "-u", "alice:secret", es.URL)
 	user, pass, ok := parseBasicAuth(es.lastHeader.Get("Authorization"))
 	if !ok || user != "alice" || pass != "secret" {

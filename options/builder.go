@@ -307,7 +307,7 @@ func (b *RequestOptionsBuilder) Validate() error {
 	// Validate secure auth
 	hasBasicAuth := opts.BasicAuth != nil
 	hasBearerToken := opts.BearerToken != ""
-	if err := validateSecureAuth(opts.URL, hasBasicAuth, hasBearerToken); err != nil {
+	if err := validateSecureAuth(opts.URL, hasBasicAuth, hasBearerToken, opts.AllowInsecureAuth); err != nil {
 		return err
 	}
 

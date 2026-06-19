@@ -19,15 +19,17 @@ func TestBuilder_Validate_ValidOptions(t *testing.T) {
 }
 
 func TestBuilder_Validate_InvalidMethod(t *testing.T) {
+	// A method with an illegal character (space) is rejected; custom tokens are
+	// allowed for curl compatibility.
 	builder := NewRequestOptionsBuilder().
-		SetMethod("INVALID").
+		SetMethod("BAD METHOD").
 		SetURL("https://example.com")
 
 	err := builder.Validate()
 	if err == nil {
-		t.Error("Validate() should return error for invalid HTTP method")
+		t.Error("Validate() should return error for a method with illegal characters")
 	}
-	if !strings.Contains(err.Error(), "invalid HTTP method") {
+	if err != nil && !strings.Contains(err.Error(), "invalid HTTP method") {
 		t.Errorf("Validate() error should mention 'invalid HTTP method', got: %v", err)
 	}
 }

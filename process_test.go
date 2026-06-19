@@ -107,6 +107,10 @@ func TestProcess(t *testing.T) {
 				Username: "testuser",
 				Password: "testpass",
 			},
+			// httptest serves over http://; this test exercises basic-auth
+			// mechanics, not transport security, so opt out of the fail-closed
+			// plaintext-auth policy (Spec 07).
+			AllowInsecureAuth: true,
 		}
 
 		resp, body, err := gocurl.Process(context.Background(), opts)

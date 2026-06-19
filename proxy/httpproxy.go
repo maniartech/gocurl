@@ -44,10 +44,9 @@ func (hp *HTTPProxy) Apply(transport *http.Transport) error {
 
 // configureProxyURL sets up the proxy URL and proxy function
 func (hp *HTTPProxy) configureProxyURL(transport *http.Transport) error {
-	proxyURLStr := hp.buildProxyURL()
-	proxyURL, err := url.Parse(proxyURLStr)
+	proxyURL, err := hp.buildProxyURL()
 	if err != nil {
-		return fmt.Errorf("failed to parse HTTP proxy URL: %v", err)
+		return err
 	}
 
 	// Set the proxy with no-proxy support
@@ -61,15 +60,31 @@ func (hp *HTTPProxy) configureProxyURL(transport *http.Transport) error {
 	return nil
 }
 
-// buildProxyURL constructs the proxy URL string with credentials
-func (hp *HTTPProxy) buildProxyURL() string {
-	if hp.Username != "" && hp.Password != "" {
-		return fmt.Sprintf("http://%s:%s@%s",
-			url.QueryEscape(hp.Username),
-			url.QueryEscape(hp.Password),
-			hp.Address)
+// buildProxyURL constructs the proxy *url.URL with credentials. Credentials are
+// attached via the net/url userinfo helpers (NOT QueryEscape): QueryEscape uses
+// form encoding where a space becomes '+', which does not round-trip through the
+// userinfo component and would send corrupted credentials. url.UserPassword
+// percent-encodes correctly (space -> %20) and Username()/Password() decode back
+// to the literal values, so the HTTP-proxy and CONNECT paths agree.
+//
+// Credentials are included whenever a username is present; the password is
+// optional (curl -x http://user@proxy — RFC 7617 allows an empty password). The
+// address is validated by parsing it on its own, so a malformed address surfaces
+// an error that carries only the address, never the credentials.
+func (hp *HTTPProxy) buildProxyURL() (*url.URL, error) {
+	if _, err := url.Parse("http://" + hp.Address); err != nil {
+		return nil, fmt.Errorf("failed to parse HTTP proxy address %q: %v", hp.Address, err)
 	}
-	return fmt.Sprintf("http://%s", hp.Address)
+
+	u := &url.URL{Scheme: "http", Host: hp.Address}
+	if hp.Username != "" {
+		if hp.Password != "" {
+			u.User = url.UserPassword(hp.Username, hp.Password)
+		} else {
+			u.User = url.User(hp.Username)
+		}
+	}
+	return u, nil
 }
 
 // createDialer creates a network dialer with timeout
@@ -129,8 +144,9 @@ func (hp *HTTPProxy) createConnectRequest(addr string) *http.Request {
 		Header: make(http.Header),
 	}
 
-	// Add proxy authentication if needed
-	if hp.Username != "" && hp.Password != "" {
+	// Add proxy authentication whenever a username is present (password optional,
+	// per RFC 7617). Encodes "user:" when the password is empty.
+	if hp.Username != "" {
 		auth := hp.Username + ":" + hp.Password
 		basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
 		connectReq.Header.Set("Proxy-Authorization", basicAuth)
