@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -13,71 +14,77 @@ import (
 
 func main() {
 	// Exit with proper code
-	os.Exit(run())
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-func run() int {
-	// Define flags
+// run is the testable entry point (Spec 13): it takes the raw argument slice and
+// the stdout/stderr writers explicitly so the whole CLI can be unit-tested
+// in-process with buffers, with no subprocess. stdout receives the response body
+// (or -o/-w formatted output); stderr receives the verbose trace, warnings, and
+// errors.
+func run(argv []string, stdout, stderr io.Writer) int {
+	// Define flags on a LOCAL FlagSet (never the global flag.CommandLine) so
+	// run() is reentrant — it can be invoked repeatedly in-process by unit tests
+	// without "flag redefined" panics.
 	var (
-		verbose        = flag.Bool("v", false, "Verbose output (show headers and request)")
-		verbose2       = flag.Bool("verbose", false, "Verbose output (show headers and request)")
-		includeHeader  = flag.Bool("i", false, "Include response headers in output")
-		includeHeader2 = flag.Bool("include", false, "Include response headers in output")
-		silent         = flag.Bool("s", false, "Silent mode")
-		silent2        = flag.Bool("silent", false, "Silent mode")
-		outputFile     = flag.String("o", "", "Write output to file")
-		outputFile2    = flag.String("output", "", "Write output to file")
-		writeOut       = flag.String("w", "", "Custom output format")
-		writeOut2      = flag.String("write-out", "", "Custom output format")
+		verbose, verbose2             bool
+		includeHeader, includeHeader2 bool
+		silent, silent2               bool
+		outputFile, outputFile2       string
+		writeOut, writeOut2           string
 	)
 
 	// Custom flag parsing to handle curl-style flags mixed with arguments
 	// We need to separate flags from curl args
-	args, curlArgs := separateFlags(os.Args[1:])
+	args, curlArgs, sepErr := separateFlags(argv)
+	if sepErr != nil {
+		fmt.Fprintf(stderr, "gocurl: %v\n", sepErr)
+		return 2
+	}
 
 	// Parse flags
 	fs := flag.NewFlagSet("gocurl", flag.ContinueOnError)
-	fs.BoolVar(verbose, "v", false, "")
-	fs.BoolVar(verbose2, "verbose", false, "")
-	fs.BoolVar(includeHeader, "i", false, "")
-	fs.BoolVar(includeHeader2, "include", false, "")
-	fs.BoolVar(silent, "s", false, "")
-	fs.BoolVar(silent2, "silent", false, "")
-	fs.StringVar(outputFile, "o", "", "")
-	fs.StringVar(outputFile2, "output", "", "")
-	fs.StringVar(writeOut, "w", "", "")
-	fs.StringVar(writeOut2, "write-out", "", "")
+	fs.SetOutput(stderr)
+	fs.BoolVar(&verbose, "v", false, "")
+	fs.BoolVar(&verbose2, "verbose", false, "")
+	fs.BoolVar(&includeHeader, "i", false, "")
+	fs.BoolVar(&includeHeader2, "include", false, "")
+	fs.BoolVar(&silent, "s", false, "")
+	fs.BoolVar(&silent2, "silent", false, "")
+	fs.StringVar(&outputFile, "o", "", "")
+	fs.StringVar(&outputFile2, "output", "", "")
+	fs.StringVar(&writeOut, "w", "", "")
+	fs.StringVar(&writeOut2, "write-out", "", "")
 
 	if err := fs.Parse(args); err != nil {
-		if !*silent && !*silent2 {
-			fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
-		}
-		return 1
+		// flag already wrote the parse error to stderr (fs.SetOutput). An
+		// unusable invocation is a curl-style "failed to initialize" → exit 2.
+		return 2
 	}
 
-	// If no curl args, show usage
+	// If no curl args, show usage on stderr (a misuse diagnostic, not data).
 	if len(curlArgs) == 0 {
-		printUsage()
-		return 1
+		printUsage(stderr)
+		return 2
 	}
 
 	ctx := context.Background()
 
 	// Build output options
 	opts := OutputOptions{
-		Verbose:       *verbose || *verbose2,
-		IncludeHeader: *includeHeader || *includeHeader2,
-		Silent:        *silent || *silent2,
-		OutputFile:    getFirstNonEmpty(*outputFile, *outputFile2),
-		WriteOut:      getFirstNonEmpty(*writeOut, *writeOut2),
+		Verbose:       verbose || verbose2,
+		IncludeHeader: includeHeader || includeHeader2,
+		Silent:        silent || silent2,
+		OutputFile:    getFirstNonEmpty(outputFile, outputFile2),
+		WriteOut:      getFirstNonEmpty(writeOut, writeOut2),
 	}
 
 	// Execute using SHARED code path (ZERO DIVERGENCE!)
-	err := executeCLI(ctx, curlArgs, opts)
+	err := executeCLI(ctx, curlArgs, opts, stdout, stderr)
 	if err != nil {
 		// Error output to stderr (like curl)
 		if !opts.Silent {
-			fmt.Fprintf(os.Stderr, "gocurl: %v\n", err)
+			fmt.Fprintf(stderr, "gocurl: %v\n", err)
 		}
 		return getExitCode(err)
 	}
@@ -85,37 +92,51 @@ func run() int {
 	return 0
 }
 
-// separateFlags separates gocurl-specific flags from curl command args
-func separateFlags(args []string) (flags []string, curlArgs []string) {
-	gocurlFlags := map[string]bool{
+// separateFlags splits the LEADING run of gocurl presentation flags from the curl
+// args. Presentation flags (-v/-i/-s and the value-taking -o/-w, plus long forms)
+// are recognized only before the first curl token — matching the documented
+// "gocurl [gocurl options] [curl options] <URL>" usage. Once any curl token
+// appears, every remaining token is passed VERBATIM to the library, so a curl flag
+// value that happens to look like a presentation flag (e.g. `-d -s url`) is no
+// longer stolen. A literal "--" ends presentation-flag scanning explicitly.
+// A value-taking presentation flag with no following token is a usage error.
+func separateFlags(args []string) (flags []string, curlArgs []string, err error) {
+	boolFlags := map[string]bool{
 		"-v": true, "--verbose": true,
 		"-i": true, "--include": true,
 		"-s": true, "--silent": true,
+	}
+	valueFlags := map[string]bool{
 		"-o": true, "--output": true,
 		"-w": true, "--write-out": true,
 	}
 
-	for i := 0; i < len(args); i++ {
+	i := 0
+	for i < len(args) {
 		arg := args[i]
-
-		// Check if this is a gocurl flag
-		if gocurlFlags[arg] {
-			flags = append(flags, arg)
-
-			// Check if this flag takes a value
-			if arg == "-o" || arg == "--output" || arg == "-w" || arg == "--write-out" {
-				if i+1 < len(args) {
-					i++
-					flags = append(flags, args[i])
-				}
-			}
-		} else {
-			// This is a curl arg
-			curlArgs = append(curlArgs, arg)
+		if arg == "--" {
+			i++ // drop the separator; everything after is curl args
+			break
 		}
+		if boolFlags[arg] {
+			flags = append(flags, arg)
+			i++
+			continue
+		}
+		if valueFlags[arg] {
+			if i+1 >= len(args) {
+				return nil, nil, fmt.Errorf("option %s requires an argument", arg)
+			}
+			flags = append(flags, arg, args[i+1])
+			i += 2
+			continue
+		}
+		// First non-presentation token: the rest are curl args (verbatim).
+		break
 	}
 
-	return flags, curlArgs
+	curlArgs = append(curlArgs, args[i:]...)
+	return flags, curlArgs, nil
 }
 
 // getFirstNonEmpty returns the first non-empty string
@@ -129,7 +150,7 @@ func getFirstNonEmpty(strs ...string) string {
 }
 
 // executeCLI uses EXACT same code path as library
-func executeCLI(ctx context.Context, args []string, opts OutputOptions) error {
+func executeCLI(ctx context.Context, args []string, opts OutputOptions, stdout, stderr io.Writer) error {
 	// Use the library's CurlArgs function directly
 	resp, err := gocurl.CurlArgs(ctx, args...)
 	if err != nil {
@@ -149,7 +170,7 @@ func executeCLI(ctx context.Context, args []string, opts OutputOptions) error {
 	}
 
 	// Format and print output
-	return FormatAndPrintResponse(resp, body, opts)
+	return FormatAndPrintResponse(resp, body, opts, stdout, stderr)
 }
 
 // getExitCode returns an appropriate process exit code for an error, preferring
@@ -158,6 +179,12 @@ func executeCLI(ctx context.Context, args []string, opts OutputOptions) error {
 func getExitCode(err error) int {
 	if err == nil {
 		return 0
+	}
+
+	// Redirect-cap is matched by sentinel (it carries no distinct Kind) and maps to
+	// curl's exit 47. Checked before the Kind switch.
+	if errors.Is(err, gocurl.ErrTooManyRedirects) {
+		return 47 // Number of redirects hit maximum
 	}
 
 	switch gocurl.KindOf(err) {
@@ -189,39 +216,39 @@ func getExitCode(err error) int {
 	}
 }
 
-func printUsage() {
-	fmt.Println("gocurl - Execute curl commands in Go")
-	fmt.Println()
-	fmt.Println("Usage:")
-	fmt.Println("  gocurl [gocurl options] [curl options] <URL>")
-	fmt.Println()
-	fmt.Println("GoCurl Options:")
-	fmt.Println("  -v, --verbose        Verbose output (show headers and request)")
-	fmt.Println("  -i, --include        Include response headers in output")
-	fmt.Println("  -s, --silent         Silent mode (no output)")
-	fmt.Println("  -o, --output FILE    Write output to file")
-	fmt.Println("  -w, --write-out FMT  Custom output format")
-	fmt.Println()
-	fmt.Println("Curl Options: (All standard curl options supported)")
-	fmt.Println("  -X, --request        HTTP method (GET, POST, PUT, DELETE, etc.)")
-	fmt.Println("  -H, --header         Add header")
-	fmt.Println("  -d, --data           Request body data")
-	fmt.Println("  -u, --user           Basic auth credentials")
-	fmt.Println("  -f, --fail           Fail (non-zero exit) on HTTP errors (>= 400)")
-	fmt.Println("  And many more...")
-	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  gocurl https://api.example.com/data")
-	fmt.Println("  gocurl -v https://api.example.com/data")
-	fmt.Println("  gocurl -X POST -d 'key=value' https://api.example.com/data")
-	fmt.Println("  gocurl -H 'Authorization: Bearer $TOKEN' https://api.example.com/data")
-	fmt.Println("  gocurl -o response.json https://api.example.com/data")
-	fmt.Println()
-	fmt.Println("Environment variables:")
-	fmt.Println("  Use $VAR or ${VAR} syntax - automatically expanded from environment")
-	fmt.Println()
-	fmt.Println("Multi-line commands:")
-	fmt.Println("  Backslash (\\) for line continuation")
-	fmt.Println("  # for comments")
-	fmt.Println("  'curl' prefix optional")
+func printUsage(w io.Writer) {
+	fmt.Fprintln(w, "gocurl - Execute curl commands in Go")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  gocurl [gocurl options] [curl options] <URL>")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "GoCurl Options:")
+	fmt.Fprintln(w, "  -v, --verbose        Verbose output (show headers and request)")
+	fmt.Fprintln(w, "  -i, --include        Include response headers in output")
+	fmt.Fprintln(w, "  -s, --silent         Silent mode (no output)")
+	fmt.Fprintln(w, "  -o, --output FILE    Write output to file")
+	fmt.Fprintln(w, "  -w, --write-out FMT  Custom output format")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Curl Options: (All standard curl options supported)")
+	fmt.Fprintln(w, "  -X, --request        HTTP method (GET, POST, PUT, DELETE, etc.)")
+	fmt.Fprintln(w, "  -H, --header         Add header")
+	fmt.Fprintln(w, "  -d, --data           Request body data")
+	fmt.Fprintln(w, "  -u, --user           Basic auth credentials")
+	fmt.Fprintln(w, "  -f, --fail           Fail (non-zero exit) on HTTP errors (>= 400)")
+	fmt.Fprintln(w, "  And many more...")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintln(w, "  gocurl https://api.example.com/data")
+	fmt.Fprintln(w, "  gocurl -v https://api.example.com/data")
+	fmt.Fprintln(w, "  gocurl -X POST -d 'key=value' https://api.example.com/data")
+	fmt.Fprintln(w, "  gocurl -H 'Authorization: Bearer $TOKEN' https://api.example.com/data")
+	fmt.Fprintln(w, "  gocurl -o response.json https://api.example.com/data")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Environment variables:")
+	fmt.Fprintln(w, "  Use $VAR or ${VAR} syntax - automatically expanded from environment")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Multi-line commands:")
+	fmt.Fprintln(w, "  Backslash (\\) for line continuation")
+	fmt.Fprintln(w, "  # for comments")
+	fmt.Fprintln(w, "  'curl' prefix optional")
 }

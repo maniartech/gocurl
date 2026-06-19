@@ -141,6 +141,11 @@ func (e *GocurlError) Retryable() bool {
 	return false
 }
 
+// ErrTooManyRedirects is wrapped by the redirect-cap error so callers (and the
+// CLI's exit-code mapping) can match it with errors.Is even after net/http wraps
+// it in a *url.Error and the engine wraps that in a GocurlError.
+var ErrTooManyRedirects = errors.New("too many redirects")
+
 // ParseError creates a parsing error (Kind == KindParse).
 func ParseError(command string, err error) error {
 	return &GocurlError{
@@ -149,6 +154,18 @@ func ParseError(command string, err error) error {
 		Command: sanitizeCommand(command),
 		Err:     err,
 	}
+}
+
+// parseOrPassthrough classifies a parse-stage failure. An error that is ALREADY a
+// typed *GocurlError (e.g. the URL ValidationError from normalizeURL) is returned
+// unchanged so its Kind — and therefore the CLI exit code — is preserved; any
+// other error (an unknown flag, a tokenizer failure) is wrapped as a ParseError.
+func parseOrPassthrough(command string, err error) error {
+	var ge *GocurlError
+	if errors.As(err, &ge) {
+		return err
+	}
+	return ParseError(command, err)
 }
 
 // RequestError creates a request execution error. The wrapped transport error
@@ -279,12 +296,17 @@ var sensitiveHeaders = map[string]bool{
 
 // sanitizeCommand removes sensitive information from commands
 func sanitizeCommand(command string) string {
+	// Prefix a space so the -u/--user and -b/--cookie flag matchers (which key off
+	// a leading space) also fire when the flag is the FIRST token — e.g. args
+	// joined without a leading space ("-u user:pass …"). The prefix is stripped
+	// again immediately after the credential redactions.
+	command = " " + command
 	// Redact -u/--user user:password (basic auth flag, space- or =-separated).
 	command = redactUserPassword(command)
-
 	// Redact -b/--cookie values: session cookies are credentials, and the parser
 	// accepts the flag form just like the Cookie: header form below.
 	command = redactFlagValue(command, []string{" --cookie=", " --cookie ", " -b=", " -b "})
+	command = strings.TrimPrefix(command, " ")
 
 	// Recompute after the credential redactions above so the substring gates below
 	// operate on the current command.
@@ -523,9 +545,30 @@ func RedactURL(raw string) string { return sanitizeURL(raw) }
 // redacted. It is the exported entry point to sanitizeCommand.
 func RedactCommand(cmd string) string { return sanitizeCommand(cmd) }
 
-// IsSensitiveHeader checks if a header should be redacted
+// IsSensitiveHeader reports whether a header value should be redacted in logs,
+// verbose output, spans, and errors. It first consults the canonical exact-match
+// set, then falls back to a bounded heuristic: no fixed list can enumerate the
+// open set of vendor auth headers (X-Goog-Api-Key, Private-Token, X-Vault-Token,
+// X-Functions-Key, …), so anything that looks credential-bearing — by content or
+// by a credential-style suffix — is redacted. This errs toward redaction, which
+// is the intended fail-safe (Spec 07: never leak secrets).
 func IsSensitiveHeader(headerName string) bool {
-	return sensitiveHeaders[strings.ToLower(headerName)]
+	name := strings.ToLower(headerName)
+	if sensitiveHeaders[name] {
+		return true
+	}
+	if strings.Contains(name, "authorization") ||
+		strings.Contains(name, "apikey") ||
+		strings.Contains(name, "password") ||
+		strings.Contains(name, "secret") {
+		return true
+	}
+	for _, suffix := range []string{"-api-key", "-apikey", "-auth-token", "-token", "-secret", "-key"} {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // RedactHeaders creates a copy of headers with sensitive values redacted

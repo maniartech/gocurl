@@ -142,11 +142,16 @@ func TestCLI_IncludeHeaders(t *testing.T) {
 }
 
 func TestCLI_UsageOnNoArgs(t *testing.T) {
-	stdout, _, exit := runCLI(t)
+	stdout, stderr, exit := runCLI(t)
 	if exit == 0 {
 		t.Error("no-args should exit non-zero")
 	}
-	if !strings.Contains(stdout, "gocurl") {
-		t.Errorf("usage not printed: %q", stdout)
+	// Usage is a misuse diagnostic → stderr (Spec 13 stream discipline); stdout
+	// stays clean so a piped consumer never sees help text as data.
+	if !strings.Contains(stderr, "gocurl") {
+		t.Errorf("usage not printed to stderr: %q", stderr)
+	}
+	if strings.Contains(stdout, "gocurl") {
+		t.Errorf("usage must not go to stdout: %q", stdout)
 	}
 }

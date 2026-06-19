@@ -554,17 +554,19 @@ func applyData(st *parseState) {
 func normalizeURL(o *options.RequestOptions) error {
 	raw := strings.TrimSpace(o.URL)
 	if raw == "" {
-		return fmt.Errorf("no URL provided")
+		// A missing or malformed URL is a validation fault (KindValidation), not a
+		// generic parse fault — the CLI maps it to curl's exit 3 by Kind.
+		return ValidationError("URL", fmt.Errorf("no URL provided"))
 	}
 	if !strings.Contains(raw, "://") {
 		raw = "http://" + raw
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("invalid URL: %v", err)
+		return ValidationError("URL", fmt.Errorf("invalid URL: %v", err))
 	}
 	if u.Host == "" {
-		return fmt.Errorf("invalid URL: missing host in %q", o.URL)
+		return ValidationError("URL", fmt.Errorf("invalid URL: missing host in %q", o.URL))
 	}
 	o.URL = u.String()
 	return nil

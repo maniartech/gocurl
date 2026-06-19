@@ -249,7 +249,10 @@ func redirectPolicy(opts *options.RequestOptions) func(req *http.Request, via []
 			return http.ErrUseLastResponse
 		}
 		if len(via) >= opts.MaxRedirects {
-			return fmt.Errorf("stopped after %d redirects", opts.MaxRedirects)
+			// Wrap the sentinel so errors.Is(err, ErrTooManyRedirects) resolves
+			// through net/http's *url.Error and the engine's GocurlError wrapper —
+			// the CLI maps this to curl's exit 47.
+			return fmt.Errorf("stopped after %d redirects: %w", opts.MaxRedirects, ErrTooManyRedirects)
 		}
 		return nil
 	}

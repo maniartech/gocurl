@@ -72,7 +72,7 @@ func CurlCommand(ctx context.Context, command string) (*http.Response, error) {
 	// Tokenize
 	tok := tokenizer.NewTokenizer()
 	if err := tok.Tokenize(processed); err != nil {
-		return nil, fmt.Errorf("failed to tokenize command: %w", err)
+		return nil, parseOrPassthrough(command, err)
 	}
 
 	tokens := tok.GetTokens()
@@ -83,7 +83,7 @@ func CurlCommand(ctx context.Context, command string) (*http.Response, error) {
 	// Convert to request options
 	opts, err := convertTokensToRequestOptions(tokens)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse command: %w", err)
+		return nil, parseOrPassthrough(command, err)
 	}
 
 	return executeOpts(ctx, opts)
@@ -128,7 +128,7 @@ func CurlArgs(ctx context.Context, args ...string) (*http.Response, error) {
 	// Convert to request options
 	opts, err := convertTokensToRequestOptions(tokens)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert arguments: %w", err)
+		return nil, parseOrPassthrough(strings.Join(args, " "), err)
 	}
 
 	// Execute
@@ -159,7 +159,7 @@ func CurlCommandWithVars(ctx context.Context, vars Variables, command string) (*
 
 	tok := tokenizer.NewTokenizer()
 	if err := tok.Tokenize(processed); err != nil {
-		return nil, fmt.Errorf("failed to tokenize command: %w", err)
+		return nil, parseOrPassthrough(command, err)
 	}
 
 	tokens := tok.GetTokens()
@@ -167,7 +167,7 @@ func CurlCommandWithVars(ctx context.Context, vars Variables, command string) (*
 
 	opts, err := convertTokensToRequestOptions(tokens)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse command: %w", err)
+		return nil, parseOrPassthrough(command, err)
 	}
 
 	return executeOpts(ctx, opts)
@@ -188,7 +188,7 @@ func CurlArgsWithVars(ctx context.Context, vars Variables, args ...string) (*htt
 
 	opts, err := convertTokensToRequestOptions(tokens)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert arguments: %w", err)
+		return nil, parseOrPassthrough(strings.Join(args, " "), err)
 	}
 
 	return executeOpts(ctx, opts)
