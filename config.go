@@ -66,6 +66,14 @@ type config struct {
 	maxReplayBytes int64
 	breaker        Middleware
 	limiter        Middleware
+
+	// Observability (Spec 06). Unset sinks resolve to no-ops; instrumentation is
+	// installed only when at least one is configured.
+	tracer        Tracer
+	metrics       Metrics
+	logger        Logger
+	hooks         Hooks
+	requestIDFunc func() string
 }
 
 // defaultConfig returns the baseline configuration. These defaults intentionally

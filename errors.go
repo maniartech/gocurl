@@ -267,6 +267,8 @@ var sensitiveHeaders = map[string]bool{
 	"set-cookie":          true,
 	"x-api-key":           true,
 	"api-key":             true,
+	"x-auth-token":        true, // canonical set merges verbose.go's list
+	"auth-token":          true,
 	"token":               true,
 	"secret":              true,
 	"password":            true,
@@ -348,9 +350,12 @@ func redactUserPassword(command string) string {
 	return command[:start] + redacted + command[end:]
 }
 
-// sanitizeURL removes sensitive query parameters
+// sanitizeURL removes sensitive query parameters AND any basic-auth userinfo
+// (user:password@) so a URL is safe to log or surface in an error. It is the
+// single redaction path shared by error messages and observability sinks.
 func sanitizeURL(url string) string {
-	return redactURLParams(url, []string{"api_key", "apikey", "key", "token", "secret", "password"})
+	url = redactURLParams(url, []string{"api_key", "apikey", "key", "token", "secret", "password"})
+	return userinfoCredRe.ReplaceAllString(url, "://$1:[REDACTED]@")
 }
 
 // redactPattern redacts content after a pattern until the next space or quote

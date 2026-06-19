@@ -126,6 +126,15 @@ func retryLoop(client options.HTTPClient, req *http.Request, opts *options.Reque
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		started := time.Now()
 
+		// Fire the per-retry observability hook (if installed) at the top of each
+		// retry, carrying the previous attempt's outcome. Decoupled from the
+		// observability types: retry.go only knows about an optional context func.
+		if attempt > 1 {
+			if h := retryHookFromContext(req.Context()); h != nil {
+				h(attempt, err, resp)
+			}
+		}
+
 		attemptReq, berr := buildAttempt(req, attempt, bodyBytes, replayable)
 		if berr != nil {
 			return nil, berr // body rewind failure — non-retryable
