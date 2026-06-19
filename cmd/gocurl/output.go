@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -19,40 +20,57 @@ type OutputOptions struct {
 	WriteOut      string // -w: Custom output format
 }
 
-// FormatAndPrintResponse handles output according to options
-func FormatAndPrintResponse(resp *http.Response, body []byte, opts OutputOptions) error {
-	var output string
-
-	// Verbose mode: show connection info + headers + body
-	if opts.Verbose {
-		output = formatVerboseOutput(resp, body)
-	} else if opts.IncludeHeader {
-		// Include headers mode: headers + body
-		output = formatHeaderOutput(resp, body)
-	} else {
-		// Default: body only
-		output = formatBodyOutput(resp, body)
+// FormatAndPrintResponse handles output according to options. Stream discipline
+// (Spec 13): the verbose trace (`-v`) goes to stderr so stdout stays a clean,
+// pipeable body; the body (or `-i` headers+body) goes to stdout (or `-o` file).
+// The body is written exactly once across every flag combination.
+func FormatAndPrintResponse(resp *http.Response, body []byte, opts OutputOptions, stdout, stderr io.Writer) error {
+	// Verbose trace → stderr (redacted), independent of the body destination, so
+	// `gocurl -v url | jq` still pipes a clean body. Suppressed by -s.
+	if opts.Verbose && !opts.Silent {
+		fmt.Fprint(stderr, formatVerboseTrace(resp))
 	}
 
-	// Apply write-out format if specified
-	if opts.WriteOut != "" {
-		output += formatWriteOut(resp, opts.WriteOut)
-	}
-
-	// Write to file or stdout
 	if opts.OutputFile != "" {
-		return os.WriteFile(opts.OutputFile, []byte(output), 0644)
+		// -o writes the body to FILE VERBATIM — no JSON pretty-print/key-reorder and
+		// no added trailing newline — so the saved bytes match the server exactly
+		// (checksums, signatures, binary payloads). With -i the status line +
+		// headers precede the verbatim body. Pretty-printing is a stdout-only
+		// convenience (Spec 13).
+		var filePayload []byte
+		if opts.IncludeHeader {
+			filePayload = []byte(formatHeaderOutput(resp, body))
+		} else {
+			filePayload = body
+		}
+		if err := os.WriteFile(opts.OutputFile, filePayload, 0644); err != nil {
+			return err
+		}
+	} else if !opts.Silent {
+		// stdout: pretty-print JSON for human consumption (default mode only).
+		var payload string
+		if opts.IncludeHeader {
+			payload = formatHeaderOutput(resp, body)
+		} else {
+			payload = formatBodyOutput(resp, body)
+		}
+		fmt.Fprint(stdout, payload)
 	}
 
-	if !opts.Silent {
-		fmt.Print(output)
+	// -w expansion is explicit, user-requested data: it always goes to stdout, even
+	// under -s or alongside -o (the canonical `curl -s -o /dev/null -w '%{http_code}'`
+	// idiom depends on this).
+	if opts.WriteOut != "" {
+		fmt.Fprint(stdout, formatWriteOut(resp, body, opts.WriteOut))
 	}
 
 	return nil
 }
 
-// formatVerboseOutput formats output like curl -v
-func formatVerboseOutput(resp *http.Response, body []byte) string {
+// formatVerboseTrace formats the request/response metadata like curl -v, with
+// sensitive headers redacted. It does NOT include the body — the body is written
+// to stdout separately so the two streams stay independent.
+func formatVerboseTrace(resp *http.Response) string {
 	var sb strings.Builder
 
 	// Request line
@@ -69,9 +87,6 @@ func formatVerboseOutput(resp *http.Response, body []byte) string {
 	// Response headers (Set-Cookie etc. redacted).
 	writeRedactedHeaders(&sb, "< ", resp.Header)
 	sb.WriteString("<\n")
-
-	// Body
-	sb.WriteString(string(body))
 
 	return sb.String()
 }
@@ -128,13 +143,16 @@ func formatBodyOutput(resp *http.Response, body []byte) string {
 	return string(body)
 }
 
-// formatWriteOut formats custom output using curl-style format strings
+// formatWriteOut formats custom output using curl-style format strings.
 // Supports: %{http_code}, %{content_type}, %{size_download}, etc.
-func formatWriteOut(resp *http.Response, format string) string {
+// size_download is the number of body bytes actually downloaded (len(body)),
+// matching curl — resp.ContentLength is unreliable (-1 for chunked/unknown-length
+// and the compressed size for transparently decoded responses).
+func formatWriteOut(resp *http.Response, body []byte, format string) string {
 	replacer := strings.NewReplacer(
 		"%{http_code}", fmt.Sprintf("%d", resp.StatusCode),
 		"%{content_type}", resp.Header.Get("Content-Type"),
-		"%{size_download}", fmt.Sprintf("%d", resp.ContentLength),
+		"%{size_download}", fmt.Sprintf("%d", len(body)),
 		"\\n", "\n",
 		"\\t", "\t",
 	)

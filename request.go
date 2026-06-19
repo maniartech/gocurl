@@ -42,7 +42,7 @@ func parseCommand(command string, expand func([]tokenizer.Token) []tokenizer.Tok
 	processed := preprocessMultilineCommand(command)
 	tok := tokenizer.NewTokenizer()
 	if err := tok.Tokenize(processed); err != nil {
-		return nil, fmt.Errorf("failed to tokenize command: %w", err)
+		return nil, ParseError(command, err)
 	}
 	tokens := tok.GetTokens()
 	if expand != nil {
@@ -50,7 +50,7 @@ func parseCommand(command string, expand func([]tokenizer.Token) []tokenizer.Tok
 	}
 	opts, err := convertTokensToRequestOptions(tokens)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse command: %w", err)
+		return nil, parseOrPassthrough(command, err)
 	}
 	return opts, nil
 }

@@ -7,6 +7,32 @@ a tagged release.
 
 ## [Unreleased]
 
+### Changed — CLI hardening (Milestone 8)
+- `cmd/gocurl`'s `main` is refactored to a testable `run(args []string, stdout, stderr io.Writer) int`
+  entry point. It is reentrant — flags are parsed on a local `flag.FlagSet`, never the global
+  `flag.CommandLine` (this also fixes a latent "flag redefined" panic on a second invocation). In-process
+  tests now cover every output mode, raising `cmd/gocurl` coverage from ~45% to 97.3%.
+- **Stream discipline (curl-compatible):** the `-v` verbose trace now goes to **stderr** (sensitive
+  headers redacted) so the body on **stdout** stays pipe-clean (`gocurl -v url | jq`). The body is
+  printed exactly once across every flag combination. `-o` writes the body to a file **verbatim**
+  (no JSON pretty-print/reorder, no added newline — pretty-printing is a stdout-only convenience);
+  `-w` expansion is explicit data that always goes to stdout, even under `-s` and alongside `-o`
+  (the `-s -o /dev/null -w '%{http_code}'` idiom); `%{size_download}` reports the actual bytes
+  downloaded; usage on misuse goes to stderr.
+- **Argument splitting** recognizes gocurl presentation flags only in the leading prefix (matching the
+  documented `gocurl [gocurl options] [curl options] <URL>`) and honors a `--` separator, so a curl
+  flag value that looks like a presentation flag (`-d -s url`) is passed through verbatim rather than
+  stolen; a value-taking presentation flag with no argument fails fast.
+- **Exit codes are derived from the error `Kind`** (Spec 08), not string matching. Parse/tokenize/
+  convert failures from `Curl`/`CurlArgs`/`CurlCommand*` and `Client.Prepare*` are now typed
+  (`ParseError`/`KindParse`, with credentials in the failing command redacted), so an unknown flag
+  exits `2`; a missing/malformed URL is `KindValidation` → `3`; too-many-redirects carries the new
+  `ErrTooManyRedirects` sentinel → `47`; `--fail`/`-f` → `22` on HTTP ≥ 400.
+- **Redaction widened:** `IsSensitiveHeader` adds a credential-suffix/content heuristic so the open set
+  of vendor auth headers (`X-Goog-Api-Key`, `Private-Token`, `X-Vault-Token`, `X-Functions-Key`, …) is
+  redacted in verbose/log output, and the `-u`/`--user`/`-b`/`--cookie` redactors now fire even when
+  the flag is the first token.
+
 ### Added — security hardening (Milestone 7)
 - **Opt-in SSRF guard** (`WithSSRFGuard`, `SSRFPolicy`, `DefaultSSRFPolicy`): blocks the initial
   request and every redirect hop whose host resolves to a loopback, link-local, RFC1918/ULA

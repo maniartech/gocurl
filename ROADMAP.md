@@ -245,12 +245,20 @@ Spec 07. deps: M1-T1, M2-T3.
 
 Spec 13. deps: M1, M4.
 
-- [ ] **M8-T1 — Refactor `main` → `run(args, stdout, stderr) int`.** *DoD: in-process unit
-  tests raise `cmd/gocurl` coverage well above current ~45%.*
-- [ ] **M8-T2 — Exit codes from `Kind`** (replace string matching) + `--fail`. *DoD: table
-  test per Kind; `--fail` tested.*
-- [ ] **M8-T3 — Output modes + parity test** (body printed once; `-v` redaction; `-i`/`-o`/
-  `-w`). *DoD: parity test (same command → same result in lib and CLI).*
+- [x] **M8-T1 — Refactor `main` → `run(args, stdout, stderr) int`.** *DoD met: `run` takes the
+  argv slice + explicit writers and is reentrant (local `flag.FlagSet`, never the global
+  `flag.CommandLine` — fixed a latent re-registration panic); in-process tests drive every path,
+  raising `cmd/gocurl` coverage from ~45% to **97.3%**.*
+- [x] **M8-T2 — Exit codes from `Kind`** (replace string matching) + `--fail`. *DoD met:
+  `getExitCode` maps `Kind`→curl codes (parse/validation 2/3, connect 7, timeout 28, tls 35,
+  server-status 22); parse/tokenize/convert failures now return typed `ParseError` (KindParse)
+  from `api.go`/`request.go` so an unknown flag exits 2 by `Kind`, not string-matching; table
+  test per Kind + `--fail` exit-22 test.*
+- [x] **M8-T3 — Output modes + parity test** (body printed once; `-v` redaction; `-i`/`-o`/
+  `-w`). *DoD met: verbose trace → stderr, body → stdout (pipe-clean `gocurl -v url | jq`),
+  `-o`/`-s`/`-i`/`-w` covered in-process and black-box; body-printed-once asserted across every
+  flag combination; `-v` redaction asserted on both streams; library/CLI parity test sends an
+  identical request on the wire for the same command via `gocurl.Curl` and the CLI argv.*
 
 ---
 

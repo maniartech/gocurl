@@ -93,14 +93,18 @@ by default — Spec 08).
 
 ## Acceptance criteria / Definition of Done
 
-- [ ] `main` refactored to `run(args, stdout, stderr) int`; unit tests drive it in-process
-      (Spec 09) raising `cmd/gocurl` line coverage well above the current ~45%.
-- [ ] Exit codes derived from `Kind` (Spec 08), not string matching; table test per Kind.
-- [ ] `-v` redaction test asserts `Authorization`/`Cookie` never appear in cleartext on any
-      stream (already covered black-box; add in-process assertion).
-- [ ] Body printed exactly once across all flag combinations (regression test kept).
-- [ ] `-o`/`-s`/`-i`/`-w` behaviors covered; `--fail` opt-in implemented and tested.
-- [ ] Library/CLI parity test: the same command produces the same `RequestOptions`/result.
+- [x] `main` refactored to `run(args, stdout, stderr) int`; unit tests drive it in-process
+      (Spec 09) raising `cmd/gocurl` line coverage from ~45% to 97.3%.
+- [x] Exit codes derived from `Kind` (Spec 08), not string matching; table test per Kind.
+      Parse/tokenize/convert failures are now typed `ParseError` (KindParse), so an unknown flag
+      exits 2 by classification.
+- [x] `-v` redaction test asserts `Authorization`/`Cookie` never appear in cleartext on any
+      stream (black-box + in-process assertions).
+- [x] Body printed exactly once across all flag combinations (regression test kept + in-process
+      matrix).
+- [x] `-o`/`-s`/`-i`/`-w` behaviors covered; `--fail` opt-in implemented and tested (exit 22).
+- [x] Library/CLI parity test: the same command produces the same request on the wire via
+      `gocurl.Curl` and the CLI argv.
 
 ## Dependencies
 
