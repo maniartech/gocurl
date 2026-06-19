@@ -129,6 +129,38 @@ func (c *Client) effectiveOptions(req *Request) *options.RequestOptions {
 	return o
 }
 
+// resolveRetryPolicy picks the effective retry policy for this request: a
+// per-request override (Request.WithRetryPolicy) beats the Client default
+// (WithRetry/WithRetryAttempts), which beats the legacy options.RetryConfig
+// (method-agnostic). It returns a COPY with the body-replay ceiling and the
+// Client's retry budget applied, so a shared policy value is never mutated.
+func (c *Client) resolveRetryPolicy(req *Request, opts *options.RequestOptions) *RetryPolicy {
+	var p *RetryPolicy
+	switch {
+	case req.retryPolicy != nil:
+		p = req.retryPolicy
+	case c.cfg.retryPolicy != nil:
+		p = c.cfg.retryPolicy
+	default:
+		// Legacy fallback: already a fresh, owned policy (or nil) — apply the cap
+		// and the Client retry budget, then return directly.
+		lp := legacyPolicyFromRetryConfig(opts.RetryConfig)
+		if lp == nil {
+			return nil
+		}
+		lp.maxReplayBytes = c.cfg.maxReplayBytes
+		if lp.Budget == nil && c.cfg.retryBudget != nil {
+			lp.Budget = c.cfg.retryBudget
+		}
+		return lp
+	}
+	eff := p.withReplayCap(c.cfg.maxReplayBytes)
+	if eff.Budget == nil && c.cfg.retryBudget != nil {
+		eff.Budget = c.cfg.retryBudget
+	}
+	return eff
+}
+
 // Do executes a prepared Request and returns the live response. The caller owns
 // resp.Body and must Close it. The body is streamed (never buffered or written
 // to stdout by the Client).
@@ -184,11 +216,18 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	// Base handler: the existing retry engine over the Client's owned http.Client.
+	// Resolve the effective retry policy (per-request override > Client default >
+	// legacy RetryConfig), then build the base handler: the retry engine over the
+	// Client's owned http.Client, with a per-request *rand.Rand for jitter.
+	policy := c.resolveRetryPolicy(req, opts)
 	base := Handler(func(hr *http.Request) (*http.Response, error) {
-		return executeWithRetries(c.httpClient, hr, opts)
+		return executeWithRetries(c.httpClient, hr, opts, policy, newRand())
 	})
-	resp, err := chain(base, c.mw...)(httpReq)
+	// Compose: circuit breaker -> rate limiter -> user middleware -> retry loop.
+	// chain makes the first middleware outermost, so an open circuit fast-fails
+	// before the limiter blocks, and breaker/limiter see only the final outcome.
+	allMW := append(append([]Middleware{}, c.cfg.systemMiddleware()...), c.mw...)
+	resp, err := chain(base, allMW...)(httpReq)
 	if err != nil {
 		if cancel != nil {
 			cancel()

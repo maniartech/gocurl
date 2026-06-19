@@ -20,6 +20,11 @@ import (
 type Request struct {
 	opts       *options.RequestOptions
 	rawCommand string // the original curl command if built via Prepare*, else ""
+
+	// retryPolicy, when set via WithRetryPolicy, overrides the Client's default
+	// RetryPolicy for this request. It lives on the gocurl Request (not on
+	// options.RequestOptions) so the options package never imports gocurl.
+	retryPolicy *RetryPolicy
 }
 
 // Options returns a deep copy of the underlying request options. The returned
@@ -226,12 +231,20 @@ func (r *Request) WithVars(vars Variables) *Request {
 		// Re-parse should not fail (it parsed once already); keep original on error.
 		return r.clone()
 	}
-	return &Request{opts: opts, rawCommand: r.rawCommand}
+	return &Request{opts: opts, rawCommand: r.rawCommand, retryPolicy: r.retryPolicy}
+}
+
+// WithRetryPolicy returns a copy of the request with a per-request RetryPolicy
+// that overrides the Client's default for this request only.
+func (r *Request) WithRetryPolicy(p RetryPolicy) *Request {
+	c := r.clone()
+	c.retryPolicy = &p
+	return c
 }
 
 // Clone returns an independent copy of the request.
 func (r *Request) Clone() *Request { return r.clone() }
 
 func (r *Request) clone() *Request {
-	return &Request{opts: r.opts.Clone(), rawCommand: r.rawCommand}
+	return &Request{opts: r.opts.Clone(), rawCommand: r.rawCommand, retryPolicy: r.retryPolicy}
 }

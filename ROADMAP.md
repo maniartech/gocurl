@@ -161,15 +161,28 @@ Spec 08. deps: M1.
 
 Spec 04. deps: M3 (replay), M4 (classification), M1-T1 (middleware).
 
-- [ ] **M5-T1 — Idempotency-aware retry middleware** (backoff+jitter, max attempts,
+- [x] **M5-T1 — Idempotency-aware retry middleware** (backoff+jitter, max attempts,
   per-attempt deadline, Retry-After). *DoD: never retries non-idempotent by default;
-  replays via `BodySource`; fault-injection tests (G1) green.*
-- [ ] **M5-T2 — Legacy `RetryConfig` → `RetryPolicy` mapping** (D5). *DoD: existing
-  `retry_test.go` behavior preserved or explicitly migrated; mapping table is normative.*
-- [ ] **M5-T3 — Circuit breaker (optional middleware), concurrency-safe.** *DoD: trips/half-open/
-  reset state-machine test; race-clean.*
-- [ ] **M5-T4 — Client-side rate limiter (optional middleware).** *DoD: token-bucket test;
-  race-clean.*
+  replays via `BodySource`; fault-injection tests (G1) green.* — `RetryPolicy`/`Attempt`/
+  `Backoff` (`ExponentialJitter` equal-jitter + `ConstantBackoff`), `DefaultRetryPolicy`
+  excludes POST/PATCH/CONNECT, Idempotency-Key escape hatch, GetBody/buffered replay with
+  `WithMaxReplayBytes` cap, per-attempt (`context.WithTimeout`, retryable) vs parent-context
+  (terminal) split, `MaxElapsed` ceiling, Retry-After (delta + HTTP-date), drain+close discarded
+  bodies, `RetryBudget`. Engine shared by one-shot + Client paths via `executeWithRetries(…,
+  policy, rnd)`. `WithRetry`/`WithRetryAttempts`/`WithRetryBudget`/`WithMaxReplayBytes` +
+  `Request.WithRetryPolicy`.
+- [x] **M5-T2 — Legacy `RetryConfig` → `RetryPolicy` mapping** (D5). *DoD: existing
+  `retry_test.go` behavior preserved or explicitly migrated; mapping table is normative.* —
+  `legacyPolicyFromRetryConfig` (method-agnostic, deterministic no-jitter backoff); `retry_test.go`
+  passes UNCHANGED; `--retry` blackbox test confirms POST still retried.
+- [x] **M5-T3 — Circuit breaker (optional middleware), concurrency-safe.** *DoD: trips/half-open/
+  reset state-machine test; race-clean.* — per-host rolling-window breaker (`CircuitBreaker`/
+  `WithCircuitBreaker`/`ErrCircuitOpen`), counts only the final loop outcome, single-probe
+  half-open, race-clean.
+- [x] **M5-T4 — Client-side rate limiter (optional middleware).** *DoD: token-bucket test;
+  race-clean.* — zero-dependency `TokenBucket` behind a pluggable `Limiter`; `RateLimiter`/
+  `WithRateLimit`; composed `breaker → limiter → user-mw → retry → transport`.
+- Deferred: hedging (`WithHedging`, EXPERIMENTAL) — out of the M5 ROADMAP scope; revisit later.
 
 ---
 

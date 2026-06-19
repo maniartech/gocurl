@@ -7,6 +7,29 @@ a tagged release.
 
 ## [Unreleased]
 
+### Added — resilience: retries, circuit breaker, rate limiter (Milestone 5)
+- Idempotency-aware `RetryPolicy` (`WithRetry` / `WithRetryAttempts`, per-request
+  `Request.WithRetryPolicy`): retries only the idempotent method set
+  (GET/HEAD/OPTIONS/TRACE/PUT/DELETE) or a request carrying an `Idempotency-Key` header — a
+  POST is **not** retried by default. `Backoff` (`ExponentialJitter` with equal jitter,
+  `ConstantBackoff`), `MaxElapsed` and per-attempt deadlines, `Retry-After` honoring
+  (delta-seconds + HTTP-date), and a `RetryBudget` (`WithRetryBudget`) to prevent retry storms.
+- Body replay prefers `GetBody`; otherwise the body is buffered up to `WithMaxReplayBytes`
+  (default 1 MiB) — larger bodies are sent once and become non-retryable. Discarded retry
+  attempts now drain **and** close their body so pooled keep-alive connections are reused.
+- `CircuitBreaker` / `WithCircuitBreaker`: per-host rolling-window breaker that fast-fails with
+  `ErrCircuitOpen` (non-retryable), half-opens after a timeout, and counts only the final
+  outcome of each request (never individual retry attempts).
+- `RateLimiter` / `WithRateLimit`: a zero-dependency client-side token bucket behind a
+  pluggable `Limiter` interface. Client middleware composes as
+  `circuit breaker → rate limiter → user middleware → retry loop → transport`.
+
+### Changed
+- **Behavior change (new API only):** the new `WithRetry` path is idempotency-aware, so a POST
+  is not retried unless you set `AllowMethods` or send an `Idempotency-Key`. The legacy
+  `options.RetryConfig` and the `--retry` flag remain **method-agnostic** (a POST with `--retry`
+  is still retried), preserving existing behavior through v0.x.
+
 ### Added — typed error model (Milestone 4)
 - `Kind` taxonomy on `GocurlError` (`KindParse`, `KindValidation`, `KindConnect`, `KindTLS`,
   `KindTimeout`, `KindCanceled`, `KindServerStatus`, `KindRetryExhausted`, `KindBodyRead`) plus
