@@ -55,6 +55,17 @@ type config struct {
 
 	// middleware are user middlewares appended to the chain via WithMiddleware.
 	middleware []Middleware
+
+	// Resilience (Spec 04). retryPolicy is the Client-wide default (per-request
+	// Request.WithRetryPolicy overrides it). retryBudget, when set, is attached to
+	// the effective policy if it has none. maxReplayBytes caps body buffering for
+	// retries (0 = unlimited). breaker and limiter are Client-only middleware
+	// composed around the retrying handler (breaker outermost).
+	retryPolicy    *RetryPolicy
+	retryBudget    *RetryBudget
+	maxReplayBytes int64
+	breaker        Middleware
+	limiter        Middleware
 }
 
 // defaultConfig returns the baseline configuration. These defaults intentionally
@@ -74,7 +85,23 @@ func defaultConfig() *config {
 		tlsHandshakeTimeout:   10 * time.Second,
 		expectContinueTimeout: 1 * time.Second,
 		http2:                 true,
+
+		maxReplayBytes: DefaultMaxReplayBytes,
 	}
+}
+
+// systemMiddleware returns the Client's framework middleware (circuit breaker,
+// then rate limiter), outermost-first, with nil entries skipped. The breaker is
+// outermost so an open circuit fast-fails before the limiter blocks on a token.
+func (c *config) systemMiddleware() []Middleware {
+	var mw []Middleware
+	if c.breaker != nil {
+		mw = append(mw, c.breaker)
+	}
+	if c.limiter != nil {
+		mw = append(mw, c.limiter)
+	}
+	return mw
 }
 
 // baseOptions projects the connection-relevant config onto a RequestOptions used
@@ -339,6 +366,89 @@ func WithHTTP2Only(allowCleartext bool) Option {
 	return func(c *config) error {
 		c.http2Only = true
 		c.h2c = allowCleartext
+		return nil
+	}
+}
+
+// --- Resilience options (Spec 04) ---
+
+// WithRetry sets the Client's default RetryPolicy. Retries are idempotency-aware:
+// by default only GET/HEAD/OPTIONS/TRACE/PUT/DELETE (or a request carrying an
+// Idempotency-Key header) are retried — a POST is NOT retried unless AllowMethods
+// opts it in. This differs from the legacy options.RetryConfig / --retry path,
+// which remains method-agnostic.
+func WithRetry(p RetryPolicy) Option {
+	return func(c *config) error {
+		if p.MaxAttempts < 0 {
+			return fmt.Errorf("WithRetry: MaxAttempts cannot be negative")
+		}
+		c.retryPolicy = &p
+		return nil
+	}
+}
+
+// WithRetryAttempts is sugar for WithRetry(DefaultRetryPolicy(n)).
+func WithRetryAttempts(n int) Option {
+	return func(c *config) error {
+		if n < 1 {
+			return fmt.Errorf("WithRetryAttempts: n must be >= 1")
+		}
+		p := DefaultRetryPolicy(n)
+		c.retryPolicy = &p
+		return nil
+	}
+}
+
+// WithRetryBudget attaches a retry budget (token bucket) limiting retries to the
+// given fraction of request volume, with a per-second floor. It applies to the
+// effective policy when that policy does not already carry its own Budget.
+func WithRetryBudget(ratio, minPerSec float64) Option {
+	return func(c *config) error {
+		if ratio < 0 || minPerSec < 0 {
+			return fmt.Errorf("WithRetryBudget: ratio and minPerSec cannot be negative")
+		}
+		c.retryBudget = NewRetryBudget(ratio, minPerSec)
+		return nil
+	}
+}
+
+// WithMaxReplayBytes caps how many bytes of a request body are buffered for
+// retries when the body cannot be re-obtained via GetBody. Bodies larger than n
+// are sent once and become non-retryable. n == 0 means unlimited; the default is
+// DefaultMaxReplayBytes (1 MiB).
+func WithMaxReplayBytes(n int64) Option {
+	return func(c *config) error {
+		if n < 0 {
+			return fmt.Errorf("WithMaxReplayBytes: n cannot be negative")
+		}
+		c.maxReplayBytes = n
+		return nil
+	}
+}
+
+// WithCircuitBreaker installs a per-key (default per-host) circuit breaker that
+// fast-fails with ErrCircuitOpen while the circuit is open. It wraps the whole
+// retry loop, counting only the final outcome of each request.
+func WithCircuitBreaker(cfg BreakerConfig) Option {
+	return func(c *config) error {
+		c.breaker = CircuitBreaker(cfg)
+		return nil
+	}
+}
+
+// WithRateLimit installs a client-side token-bucket rate limiter admitting rps
+// requests per second with the given burst. It is the outermost-but-one
+// middleware (inside the circuit breaker), so requests block on a token unless
+// the circuit is already open.
+func WithRateLimit(rps float64, burst int) Option {
+	return func(c *config) error {
+		if rps <= 0 {
+			return fmt.Errorf("WithRateLimit: rps must be > 0")
+		}
+		if burst < 1 {
+			return fmt.Errorf("WithRateLimit: burst must be >= 1")
+		}
+		c.limiter = RateLimiter(NewTokenBucket(rps, burst))
 		return nil
 	}
 }

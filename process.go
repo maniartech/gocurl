@@ -80,7 +80,9 @@ func doRequest(ctx context.Context, opts *options.RequestOptions) (*http.Respons
 		return nil, err
 	}
 
-	resp, err := executeWithRetries(httpClient, req, opts)
+	// The one-shot path has no Client, so only the legacy options.RetryConfig
+	// (method-agnostic, also set by the --retry flag) can drive retries here.
+	resp, err := executeWithRetries(httpClient, req, opts, legacyPolicyFromRetryConfig(opts.RetryConfig), newRand())
 	if err != nil {
 		return nil, wrapTransportError(opts.URL, err)
 	}
