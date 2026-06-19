@@ -28,17 +28,29 @@ func TestValidateMethod_Empty(t *testing.T) {
 	}
 }
 
-func TestValidateMethod_Invalid(t *testing.T) {
-	invalidMethods := []string{"INVALID", "HACK", "hack", "get", "GeT", "CUSTOM"}
+func TestValidateMethod_CustomAllowed(t *testing.T) {
+	// gocurl is curl-compatible: custom and WebDAV methods are valid HTTP tokens
+	// and must be accepted (the strict allow-list was removed).
+	for _, method := range []string{"PROPFIND", "MKCALENDAR", "PURGE", "CUSTOM", "HACK", "get"} {
+		t.Run(method, func(t *testing.T) {
+			if err := validateMethod(method); err != nil {
+				t.Errorf("validateMethod(%q) should accept a valid token, got: %v", method, err)
+			}
+		})
+	}
+}
 
-	for _, method := range invalidMethods {
+func TestValidateMethod_Invalid(t *testing.T) {
+	// Only methods containing illegal characters (spaces, control chars,
+	// separators) are rejected.
+	for _, method := range []string{"GET POST", "GET\n", "GE/T", "POST;", "\tGET"} {
 		t.Run(method, func(t *testing.T) {
 			err := validateMethod(method)
 			if err == nil {
-				t.Errorf("validateMethod(%s) should return error, got nil", method)
+				t.Errorf("validateMethod(%q) should return error, got nil", method)
 			}
-			if !strings.Contains(err.Error(), "invalid HTTP method") {
-				t.Errorf("validateMethod(%s) error should mention 'invalid HTTP method', got: %v", method, err)
+			if err != nil && !strings.Contains(err.Error(), "invalid HTTP method") {
+				t.Errorf("validateMethod(%q) error should mention 'invalid HTTP method', got: %v", method, err)
 			}
 		})
 	}
@@ -266,26 +278,26 @@ func TestValidateQueryParams_TooMany(t *testing.T) {
 
 // TestValidateSecureAuth tests security validation
 func TestValidateSecureAuth_HTTPS(t *testing.T) {
-	err := validateSecureAuth("https://example.com", true, false)
+	err := validateSecureAuth("https://example.com", true, false, false)
 	if err != nil {
 		t.Errorf("validateSecureAuth should not error for HTTPS with BasicAuth, got: %v", err)
 	}
 
-	err = validateSecureAuth("https://example.com", false, true)
+	err = validateSecureAuth("https://example.com", false, true, false)
 	if err != nil {
 		t.Errorf("validateSecureAuth should not error for HTTPS with BearerToken, got: %v", err)
 	}
 }
 
 func TestValidateSecureAuth_HTTP_NoAuth(t *testing.T) {
-	err := validateSecureAuth("http://example.com", false, false)
+	err := validateSecureAuth("http://example.com", false, false, false)
 	if err != nil {
 		t.Errorf("validateSecureAuth should not error for HTTP without auth, got: %v", err)
 	}
 }
 
 func TestValidateSecureAuth_HTTP_BasicAuth(t *testing.T) {
-	err := validateSecureAuth("http://example.com", true, false)
+	err := validateSecureAuth("http://example.com", true, false, false)
 	if err == nil {
 		t.Error("validateSecureAuth should error for BasicAuth over HTTP")
 	}
@@ -295,12 +307,30 @@ func TestValidateSecureAuth_HTTP_BasicAuth(t *testing.T) {
 }
 
 func TestValidateSecureAuth_HTTP_BearerToken(t *testing.T) {
-	err := validateSecureAuth("http://example.com", false, true)
+	err := validateSecureAuth("http://example.com", false, true, false)
 	if err == nil {
 		t.Error("validateSecureAuth should error for Bearer token over HTTP")
 	}
 	if !strings.Contains(err.Error(), "insecure") {
 		t.Errorf("validateSecureAuth error should mention 'insecure', got: %v", err)
+	}
+}
+
+// TestValidateSecureAuth_UppercaseScheme is the regression for the case-sensitive
+// scheme bug: net/url lowercases the scheme, so "HTTP://"/"Http://" travel over
+// plaintext and must fail closed exactly like "http://".
+func TestValidateSecureAuth_UppercaseScheme(t *testing.T) {
+	for _, u := range []string{"HTTP://example.com", "Http://example.com", "hTTp://example.com"} {
+		if err := validateSecureAuth(u, true, false, false); err == nil {
+			t.Errorf("validateSecureAuth(%q, BasicAuth) should fail closed, got nil", u)
+		}
+		if err := validateSecureAuth(u, false, true, false); err == nil {
+			t.Errorf("validateSecureAuth(%q, BearerToken) should fail closed, got nil", u)
+		}
+	}
+	// HTTPS in any case must still pass.
+	if err := validateSecureAuth("HTTPS://example.com", true, false, false); err != nil {
+		t.Errorf("validateSecureAuth(HTTPS, BasicAuth) should pass, got: %v", err)
 	}
 }
 
@@ -328,7 +358,7 @@ func TestValidation_ConcurrentSafe(t *testing.T) {
 			params := map[string][]string{"param": {"value"}}
 			_ = validateQueryParams(params)
 
-			_ = validateSecureAuth("https://example.com", true, false)
+			_ = validateSecureAuth("https://example.com", true, false, false)
 
 			done <- true
 		}(i)

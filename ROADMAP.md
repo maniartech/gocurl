@@ -215,16 +215,29 @@ Spec 06. deps: M1-T1, M4.
 
 Spec 07. deps: M1-T1, M2-T3.
 
-- [ ] **M7-T1 — Opt-in SSRF guard** (`SSRFPolicy`/`WithSSRFGuard`, D2): pre-flight + per-redirect
+- [x] **M7-T1 — Opt-in SSRF guard** (`SSRFPolicy`/`WithSSRFGuard`, D2): pre-flight + per-redirect
   (via `RedirectPolicy.Allow`). *DoD: blocks link-local/loopback/RFC1918/metadata unless
-  allow-listed; tested.*
-- [ ] **M7-T2 — Redaction middleware** wired everywhere (logs/verbose/errors). *DoD: secret
-  never appears in any stream (test across modes).*
-- [ ] **M7-T3 — Runtime input validation on the live path** (wire the dead `options`
+  allow-listed; tested.* — `security_ssrf.go`: `SSRFPolicy`/`DefaultSSRFPolicy`/`CheckSSRF`/
+  `SSRFGuard`/`ErrSSRFBlocked` (KindValidation, non-retryable); IPv4/IPv6 + metadata coverage,
+  allow-list precedence; enforced as outermost system middleware AND on every redirect hop via
+  the request-context redirect seam (public→metadata 302 blocked, hermetic test).
+- [x] **M7-T2 — Redaction middleware** wired everywhere (logs/verbose/errors). *DoD: secret
+  never appears in any stream (test across modes).* — unified on `errors.go IsSensitiveHeader`
+  + `sanitizeURL` (userinfo + query secrets), `RedactURL`/`RedactCommand` exported; M6 already
+  routed logs/spans through it. **TLS pinning hardened**: checked in addition to chain
+  verification (fail-closed on a bad pin) unless `--insecure` — pinning no longer forces
+  `InsecureSkipVerify` (tested: good pin succeeds, bad pin fails closed).
+- [x] **M7-T3 — Runtime input validation on the live path** (wire the dead `options`
   validators), reconciled with streaming (F2). *DoD: plaintext-auth-over-http policy +
-  header/body checks active on `Do`.*
-- [ ] **M7-T4 — Proxy auth incl. username-only; TLS `WithTLS`/`WithTLSConfig`** (D1). *DoD:
-  username-only proxy authenticates; `WithTLS` flows through `LoadTLSConfig`.*
+  header/body checks active on `Do`.* — `options.ValidateRequest` (method-token, header
+  count/size + forbidden Host/Content-Length/Transfer-Encoding, body/form/query caps,
+  secure-auth) called from `ValidateRequestOptions`; streaming bodies exempt from the body cap.
+  Plaintext auth fails closed by default; `WithAllowInsecureAuth`/`GOCURL_ALLOW_INSECURE_AUTH=1`
+  override. `validateMethod` relaxed to RFC7230 tokens (curl-compat).
+- [x] **M7-T4 — Proxy auth incl. username-only; TLS `WithTLS`/`WithTLSConfig`** (D1). *DoD:
+  username-only proxy authenticates; `WithTLS` flows through `LoadTLSConfig`.* — `proxy`
+  sends `Proxy-Authorization`/userinfo whenever a username is present (RFC 7617 empty password);
+  `WithTLSConfig` flows a `*tls.Config` through `LoadTLSConfig` via `baseOptions`.
 
 ---
 

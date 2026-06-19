@@ -112,6 +112,10 @@ type RequestOptions struct {
 	// error. See specs/08-error-model.md.
 	FailOnError bool `json:"fail_on_error,omitempty"`
 
+	// AllowInsecureAuth opts out of the plaintext-auth-over-HTTP check (see
+	// WithAllowInsecureAuth). Default false (fail closed). See specs/07-security.md.
+	AllowInsecureAuth bool `json:"allow_insecure_auth,omitempty"`
+
 	// Compression
 	Compress           bool     `json:"compress,omitempty"`
 	CompressionMethods []string `json:"compression_methods,omitempty"` // Specific methods: gzip, deflate, br

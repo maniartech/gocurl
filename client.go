@@ -52,6 +52,25 @@ func New(opts ...Option) (*Client, error) {
 		}
 	}
 
+	// When the SSRF guard is enabled, re-check every redirect hop through the
+	// request-context redirect seam (composing with any user-supplied Allow hook),
+	// so a public URL that redirects to an internal address is blocked.
+	if cfg.ssrfPolicy != nil {
+		pol := *cfg.ssrfPolicy
+		prev := cfg.redirectAllow
+		cfg.redirectAllow = func(req *http.Request, via []*http.Request) error {
+			if req.URL != nil {
+				if err := pol.CheckSSRF(req.Context(), req.URL.Host); err != nil {
+					return err
+				}
+			}
+			if prev != nil {
+				return prev(req, via)
+			}
+			return nil
+		}
+	}
+
 	transport, err := cfg.buildTransport()
 	if err != nil {
 		return nil, err
@@ -116,6 +135,9 @@ func (c *Client) effectiveOptions(req *Request) *options.RequestOptions {
 	}
 	if c.cfg.failOnStatus {
 		o.FailOnError = true
+	}
+	if c.cfg.allowInsecureAuth {
+		o.AllowInsecureAuth = true
 	}
 	for key, values := range c.cfg.defaultHeaders {
 		if o.Headers == nil {

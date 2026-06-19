@@ -262,28 +262,33 @@ func CanceledError(url string, err error) error {
 
 // sensitiveHeaders are headers that should be redacted in logs/errors
 var sensitiveHeaders = map[string]bool{
-	"authorization":       true,
-	"cookie":              true,
-	"set-cookie":          true,
-	"x-api-key":           true,
-	"api-key":             true,
-	"x-auth-token":        true, // canonical set merges verbose.go's list
-	"auth-token":          true,
-	"token":               true,
-	"secret":              true,
-	"password":            true,
-	"proxy-authorization": true,
+	"authorization":        true,
+	"cookie":               true,
+	"set-cookie":           true,
+	"x-api-key":            true,
+	"api-key":              true,
+	"x-auth-token":         true, // canonical set merges verbose.go's list
+	"auth-token":           true,
+	"x-amz-security-token": true, // AWS STS temporary session token (bearer-equivalent)
+	"x-csrf-token":         true,
+	"token":                true,
+	"secret":               true,
+	"password":             true,
+	"proxy-authorization":  true,
 }
 
 // sanitizeCommand removes sensitive information from commands
 func sanitizeCommand(command string) string {
-	// Redact common sensitive patterns
-	lower := strings.ToLower(command)
+	// Redact -u/--user user:password (basic auth flag, space- or =-separated).
+	command = redactUserPassword(command)
 
-	// Redact -u user:password (basic auth flag)
-	if strings.Contains(lower, " -u ") {
-		command = redactUserPassword(command)
-	}
+	// Redact -b/--cookie values: session cookies are credentials, and the parser
+	// accepts the flag form just like the Cookie: header form below.
+	command = redactFlagValue(command, []string{" --cookie=", " --cookie ", " -b=", " -b "})
+
+	// Recompute after the credential redactions above so the substring gates below
+	// operate on the current command.
+	lower := strings.ToLower(command)
 
 	// Redact Authorization headers (must be done before bearer/basic to catch the whole header value)
 	if strings.Contains(lower, "authorization:") {
@@ -318,36 +323,65 @@ func sanitizeCommand(command string) string {
 	return command
 }
 
-// redactUserPassword redacts password from -u user:password format
+// redactUserPassword redacts the password from a -u/--user user:password value.
+// curl accepts both the short (-u) and long (--user) flags, each either
+// space- or =-separated, so all four forms are handled; the username is kept and
+// only the password segment after the first colon is replaced.
 func redactUserPassword(command string) string {
 	lower := strings.ToLower(command)
-	idx := strings.Index(lower, " -u ")
-	if idx == -1 {
-		return command
+	// Longest forms first so "--user=" wins over "--user " and "-u=" over "-u ".
+	for _, flag := range []string{" --user=", " --user ", " -u=", " -u "} {
+		idx := strings.Index(lower, flag)
+		if idx == -1 {
+			continue
+		}
+
+		start := idx + len(flag)
+		end := start
+		// Find the end of the user:password token (space or end of string).
+		for end < len(command) && command[end] != ' ' {
+			end++
+		}
+
+		userPass := command[start:end]
+		colonIdx := strings.Index(userPass, ":")
+		if colonIdx == -1 {
+			continue // No password segment to redact for this flag form.
+		}
+
+		redacted := userPass[:colonIdx] + ":[REDACTED]"
+		return command[:start] + redacted + command[end:]
 	}
 
-	// Start after " -u "
-	start := idx + 4
-	end := start
+	return command
+}
 
-	// Find the end of the user:password string (space or end)
-	for end < len(command) && command[end] != ' ' {
-		end++
+// redactFlagValue replaces the entire value token following the first matching
+// flag form with [REDACTED]. Used for flags whose whole argument is sensitive
+// (e.g. -b/--cookie). flags should be ordered longest-first.
+func redactFlagValue(command string, flags []string) string {
+	lower := strings.ToLower(command)
+	for _, flag := range flags {
+		idx := strings.Index(lower, flag)
+		if idx == -1 {
+			continue
+		}
+
+		start := idx + len(flag)
+		end := start
+		// The value runs to the next space (a quoted value has no internal space
+		// in practice; the surrounding quotes are consumed into the token).
+		for end < len(command) && command[end] != ' ' {
+			end++
+		}
+		if end == start {
+			continue // No value token present.
+		}
+
+		return command[:start] + "[REDACTED]" + command[end:]
 	}
 
-	userPass := command[start:end]
-
-	// Find the colon separating user and password
-	colonIdx := strings.Index(userPass, ":")
-	if colonIdx == -1 {
-		return command // No password, just username
-	}
-
-	// Redact the password part
-	user := userPass[:colonIdx]
-	redacted := user + ":[REDACTED]"
-
-	return command[:start] + redacted + command[end:]
+	return command
 }
 
 // sanitizeURL removes sensitive query parameters AND any basic-auth userinfo
@@ -441,35 +475,53 @@ func redactUnquotedPattern(text string, idx, patternLen int, replacement string)
 	return text[:idx] + replacement + text[end:]
 }
 
-// redactURLParams redacts specified query parameters from URLs
+// redactURLParams redacts specified query parameters from URLs. It redacts EVERY
+// occurrence of each parameter, not just the first: repeated sensitive keys
+// (e.g. ?api_key=A&…&api_key=B) are legitimate in URLs and SDK-built requests,
+// and leaving the later values in clear text would leak them to logs/errors.
 func redactURLParams(url string, params []string) string {
 	for _, param := range params {
 		// Look for param=value
 		pattern := param + "="
-		idx := strings.Index(strings.ToLower(url), strings.ToLower(pattern))
-
-		if idx == -1 {
-			continue
-		}
-
-		start := idx + len(pattern)
-		end := start
-
-		// Find end of parameter value (& or end of string)
-		for end < len(url) {
-			ch := url[end]
-			if ch == '&' || ch == ' ' || ch == '"' || ch == '\'' {
+		searchFrom := 0
+		for {
+			rel := strings.Index(strings.ToLower(url[searchFrom:]), strings.ToLower(pattern))
+			if rel == -1 {
 				break
 			}
-			end++
-		}
+			idx := searchFrom + rel
+			start := idx + len(pattern)
+			end := start
 
-		// Replace value with [REDACTED]
-		url = url[:start] + "[REDACTED]" + url[end:]
+			// Find end of parameter value (& or end of string)
+			for end < len(url) {
+				ch := url[end]
+				if ch == '&' || ch == ' ' || ch == '"' || ch == '\'' {
+					break
+				}
+				end++
+			}
+
+			// Replace value with [REDACTED]
+			url = url[:start] + "[REDACTED]" + url[end:]
+			// Advance past the replacement so we keep scanning for more
+			// occurrences of the same parameter without re-matching it.
+			searchFrom = start + len("[REDACTED]")
+		}
 	}
 
 	return url
 }
+
+// RedactURL returns a copy of raw safe to log or display: sensitive query
+// parameters and any basic-auth userinfo are redacted. It is the exported entry
+// point to the single URL-redaction path (sanitizeURL).
+func RedactURL(raw string) string { return sanitizeURL(raw) }
+
+// RedactCommand returns a copy of a curl command safe to log or display, with
+// credentials (`-u`, Authorization/Bearer/Basic, Cookie, sensitive URL params)
+// redacted. It is the exported entry point to sanitizeCommand.
+func RedactCommand(cmd string) string { return sanitizeCommand(cmd) }
 
 // IsSensitiveHeader checks if a header should be redacted
 func IsSensitiveHeader(headerName string) bool {

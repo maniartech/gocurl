@@ -3,6 +3,7 @@ package options
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -16,30 +17,33 @@ const (
 	MaxQueryParams = 1000             // Maximum query parameters
 )
 
-// validHTTPMethods defines allowed HTTP methods
-var validHTTPMethods = map[string]bool{
-	http.MethodGet:     true,
-	http.MethodPost:    true,
-	http.MethodPut:     true,
-	http.MethodDelete:  true,
-	http.MethodPatch:   true,
-	http.MethodHead:    true,
-	http.MethodOptions: true,
-	http.MethodConnect: true,
-	http.MethodTrace:   true,
-}
-
-// validateMethod checks if HTTP method is valid
+// validateMethod checks that the HTTP method is a valid RFC 7230 token. It does
+// NOT restrict to the standard verbs: curl (and gocurl) must support custom and
+// WebDAV methods (PROPFIND, MKCALENDAR, …); only methods containing illegal
+// characters (spaces, control chars, separators) are rejected.
 func validateMethod(method string) error {
 	if method == "" {
 		return nil // Empty is OK, defaults to GET
 	}
-
-	if !validHTTPMethods[method] {
-		return fmt.Errorf("invalid HTTP method: %s (allowed: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS, CONNECT, TRACE)", method)
+	for _, r := range method {
+		if !isMethodTokenChar(r) {
+			return fmt.Errorf("invalid HTTP method %q: contains an illegal character", method)
+		}
 	}
-
 	return nil
+}
+
+// isMethodTokenChar reports whether r is a valid RFC 7230 "tchar".
+func isMethodTokenChar(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		return true
+	}
+	switch r {
+	case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
+		return true
+	}
+	return false
 }
 
 // validateURL checks URL length
@@ -153,35 +157,69 @@ func validateQueryParams(params map[string][]string) error {
 	return nil
 }
 
-// validateSecureAuth warns about insecure authentication
-func validateSecureAuth(url string, hasBasicAuth bool, hasBearerToken bool) error {
-	// Check if using HTTP (not HTTPS)
-	isHTTP := strings.HasPrefix(url, "http://")
-
-	if !isHTTP {
-		return nil // HTTPS is secure
+// validateSecureAuth fails closed when credentials would be sent over cleartext
+// HTTP. The allowInsecure argument (from WithAllowInsecureAuth) and the
+// GOCURL_ALLOW_INSECURE_AUTH=1 environment variable both override it.
+func validateSecureAuth(url string, hasBasicAuth bool, hasBearerToken bool, allowInsecure bool) error {
+	// Case-insensitive: net/url lowercases the scheme, so "HTTP://" / "Http://"
+	// travel over plaintext just like "http://". A case-sensitive prefix check
+	// would fail open and send credentials in the clear.
+	if !strings.HasPrefix(strings.ToLower(url), "http://") {
+		return nil // HTTPS (or scheme-relative/other) is not plaintext HTTP
 	}
 
-	// Check for override environment variable
-	if allowInsecureAuth() {
+	if allowInsecure || allowInsecureAuth() {
 		return nil
 	}
 
-	// Warn about BasicAuth over HTTP
 	if hasBasicAuth {
-		return fmt.Errorf("security warning: BasicAuth over HTTP is insecure (credentials sent in plaintext). Use HTTPS or set GOCURL_ALLOW_INSECURE_AUTH=1")
+		return fmt.Errorf("BasicAuth over HTTP is insecure (credentials sent in plaintext); use HTTPS, set GOCURL_ALLOW_INSECURE_AUTH=1, or WithAllowInsecureAuth(true)")
 	}
-
-	// Warn about BearerToken over HTTP
 	if hasBearerToken {
-		return fmt.Errorf("security warning: Bearer token over HTTP is insecure. Use HTTPS or set GOCURL_ALLOW_INSECURE_AUTH=1")
+		return fmt.Errorf("Bearer token over HTTP is insecure; use HTTPS, set GOCURL_ALLOW_INSECURE_AUTH=1, or WithAllowInsecureAuth(true)")
 	}
-
 	return nil
 }
 
-// allowInsecureAuth checks if insecure auth is explicitly allowed
+// allowInsecureAuth reports whether the GOCURL_ALLOW_INSECURE_AUTH environment
+// variable opts out of the plaintext-auth check.
 func allowInsecureAuth() bool {
-	// Check environment variable
-	return false // For now, always enforce. Can add os.Getenv check later
+	return os.Getenv("GOCURL_ALLOW_INSECURE_AUTH") == "1"
+}
+
+// ValidateRequest runs the runtime input validators that protect the live
+// request path: method, headers (count/size/forbidden Host/Content-Length/
+// Transfer-Encoding), in-memory body size, form/query counts, and the secure-auth
+// (plaintext-credential) policy. Streaming bodies (BodyStream) are exempt from the
+// in-memory body cap — only opts.Body is size-checked.
+func ValidateRequest(opts *RequestOptions) error {
+	if err := validateMethod(opts.Method); err != nil {
+		return err
+	}
+	if err := validateURL(opts.URL); err != nil {
+		return err
+	}
+	if err := validateHeaders(opts.Headers); err != nil {
+		return err
+	}
+	if opts.Body != "" {
+		limit := opts.ResponseBodyLimit
+		if limit <= 0 {
+			limit = MaxBodySize
+		}
+		if err := validateBody(opts.Body, limit); err != nil {
+			return err
+		}
+	}
+	if len(opts.Form) > 0 {
+		if err := validateForm(opts.Form); err != nil {
+			return err
+		}
+	}
+	if len(opts.QueryParams) > 0 {
+		if err := validateQueryParams(opts.QueryParams); err != nil {
+			return err
+		}
+	}
+	return validateSecureAuth(opts.URL, opts.BasicAuth != nil, opts.BearerToken != "", opts.AllowInsecureAuth)
 }

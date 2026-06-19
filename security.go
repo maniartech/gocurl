@@ -21,10 +21,20 @@ func LoadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
 	// Start with secure defaults
 	tlsConfig := SecureDefaults()
 
-	// If user provided a custom TLS config, merge it
+	// If user provided a custom TLS config, merge it OVER the secure defaults
+	// rather than replacing them. Cloning preserves the caller's RootCAs,
+	// Certificates, ServerName, etc.; we then restore the secure floor and curated
+	// cipher list for any field the caller left at its zero value, so a
+	// WithTLSConfig(&tls.Config{RootCAs: pool}) still gets the TLS 1.2 floor.
 	if opts.TLSConfig != nil {
-		// Clone the user's config to avoid modifying the original
+		base := tlsConfig
 		tlsConfig = opts.TLSConfig.Clone()
+		if tlsConfig.MinVersion == 0 {
+			tlsConfig.MinVersion = base.MinVersion
+		}
+		if len(tlsConfig.CipherSuites) == 0 {
+			tlsConfig.CipherSuites = base.CipherSuites
+		}
 	}
 
 	// Handle insecure mode
@@ -61,15 +71,17 @@ func LoadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
 		tlsConfig.RootCAs = caCertPool
 	}
 
-	// Certificate pinning if provided
-	if opts.CertPinFingerprints != nil && len(opts.CertPinFingerprints) > 0 {
-		// Set up VerifyPeerCertificate callback for pinning
+	// Certificate pinning if provided.
+	if len(opts.CertPinFingerprints) > 0 {
+		// Run the pin check via VerifyPeerCertificate. We deliberately do NOT set
+		// InsecureSkipVerify here: with verification ON, the stdlib validates the
+		// chain first and then calls this callback, so the pin is checked IN
+		// ADDITION to chain verification — a typo'd pin against a valid chain fails
+		// CLOSED. Only when the caller ALSO passed --insecure (handled above, which
+		// sets InsecureSkipVerify) does the pin become the sole check.
 		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 			return VerifyCertificatePin(rawCerts, opts.CertPinFingerprints)
 		}
-		// Must also set InsecureSkipVerify to true when using VerifyPeerCertificate
-		// but we still do our own verification in the callback
-		tlsConfig.InsecureSkipVerify = true
 	}
 
 	// SNI (Server Name Indication) - set the server name if provided
@@ -195,6 +207,13 @@ func ValidateRequestOptions(opts *options.RequestOptions) error {
 	// Validate redirects and retries
 	if err := validateRedirectsAndRetries(opts); err != nil {
 		return err
+	}
+
+	// Runtime input validation on the live path (Spec 07 §4): method, header
+	// count/size + forbidden headers, in-memory body size, form/query counts, and
+	// the plaintext-auth policy. Streaming bodies are exempt from the body cap.
+	if err := options.ValidateRequest(opts); err != nil {
+		return ValidationError("request", err)
 	}
 
 	return nil

@@ -7,6 +7,43 @@ a tagged release.
 
 ## [Unreleased]
 
+### Added — security hardening (Milestone 7)
+- **Opt-in SSRF guard** (`WithSSRFGuard`, `SSRFPolicy`, `DefaultSSRFPolicy`): blocks the initial
+  request and every redirect hop whose host resolves to a loopback, link-local, RFC1918/ULA
+  private, the unspecified address (`0.0.0.0`/`::`, loopback-equivalent for routing), or a
+  cloud-metadata address (`169.254.169.254`, `fd00:ec2::254`, `metadata.google.internal`, matched
+  with a trailing FQDN dot normalized away) unless allow-listed (`AllowHosts`/`AllowIPs`). A block
+  is a typed, non-retryable error (`errors.Is(err, ErrSSRFBlocked)`). Opt-in to preserve the
+  paste-any-curl promise; DNS-rebinding between check and dial is a documented residual risk.
+- **Runtime input validation on the live path**: `Curl*`/`Do` now enforce method-token validity,
+  header count/size caps, a forbidden-header rule (`Host`/`Content-Length`/`Transfer-Encoding`),
+  and body/form/query-count caps — previously reachable only via the builder. Streaming bodies are
+  exempt from the in-memory body cap.
+- **Fail-closed plaintext auth**: BasicAuth or a bearer token over cleartext `http://` is now an
+  error by default (scheme matched case-insensitively, so `HTTP://` cannot slip past); override with
+  `WithAllowInsecureAuth(true)` or `GOCURL_ALLOW_INSECURE_AUTH=1`.
+- `WithTLSConfig(*tls.Config)` merges a caller TLS config **over** `SecureDefaults()` via
+  `LoadTLSConfig`: the caller's fields win, but any field left zero (e.g. a config that only sets
+  `RootCAs`) still inherits the TLS 1.2 floor and the curated cipher list.
+- **Redaction coverage widened** (one path: `RedactURL`/`RedactCommand`/`IsSensitiveHeader`, also
+  feeding logs, spans, and verbose output): every occurrence of a repeated sensitive query
+  parameter is redacted (not just the first); the `-u`/`--user` (and `=`-separated) and
+  `-b`/`--cookie` flag forms are redacted, not only the header forms; and `x-amz-security-token`
+  (AWS STS) and `x-csrf-token` join the sensitive-header set.
+
+### Changed
+- **TLS pinning hardened**: a pinned request now verifies the certificate chain **and** the pin
+  (a wrong pin against a valid chain fails closed); pinning no longer silently sets
+  `InsecureSkipVerify`. Only `-k`/`--insecure` makes the pin the sole check.
+- **Behavior changes (security, may affect existing code):** setting `Host`/`Content-Length`/
+  `Transfer-Encoding` via `-H` is now rejected; BasicAuth/bearer over `http://` fails closed
+  (see overrides above). `validateMethod` now accepts any valid HTTP method token (custom/WebDAV
+  methods are allowed; previously a fixed allow-list).
+- Proxy auth is sent whenever a username is present (`-x http://user@proxy`), not only when a
+  password is also set. Proxy credentials are now encoded via the `net/url` userinfo helpers
+  (spaces and special characters round-trip correctly; the HTTP-proxy and CONNECT paths agree), and
+  a malformed proxy address never echoes the credentials in its error.
+
 ### Added — observability: tracing, metrics, logging, hooks (Milestone 6)
 - Vendor-neutral, dependency-free primitives in the core package: `Tracer`/`Span`, `Metrics`,
   `Logger`/`Level`/`Field`, and lifecycle `Hooks` (`OnRequest`/`OnRetry`/`OnResponse`/`OnError`),
