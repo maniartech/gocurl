@@ -105,7 +105,7 @@ This is a bug in the gocurl library itself, NOT in the example code. The `execut
 
 ### Full Compilation Test
 ```bash
-go run scripts/test-examples.go
+./scripts/verify-examples.sh
 ```
 
 ### Individual Example Tests
@@ -209,6 +209,6 @@ All 40 testable examples in Part 1 and Part 2 compile successfully. The example 
 ---
 
 **Tested By:** GitHub Copilot
-**Test Script:** `scripts/test-examples.go`
+**Test Script:** `scripts/verify-examples.sh`
 **Platform:** Windows, Go 1.x
 **Date:** October 17, 2025
