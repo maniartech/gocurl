@@ -1,11 +1,18 @@
 # GoCurl Implementation Design
 
+> ⚠️ **HISTORICAL / SUPERSEDED.** This is a pre-implementation planning document. Its
+> "zero-allocation", "faster than net/http", and "military-grade" language was aspirational
+> and is **not** a claim about the shipped library. The authoritative, honest references are
+> [specs/](specs/README.md), [VISION.md](VISION.md), and the benchmarking methodology in
+> [docs/benchmarking.md](docs/benchmarking.md) (parity with `net/http`, allocation budgets,
+> never "faster" or "zero-allocation").
+
 ## Design Philosophy: Sweet, Simple, Robust (SSR)
 
 This design follows three core principles:
 - **Sweet**: Developer-friendly API, minimal cognitive load, copy-paste curl commands
 - **Simple**: No over-engineering, clear data flow, maintainable codebase
-- **Robust**: Zero-allocation where critical, military-grade reliability, thread-safe, race-free, comprehensive error handling, battle-tested under extreme load
+- **Robust**: allocation-budgeted hot paths (see [docs/benchmarking.md](docs/benchmarking.md) — parity with `net/http`, never a "zero-allocation" or "faster" claim), thread-safe, race-free, comprehensive error handling, tested under load
 
 ## Architecture Overview
 
@@ -29,7 +36,7 @@ This design follows three core principles:
 ┌─────────────────────────────────────────────────────────────┐
 │                 Core Execution Layer                        │
 ├─────────────────────────────────────────────────────────────┤
-│  • Request builder  - Zero-alloc HTTP request construction  │
+│  • Request builder  - Budgeted HTTP request construction    │
 │  • Client factory   - Pooled, reusable HTTP clients         │
 │  • Response handler - Streaming, buffered, or pooled        │
 └─────────────────────────────────────────────────────────────┘
@@ -189,7 +196,7 @@ func expandTokenVariables(tokens []Token, vars Variables) []Token
 
 **Why**: More secure than os.ExpandEnv, controlled, testable, no surprises.
 
-### 5. Request Builder (Zero-Allocation Path)
+### 5. Request Builder (Allocation-Budgeted Path)
 
 **File**: `builder/request_builder.go` (NEW)
 
@@ -212,7 +219,7 @@ func BuildRequest(ctx context.Context, opts *RequestOptions) (*http.Request, err
 }
 ```
 
-**Why**: Achieves zero-allocation promise for critical path without over-engineering.
+**Why**: keeps the per-request hot path within a measured allocation budget (enforced by `TestAllocBudget_*`) without over-engineering. Not a zero-allocation claim — see [docs/benchmarking.md](docs/benchmarking.md).
 
 ### 6. Response Handler (Smart Buffering)
 
@@ -361,14 +368,19 @@ func main() {
 
 ## Memory Management Strategy
 
-### Zero-Allocation Targets
+### Allocation Budget Targets
 
-**Critical Path** (must be zero-alloc):
-- Request option parsing (reuse token arrays)
+Budgets are measured ceilings (baseline + headroom), enforced by `TestAllocBudget_*`
+and documented in [docs/benchmarking.md](docs/benchmarking.md) — **not** zero-allocation
+promises.
+
+**Hot path** (kept within a tight budget):
+- Per-request execution (`Do` over a pooled transport)
 - Header construction (pre-allocated maps)
-- URL building (string builder pooling)
+- URL building
 
-**Acceptable Allocations** (not on critical path):
+**Authoring-time, one-time cost** (budgeted, not minimized — paid once by `Prepare`):
+- Command parsing / token conversion
 - Response bodies (one-time read)
 - Error messages (exceptional cases)
 - TLS handshakes (infrequent)
@@ -389,7 +401,7 @@ var (
 // - Rarely-used objects (pool overhead)
 ```
 
-**Why**: Focus zero-alloc efforts where they matter, avoid over-engineering.
+**Why**: focus allocation-budget efforts where they matter (the per-request hot path), avoid over-engineering the one-time parse path.
 
 ## Error Handling Philosophy
 
@@ -435,18 +447,19 @@ func (e *GocurlError) Error() string {
 - Retry with concurrent requests
 
 ### Benchmark Tests
-- Zero-allocation verification (`-benchmem`)
-- Performance vs net/http
+- Allocation-budget verification (`-benchmem`, `TestAllocBudget_*`)
+- Parity comparison vs net/http (never a "faster" claim — see docs/benchmarking.md)
 - Memory profiling (`-memprofile`)
 - CPU profiling (`-cpuprofile`)
 - Concurrent request handling (1k, 10k, 100k goroutines)
 - Benchmark regression testing (CI fails on >5% degradation)
 
 ### Load Tests
-- **Sustained throughput**: 10k req/s for 1 hour minimum
-- **Burst handling**: 100k req/s for 10 seconds
-- **Memory stability**: No growth over 24-hour soak test
-- **Connection pooling**: Verify reuse under load
+- **Sustained throughput**: bounded soak loop (`TestClient_Soak`), stable goroutines;
+  numbers and methodology in [docs/benchmarking.md](docs/benchmarking.md) — no fixed
+  req/s target is claimed
+- **Memory stability**: no goroutine/connection growth over the soak run
+- **Connection pooling**: reuse verified under load (`TestClient_Do_ReusesConnections`)
 - **Graceful degradation**: Behavior at 10x normal load
 
 ### Stress Tests

@@ -1,5 +1,11 @@
 # GoCurl - Curl-Compatible HTTP Client for Go
 
+> ⚠️ **HISTORICAL / SUPERSEDED draft README.** The live README is [README.md](README.md).
+> This draft's "zero-allocation" / "military-grade performance" / "beats net/http" language
+> is **not** a claim about the shipped library. The authoritative, honest performance
+> reference is [docs/benchmarking.md](docs/benchmarking.md) (parity with `net/http`,
+> allocation budgets, never "faster" or "zero-allocation").
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/maniartech/gocurl.svg)](https://pkg.go.dev/github.com/maniartech/gocurl)
 [![Go Report Card](https://goreportcard.com/badge/github.com/maniartech/gocurl)](https://goreportcard.com/report/github.com/maniartech/gocurl)
 

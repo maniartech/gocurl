@@ -52,3 +52,17 @@ jobs:
         run: |
           go test -run='^$' -fuzz='FuzzTokenize$' -fuzztime=30s ./tokenizer/
           go test -run='^$' -fuzz='FuzzParseCommand$' -fuzztime=30s .
+
+  benchmarks:
+    # Benchmarks run without -race (which perturbs timing/allocs) on a single pinned
+    # Go version so numbers stay comparable. This is a SMOKE: every benchmark runs
+    # once and must not error. Performance numbers themselves are recorded in
+    # docs/benchmarking.md via `-count=10` + benchstat, not gated on time here.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Benchmark smoke (no -race, run once)
+        run: go test -run='^$' -bench=. -benchmem -benchtime=1x ./...

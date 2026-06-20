@@ -1,5 +1,12 @@
 # Performance & Race Condition Testing Results
 
+> **SUPERSEDED.** This early note (with its "Week 1 baseline", "Week 2 target: 0
+> allocs/op", and "10k req/s" goals) is historical and no longer authoritative. The
+> current, honest benchmarking methodology — parity with `net/http` (never "faster" or
+> "zero-allocation"), allocation budgets, the round-trip arms, and the pprof/latency
+> workflow — lives in [docs/benchmarking.md](../docs/benchmarking.md). Do not cite the
+> targets below.
+
 ## Summary
 
 ✅ **Race Condition Testing: PASSED**

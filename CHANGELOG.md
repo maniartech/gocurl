@@ -7,6 +7,19 @@ a tagged release.
 
 ## [Unreleased]
 
+### Internal — benchmarking & performance methodology (Milestone 10)
+- **Comparative round-trip suite** (`bench_roundtrip_test.go`): gocurl (prepared + per-call-parse)
+  vs a well-tuned `net/http` client over one shared httptest server, plus concurrent
+  (`b.RunParallel`) arms. Honest baseline recorded in **docs/benchmarking.md** with machine/Go/OS
+  provenance: gocurl adds ~+13 allocs/op and a roughly constant ~40µs over bare net/http — parity,
+  never "faster".
+- **Allocation budgets** (`alloc_budget_test.go`, `testing.AllocsPerRun`): hard ceilings for
+  `ExpandVariables`/`Prepare`/`Do` that fail the build on a regression (baselined, not zero), plus
+  a `TestLatencyDistribution` p50/p99 harness and a new non-`-race` CI `benchmarks` smoke job.
+- **Honesty cleanup:** the legacy "zero-allocation / faster-than-net/http / 10k-req/s" language is
+  superseded with banners (`design.md`, `objective.md`, `objective-gaps.md`, `README_NEW.md`,
+  `plan/`, `wip-notes/PERFORMANCE_TESTING.md`); no authoritative doc claims it. No library code change.
+
 ### Internal — testing & quality hardening (Milestone 9)
 - **Curl-compat regression corpus** (`internal/corpus/compat.json`): real doc commands (Stripe,
   GitHub, OpenAI) mapped to their expected parse, run by both a whitebox parse assertion and a

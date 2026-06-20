@@ -291,10 +291,20 @@ Spec 09. deps: ongoing; finalize here.
 
 Spec 10. deps: M2, M3.
 
-- [ ] **M10-T1 — Comparative benchmark suite vs raw `net/http`** over a shared httptest
-  server (construction, round-trip, concurrent throughput, allocs/op). *DoD: reproducible;
-  results documented honestly (parity framing, never "faster").*
-- [ ] **M10-T2 — Benchmark regression detection in CI.** *DoD: CI flags >X% regressions.*
+- [x] **M10-T1 — Comparative benchmark suite vs raw `net/http`.** `bench_roundtrip_test.go`:
+  `BenchmarkRoundTrip_NetHTTP` (parity bar), `_Gocurl_Prepared` (parse-once hot path),
+  `_Gocurl_PerCallParse` (the parse tax), and `_Concurrent_*` (`b.RunParallel`), all against one
+  shared httptest server, all draining the body, all `ReportAllocs`. The skipped
+  `BenchmarkRequestAPI` is removed; construction/expansion benchmarks are reframed as one-time
+  cost. A `TestLatencyDistribution` harness (p50/p99, `-short`-gated) fills the percentile gap.
+  Honest baseline recorded in `docs/benchmarking.md` with machine/Go/OS provenance: gocurl adds
+  ~+13 allocs/op and a roughly constant ~40µs over bare net/http (parity, never "faster").
+- [x] **M10-T2 — Regression detection in CI.** `alloc_budget_test.go` (`testing.AllocsPerRun`
+  ceilings for `ExpandVariables`=6, `Prepare`=45, `Do`=100 — baselined, not zero) fails the build
+  on an allocation regression; a new non-`-race` `benchmarks` CI job runs every benchmark once
+  (`-benchtime=1x`) as a smoke. `docs/benchmarking.md` documents the methodology, pprof/latency
+  workflow, and the "parity, never superiority" claim policy; the legacy "zero-allocation /
+  10k-req/s / faster-than-net/http" docs are superseded with banners.
 
 ---
 

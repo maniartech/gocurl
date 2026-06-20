@@ -173,31 +173,33 @@ gated (skipped in the fast CI test job) and informational, not pass/fail.
 
 ## Acceptance criteria / Definition of Done
 
-- [ ] `bench_roundtrip_test.go` exists with `BenchmarkRoundTrip_NetHTTP`,
+- [x] `bench_roundtrip_test.go` exists with `BenchmarkRoundTrip_NetHTTP`,
       `BenchmarkRoundTrip_Gocurl_Prepared`, and `BenchmarkRoundTrip_Gocurl_PerCallParse`, all
       against a shared `httptest` server, all draining the body, all calling `b.ReportAllocs()`.
-- [ ] `BenchmarkRequestAPI`'s `b.Skip` (`benchmark_test.go:54`) is removed/replaced; no
-      benchmark used to support a claim is skipped.
-- [ ] Construction and expansion benchmarks (`BenchmarkRequestConstruction`,
+- [x] `BenchmarkRequestAPI`'s `b.Skip` is removed (the function is deleted, superseded by the
+      real `BenchmarkRoundTrip_*` arms); no benchmark used to support a claim is skipped.
+- [x] Construction and expansion benchmarks (`BenchmarkRequestConstruction`,
       `BenchmarkVariableExpansion`, `BenchmarkConcurrentRequests`) are retained and rephrased
       as **"one-time" cost**, explicitly separated from the round-trip hot path.
-- [ ] `BenchmarkRoundTrip_Concurrent_*` arms use `b.RunParallel` and demonstrate connection
+- [x] `BenchmarkRoundTrip_Concurrent_*` arms use `b.RunParallel` and demonstrate connection
       reuse via the cached transport.
-- [ ] `alloc_budget_test.go` uses `testing.AllocsPerRun` with documented ceiling budgets for
-      `Prepare`, `ExpandVariables`, and `Do` (over httptest); budgets are baselined, not zero.
-- [ ] Optional `resty`/`req` arms compile only under `-tags benchvendor` and are not in the
-      default module require graph used by `go build ./...`.
-- [ ] CI gains a non-`-race` `benchmarks` job that runs `go test -run=^$ -bench=. -benchmem
-      -benchtime=1x` (smoke: every benchmark executes once without error) plus the
-      `TestAllocBudget_*` guards in the normal test job.
-- [ ] `docs/benchmarking.md` documents the methodology, the pprof workflow, the p50/p99
+- [x] `alloc_budget_test.go` uses `testing.AllocsPerRun` with documented ceiling budgets for
+      `Prepare` (45), `ExpandVariables` (6), and `Do` over httptest (100); budgets are baselined
+      (2/30/76), not zero.
+- [~] Optional `resty`/`req` arms — **deferred**: omitted to keep the module's require graph free
+      of vendor deps. Documented in `docs/benchmarking.md` as opt-in/future; not required for v1.
+- [x] CI gains a non-`-race` `benchmarks` job that runs `go test -run=^$ -bench=. -benchmem
+      -benchtime=1x` (smoke: every benchmark executes once without error); the `TestAllocBudget_*`
+      guards run in the normal test job.
+- [x] `docs/benchmarking.md` documents the methodology, the pprof workflow, the p50/p99
       latency harness, and the "parity, not superiority" claim policy.
-- [ ] `wip-notes/PERFORMANCE_TESTING.md`'s zero-allocation / 10k-req/s targets are removed or
-      superseded by a pointer to this spec; no doc retains a "faster than net/http" or
-      "zero-allocation" statement.
-- [ ] A `benchstat`-based comparison of `Gocurl_Prepared` vs `NetHTTP` is recorded in
-      `docs/benchmarking.md` with the machine/Go/OS provenance and shows the overhead delta
-      (the honest parity number).
+- [x] `wip-notes/PERFORMANCE_TESTING.md`'s zero-allocation / 10k-req/s targets are superseded by
+      a banner pointing to `docs/benchmarking.md`; the legacy planning docs (`design.md`,
+      `objective.md`, `objective-gaps.md`, `README_NEW.md`, `plan/`) are banner-superseded so no
+      authoritative doc retains a "faster than net/http" or "zero-allocation" claim.
+- [x] A comparison of `Gocurl_Prepared` vs `NetHTTP` is recorded in `docs/benchmarking.md` with
+      machine/Go/OS provenance and the overhead delta (the honest parity number); `benchstat`
+      with `-count=10` is documented as the reproducible method.
 
 ## Dependencies
 

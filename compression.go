@@ -36,7 +36,8 @@ var brotliReaderPool = sync.Pool{
 }
 
 // DecompressResponse handles automatic decompression of response bodies based on Content-Encoding.
-// This function is zero-allocation optimized using reader pools.
+// It reuses gzip/zlib readers via a sync.Pool to reduce per-response allocations (not a
+// zero-allocation guarantee).
 func DecompressResponse(resp *http.Response) error {
 	if resp == nil || resp.Body == nil {
 		return nil
