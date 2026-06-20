@@ -29,6 +29,14 @@ surface for a future release.
   change must regenerate the golden (`GOCURL_UPDATE_API=1 go test -run TestAPISurface .`) and be
   recorded here.
 
+### Fixed — streaming response body limit (`limitedBody`)
+- The `ResponseBodyLimit` streaming guard now caps the slice handed to the underlying reader, so it
+  pulls **at most one overflow-probe byte** past the cap instead of a whole buffer chunk, and it
+  returns a **typed, classifiable** error (`KindBodyRead` / `errors.Is(err, gocurl.ErrBodyRead)`)
+  instead of a bare `fmt.Errorf`. Boundary behavior is unchanged and now pinned by tests: a body
+  exactly at the limit succeeds, the first byte over fails. Added a regression test proving the cap
+  is measured on the **decompressed** stream for `--compressed`/gzip responses. (specs/05 §7 DoD.)
+
 ### Removed — repository de-sprawl (pre-v1 cleanup)
 - Deleted the unrelated `cmd/` recipe_search demo (a standalone USDA food-API client that did not
   use gocurl and whose non-hermetic test polluted the coverage gate). The real CLI, `cmd/gocurl`,

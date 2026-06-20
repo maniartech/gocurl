@@ -166,23 +166,49 @@ type limitedBody struct {
 }
 
 func (l *limitedBody) Read(p []byte) (int, error) {
-    if l.read >= l.limit {
-        return 0, &GocurlError{Code: ErrBodyTooLarge,
-            Message: fmt.Sprintf("response body exceeds limit of %d bytes", l.limit)}
+    if len(p) == 0 {
+        return 0, nil
     }
-    if int64(len(p)) > l.limit-l.read {
-        p = p[:l.limit-l.read] // never read past the cap
+    remaining := l.limit - l.read
+    if remaining <= 0 {
+        // Already delivered exactly `limit` bytes — probe ONE byte to tell a body
+        // that is exactly at the cap (clean EOF -> success) from one that runs over,
+        // without buffering more than that single byte.
+        var probe [1]byte
+        n, err := l.rc.Read(probe[:])
+        if n > 0 {
+            return 0, l.tooLargeErr()
+        }
+        return 0, err
+    }
+    if int64(len(p)) > remaining+1 {
+        p = p[:remaining+1] // never pull more than one byte past the cap
     }
     n, err := l.rc.Read(p)
     l.read += int64(n)
+    if l.read > l.limit {
+        n -= int(l.read - l.limit) // hide the probe byte from the caller
+        l.read = l.limit
+        return n, l.tooLargeErr()
+    }
     return n, err
+}
+
+// tooLargeErr classifies the over-limit case as KindBodyRead (errors.Is(err,
+// ErrBodyRead) / KindOf), the consolidated body-read failure kind.
+func (l *limitedBody) tooLargeErr() error {
+    return &GocurlError{Op: "body read", Kind: KindBodyRead,
+        Err: fmt.Errorf("response body size exceeds limit of %d bytes", l.limit)}
 }
 ```
 
-This fixes two issues in the current implementation: it caps the slice handed to the underlying
-`Read` (so it does not over-read past the limit) and returns a typed, classifiable error
-(Spec 03) instead of a bare `fmt.Errorf`. The CLI `--max-filesize`-style flag maps to
-`ResponseBodyLimit`.
+This fixes the two issues in the original implementation: it caps the slice handed to the
+underlying `Read` (so it pulls at most one byte — the overflow probe — past the cap rather than a
+whole buffer chunk), and it returns a typed, classifiable error (Spec 03) instead of a bare
+`fmt.Errorf`. The error uses the existing `KindBodyRead` taxonomy — body-read failures, including
+the over-limit/truncation case, are consolidated under one kind; there is no separate
+`ErrBodyTooLarge`. A body exactly at `limit` succeeds (the probe reads a clean EOF); the first
+byte over errors. The CLI `--max-filesize`-style flag maps to `ResponseBodyLimit`.
 
 ### 8. Streaming ↔ retry replay
 
@@ -242,10 +268,12 @@ upload — defeating streaming. New rule:
       has started streaming is **never** retried and returns a classifiable `ErrBodyNotReplayable`.
 - [ ] Response streaming contract documented on `Curl`/`client.Do`: caller closes `resp.Body`;
       convenience wrappers close it themselves; no `os.Stdout` writes outside deprecated `Process`.
-- [ ] `limitedBody` caps the underlying read slice, never over-reads, and returns a typed
-      `ErrBodyTooLarge`; boundary test (size == limit passes, size == limit+1 fails).
-- [ ] `ResponseBodyLimit` applies to the decompressed stream; test with a gzip body verifies the
-      cap is measured on decompressed bytes.
+- [x] `limitedBody` caps the underlying read slice (pulls at most one overflow-probe byte past
+      the cap), never over-reads, and returns a typed, classifiable `KindBodyRead` error
+      (`errors.Is(err, ErrBodyRead)`); boundary test (size == limit passes, size == limit+1 fails)
+      — `TestLimitedBody_*` + `TestResponseBodyLimit_{ExactLimit,OneByteOver}`.
+- [x] `ResponseBodyLimit` applies to the decompressed stream — `TestResponseBodyLimit_DecompressedStream`
+      gzips a 64 KiB body (compressed < cap) and verifies the limit still fires on the inflated bytes.
 - [ ] SSE test: a `text/event-stream` endpoint is consumed event-by-event with
       `bufio.Scanner` without the library buffering the full stream.
 - [ ] Trailers: a test reads `resp.Trailer` successfully after full body read and confirms it is
