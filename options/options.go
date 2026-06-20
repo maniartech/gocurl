@@ -31,8 +31,8 @@ import (
 //     opts.SetHeader("Authorization", "Bearer token")
 //
 //     // Safe: Multiple goroutines reading the same options
-//     go func() { resp, _ := gocurl.Execute(ctx1, opts) }()
-//     go func() { resp, _ := gocurl.Execute(ctx2, opts) }()
+//     go func() { req, _ := client.Prepare(cmd1); client.Do(ctx1, req) }()
+//     go func() { req, _ := client.Prepare(cmd2); client.Do(ctx2, req) }()
 //
 //  2. Concurrent Modifications (USE CLONE):
 //     opts := options.NewRequestOptions("https://api.example.com")
@@ -41,13 +41,13 @@ import (
 //     go func() {
 //     opts1 := opts.Clone()
 //     opts1.AddHeader("X-Request-ID", "req-1")
-//     gocurl.Execute(ctx, opts1)
+//     // ... drive via a Client/Request built from opts1
 //     }()
 //
 //     go func() {
 //     opts2 := opts.Clone()
 //     opts2.AddHeader("X-Request-ID", "req-2")
-//     gocurl.Execute(ctx, opts2)
+//     // ... drive via a Client/Request built from opts2
 //     }()
 //
 //  3. UNSAFE Pattern (RACE CONDITION):

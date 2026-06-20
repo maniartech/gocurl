@@ -1,193 +1,31 @@
-package gocurl_test
+package gocurl
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/maniartech/gocurl"
 	"github.com/maniartech/gocurl/middlewares"
 	"github.com/maniartech/gocurl/options"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func TestProcess(t *testing.T) {
-	t.Run("Basic GET request", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "GET", r.Method)
-			fmt.Fprint(w, "Hello, World!")
-		}))
-		defer server.Close()
-
-		opts := &options.RequestOptions{
-			URL: server.URL,
-		}
-
-		resp, body, err := gocurl.Process(context.Background(), opts)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, "Hello, World!", body)
-	})
-
-	t.Run("Output to file", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprint(w, "File content")
-		}))
-		defer server.Close()
-
-		tempFile, err := os.CreateTemp("", "gocurl-test-")
-		require.NoError(t, err)
-		tempFile.Close()
-		defer os.Remove(tempFile.Name())
-
-		opts := &options.RequestOptions{
-			URL:        server.URL,
-			OutputFile: tempFile.Name(),
-		}
-
-		_, _, err = gocurl.Process(context.Background(), opts)
-		require.NoError(t, err)
-
-		content, err := os.ReadFile(tempFile.Name())
-		require.NoError(t, err)
-		assert.Equal(t, "File content", string(content))
-	})
-
-	t.Run("Custom headers", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "TestValue", r.Header.Get("X-Test-Header"))
-			fmt.Fprint(w, "Header received")
-		}))
-		defer server.Close()
-
-		opts := &options.RequestOptions{
-			URL: server.URL,
-			Headers: http.Header{
-				"X-Test-Header": []string{"TestValue"},
-			},
-		}
-
-		resp, body, err := gocurl.Process(context.Background(), opts)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		require.NoError(t, err)
-		assert.Equal(t, "Header received", body)
-	})
-
-	t.Run("Basic authentication", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			username, password, ok := r.BasicAuth()
-			assert.True(t, ok)
-
-			if username != "testuser" || password != "testpass" {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			assert.Equal(t, "testuser", username)
-			assert.Equal(t, "testpass", password)
-			fmt.Fprint(w, "Authenticated")
-		}))
-		defer server.Close()
-
-		opts := &options.RequestOptions{
-			URL: server.URL,
-			BasicAuth: &options.BasicAuth{
-				Username: "testuser",
-				Password: "testpass",
-			},
-			// httptest serves over http://; this test exercises basic-auth
-			// mechanics, not transport security, so opt out of the fail-closed
-			// plaintext-auth policy (Spec 07).
-			AllowInsecureAuth: true,
-		}
-
-		resp, body, err := gocurl.Process(context.Background(), opts)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, "Authenticated", body)
-	})
-
-	t.Run("Output to file", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprint(w, "File content")
-		}))
-		defer server.Close()
-
-		tempFile, err := os.CreateTemp("", "gocurl-test-")
-		require.NoError(t, err)
-		tempFile.Close()
-		defer os.Remove(tempFile.Name())
-
-		opts := &options.RequestOptions{
-			URL:        server.URL,
-			OutputFile: tempFile.Name(),
-		}
-
-		_, _, err = gocurl.Process(context.Background(), opts)
-		require.NoError(t, err)
-
-		content, err := os.ReadFile(tempFile.Name())
-		require.NoError(t, err)
-		assert.Equal(t, "File content", string(content))
-	})
-
-	t.Run("Retry mechanism", func(t *testing.T) {
-		attempts := 0
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			attempts++
-			if attempts < 3 {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			fmt.Fprint(w, "Success after retries")
-		}))
-		defer server.Close()
-
-		opts := &options.RequestOptions{
-			URL: server.URL,
-			RetryConfig: &options.RetryConfig{
-				MaxRetries:  3,
-				RetryDelay:  time.Millisecond,
-				RetryOnHTTP: []int{500},
-			},
-		}
-
-		resp, body, err := gocurl.Process(context.Background(), opts)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, "Success after retries", body)
-		assert.Equal(t, 3, attempts)
-	})
-
-	// Add more test cases for other features like file uploads, middleware, etc.
-}
 
 func TestValidateOptions(t *testing.T) {
 	t.Run("Valid options", func(t *testing.T) {
 		opts := &options.RequestOptions{
 			URL: "https://example.com",
 		}
-		err := gocurl.ValidateOptions(opts)
+		err := ValidateOptions(opts)
 		assert.NoError(t, err)
 	})
 
 	t.Run("Missing URL", func(t *testing.T) {
 		opts := &options.RequestOptions{}
-		err := gocurl.ValidateOptions(opts)
+		err := ValidateOptions(opts)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "URL is required")
 	})
@@ -199,7 +37,7 @@ func TestCreateHTTPClient(t *testing.T) {
 	t.Run("Default client", func(t *testing.T) {
 		ctx := context.Background()
 		opts := &options.RequestOptions{}
-		client, err := gocurl.CreateHTTPClient(ctx, opts)
+		client, err := CreateHTTPClient(ctx, opts)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
 	})
@@ -209,7 +47,7 @@ func TestCreateHTTPClient(t *testing.T) {
 		opts := &options.RequestOptions{
 			Timeout: 5 * time.Second,
 		}
-		client, err := gocurl.CreateHTTPClient(ctx, opts)
+		client, err := CreateHTTPClient(ctx, opts)
 		assert.NoError(t, err)
 		assert.Equal(t, 5*time.Second, client.Timeout)
 	})
@@ -220,7 +58,7 @@ func TestCreateHTTPClient(t *testing.T) {
 		opts := &options.RequestOptions{
 			Timeout: 5 * time.Second, // Should be ignored
 		}
-		client, err := gocurl.CreateHTTPClient(ctx, opts)
+		client, err := CreateHTTPClient(ctx, opts)
 		assert.NoError(t, err)
 		// When context has deadline, client.Timeout should be 0 (context controls)
 		assert.Equal(t, time.Duration(0), client.Timeout)
@@ -234,7 +72,7 @@ func TestCreateRequest(t *testing.T) {
 		opts := &options.RequestOptions{
 			URL: "https://example.com",
 		}
-		req, err := gocurl.CreateRequest(context.Background(), opts)
+		req, err := CreateRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Equal(t, "GET", req.Method)
 		assert.Equal(t, "https://example.com", req.URL.String())
@@ -246,7 +84,7 @@ func TestCreateRequest(t *testing.T) {
 			URL:    "https://example.com",
 			Body:   "test data",
 		}
-		req, err := gocurl.CreateRequest(context.Background(), opts)
+		req, err := CreateRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Equal(t, "POST", req.Method)
 		body, _ := io.ReadAll(req.Body)
@@ -261,7 +99,7 @@ func TestCreateRequest(t *testing.T) {
 				"key2": []string{"value2"},
 			},
 		}
-		req, err := gocurl.CreateRequest(context.Background(), opts)
+		req, err := CreateRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Contains(t, req.URL.String(), "key1=value1")
 		assert.Contains(t, req.URL.String(), "key2=value2")
@@ -274,7 +112,7 @@ func TestCreateRequest(t *testing.T) {
 				"X-Custom-Header": []string{"CustomValue"},
 			},
 		}
-		req, err := gocurl.CreateRequest(context.Background(), opts)
+		req, err := CreateRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Equal(t, "CustomValue", req.Header.Get("X-Custom-Header"))
 	})
@@ -287,7 +125,7 @@ func TestCreateRequest(t *testing.T) {
 				Password: "pass",
 			},
 		}
-		req, err := gocurl.CreateRequest(context.Background(), opts)
+		req, err := CreateRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		username, password, ok := req.BasicAuth()
 		assert.True(t, ok)
@@ -300,7 +138,7 @@ func TestCreateRequest(t *testing.T) {
 			URL:         "https://example.com",
 			BearerToken: "token123",
 		}
-		req, err := gocurl.CreateRequest(context.Background(), opts)
+		req, err := CreateRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Equal(t, "Bearer token123", req.Header.Get("Authorization"))
 	})
@@ -314,7 +152,7 @@ func TestApplyMiddleware(t *testing.T) {
 		}
 
 		req, _ := http.NewRequest("GET", "https://example.com", nil)
-		modifiedReq, err := gocurl.ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware})
+		modifiedReq, err := ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware})
 
 		assert.NoError(t, err)
 		assert.Equal(t, "Applied", modifiedReq.Header.Get("X-Middleware"))
@@ -331,7 +169,7 @@ func TestApplyMiddleware(t *testing.T) {
 		}
 
 		req, _ := http.NewRequest("GET", "https://example.com", nil)
-		modifiedReq, err := gocurl.ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware1, middleware2})
+		modifiedReq, err := ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware1, middleware2})
 
 		assert.NoError(t, err)
 		assert.Equal(t, "Applied1", modifiedReq.Header.Get("X-Middleware-1"))
@@ -344,7 +182,7 @@ func TestApplyMiddleware(t *testing.T) {
 		}
 
 		req, _ := http.NewRequest("GET", "https://example.com", nil)
-		_, err := gocurl.ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware})
+		_, err := ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware})
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "middleware error")
@@ -365,7 +203,7 @@ func TestExecuteRequestWithRetries(t *testing.T) {
 		req, _ := http.NewRequest("GET", server.URL, nil)
 		opts := &options.RequestOptions{}
 
-		resp, err := gocurl.ExecuteRequestWithRetries(client, req, opts)
+		resp, err := ExecuteRequestWithRetries(client, req, opts)
 
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -393,7 +231,7 @@ func TestExecuteRequestWithRetries(t *testing.T) {
 			},
 		}
 
-		resp, err := gocurl.ExecuteRequestWithRetries(client, req, opts)
+		resp, err := ExecuteRequestWithRetries(client, req, opts)
 
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -416,86 +254,10 @@ func TestExecuteRequestWithRetries(t *testing.T) {
 			},
 		}
 
-		resp, err := gocurl.ExecuteRequestWithRetries(client, req, opts)
+		resp, err := ExecuteRequestWithRetries(client, req, opts)
 
 		assert.NoError(t, err) // The function doesn't return an error for HTTP errors
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
 }
 */
-
-func TestHandleOutput(t *testing.T) {
-	t.Run("Output to file", func(t *testing.T) {
-		tempFile, err := os.CreateTemp("", "gocurl-test-")
-		require.NoError(t, err)
-		tempFile.Close()
-		defer os.Remove(tempFile.Name())
-
-		resp := &http.Response{
-			Body: io.NopCloser(strings.NewReader("Test output")),
-		}
-		opts := &options.RequestOptions{
-			OutputFile: tempFile.Name(),
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		assert.NoError(t, err)
-
-		err = gocurl.HandleOutput(string(body), opts)
-		assert.NoError(t, err)
-
-		content, err := os.ReadFile(tempFile.Name())
-		assert.NoError(t, err)
-		assert.Equal(t, "Test output", string(content))
-	})
-
-	t.Run("Output to stdout", func(t *testing.T) {
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
-		resp := &http.Response{
-			Body: io.NopCloser(strings.NewReader("Test output")),
-		}
-		opts := &options.RequestOptions{}
-
-		body, err := io.ReadAll(resp.Body)
-		assert.NoError(t, err)
-
-		err = gocurl.HandleOutput(string(body), opts)
-		assert.NoError(t, err)
-
-		w.Close()
-		os.Stdout = oldStdout
-
-		var buf bytes.Buffer
-		io.Copy(&buf, r)
-		assert.Equal(t, "Test output", buf.String())
-	})
-
-	t.Run("Silent output", func(t *testing.T) {
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
-		resp := &http.Response{
-			Body: io.NopCloser(strings.NewReader("Test output")),
-		}
-		opts := &options.RequestOptions{
-			Silent: true,
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		assert.NoError(t, err)
-
-		err = gocurl.HandleOutput(string(body), opts)
-		assert.NoError(t, err)
-
-		w.Close()
-		os.Stdout = oldStdout
-
-		var buf bytes.Buffer
-		io.Copy(&buf, r)
-		assert.Empty(t, buf.String())
-	})
-}

@@ -1,4 +1,4 @@
-package gocurl_test
+package gocurl
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maniartech/gocurl"
 	"github.com/maniartech/gocurl/options"
 )
 
@@ -40,7 +39,7 @@ func TestRetryLogic_GET(t *testing.T) {
 		},
 	}
 
-	resp, _, err := gocurl.Process(context.Background(), opts)
+	resp, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -88,7 +87,7 @@ func TestRetryLogic_POST(t *testing.T) {
 		},
 	}
 
-	resp, _, err := gocurl.Process(context.Background(), opts)
+	resp, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -146,7 +145,7 @@ func TestRetryLogic_PUT(t *testing.T) {
 		},
 	}
 
-	resp, _, err := gocurl.Process(context.Background(), opts)
+	resp, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -189,7 +188,7 @@ func TestRetryLogic_NoRetryNeeded(t *testing.T) {
 		},
 	}
 
-	resp, _, err := gocurl.Process(context.Background(), opts)
+	resp, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -240,7 +239,7 @@ func TestRetryLogic_DefaultRetryBehavior(t *testing.T) {
 				},
 			}
 
-			resp, _, err := gocurl.Process(context.Background(), opts)
+			resp, _, err := processForTest(context.Background(), opts)
 			if err != nil {
 				t.Fatalf("Request failed: %v", err)
 			}
@@ -285,7 +284,7 @@ func TestRetryLogic_ExponentialBackoff(t *testing.T) {
 	}
 
 	start := time.Now()
-	resp, _, err := gocurl.Process(context.Background(), opts)
+	resp, _, err := processForTest(context.Background(), opts)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -346,7 +345,7 @@ func TestRetryLogic_LargeBody(t *testing.T) {
 		},
 	}
 
-	resp, _, err := gocurl.Process(context.Background(), opts)
+	resp, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}

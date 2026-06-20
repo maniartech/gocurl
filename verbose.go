@@ -129,17 +129,3 @@ func printResponseVerbose(opts *options.RequestOptions, resp *http.Response) {
 	// Print empty line to separate headers from body
 	fmt.Fprintf(w, "<\r\n")
 }
-
-// printConnectionClose prints connection close info (curl -v style)
-func printConnectionClose(opts *options.RequestOptions) {
-	if !opts.Verbose {
-		return
-	}
-
-	w := VerboseWriter
-	if w == nil {
-		return
-	}
-
-	fmt.Fprintf(w, "* Connection #0 to host left intact\n")
-}

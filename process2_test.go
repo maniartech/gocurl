@@ -1,4 +1,4 @@
-package gocurl_test
+package gocurl
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maniartech/gocurl"
 	"github.com/maniartech/gocurl/options"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,7 +39,7 @@ func TestPostRequests(t *testing.T) {
 			},
 		}
 
-		resp, body, err := gocurl.Process(context.Background(), opts)
+		resp, body, err := processForTest(context.Background(), opts)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -87,7 +86,7 @@ func TestPostRequests(t *testing.T) {
 			},
 		}
 
-		resp, body, err := gocurl.Process(context.Background(), opts)
+		resp, body, err := processForTest(context.Background(), opts)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -110,7 +109,7 @@ func TestCustomTLSConfig(t *testing.T) {
 			},
 		}
 
-		resp, body, err := gocurl.Process(context.Background(), opts)
+		resp, body, err := processForTest(context.Background(), opts)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -136,7 +135,7 @@ func TestRedirectBehavior(t *testing.T) {
 			MaxRedirects:    10,
 		}
 
-		resp, body, err := gocurl.Process(context.Background(), opts)
+		resp, body, err := processForTest(context.Background(), opts)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -159,7 +158,7 @@ func TestRedirectBehavior(t *testing.T) {
 			FollowRedirects: false,
 		}
 
-		resp, _, err := gocurl.Process(context.Background(), opts)
+		resp, _, err := processForTest(context.Background(), opts)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -185,7 +184,7 @@ func TestHTTPVersions(t *testing.T) {
 			HTTP2: true,
 		}
 
-		resp, body, err := gocurl.Process(context.Background(), opts)
+		resp, body, err := processForTest(context.Background(), opts)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -198,7 +197,7 @@ func TestCustomUserAgent(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userAgent := r.Header.Get("User-Agent")
 			// Should match "gocurl/VERSION" format (like curl sends "curl/VERSION")
-			assert.Equal(t, "gocurl/"+gocurl.Version, userAgent)
+			assert.Equal(t, "gocurl/"+Version, userAgent)
 			fmt.Fprintf(w, "Default User-Agent: %s", userAgent)
 		}))
 		defer server.Close()
@@ -208,7 +207,7 @@ func TestCustomUserAgent(t *testing.T) {
 			// No UserAgent set - should use default
 		}
 
-		resp, body, err := gocurl.Process(context.Background(), opts)
+		resp, body, err := processForTest(context.Background(), opts)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -227,7 +226,7 @@ func TestCustomUserAgent(t *testing.T) {
 			UserAgent: "GoCurl/1.0",
 		}
 
-		resp, body, err := gocurl.Process(context.Background(), opts)
+		resp, body, err := processForTest(context.Background(), opts)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -252,7 +251,7 @@ func TestTimeoutBehavior(t *testing.T) {
 			Timeout: 1 * time.Second,
 		}
 
-		_, _, err := gocurl.Process(context.Background(), opts)
+		_, _, err := processForTest(context.Background(), opts)
 		assert.Error(t, err)
 		assert.True(t, strings.Contains(err.Error(), "context deadline exceeded") || strings.Contains(err.Error(), "timeout"))
 	})
@@ -271,7 +270,7 @@ func TestEdgeCases(t *testing.T) {
 			Silent: true, // ✅ Don't print 10MB to stdout!
 		}
 
-		resp, body, err := gocurl.Process(context.Background(), opts)
+		resp, body, err := processForTest(context.Background(), opts)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -290,7 +289,7 @@ func TestEdgeCases(t *testing.T) {
 			Timeout: 200 * time.Millisecond,
 		}
 
-		resp, body, err := gocurl.Process(context.Background(), opts)
+		resp, body, err := processForTest(context.Background(), opts)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -308,7 +307,7 @@ func TestEdgeCases(t *testing.T) {
 			URL: server.URL,
 		}
 
-		_, _, err := gocurl.Process(context.Background(), opts)
+		_, _, err := processForTest(context.Background(), opts)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unexpected EOF")
 	})

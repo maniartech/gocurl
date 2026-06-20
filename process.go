@@ -18,39 +18,6 @@ import (
 	"github.com/maniartech/gocurl/proxy"
 )
 
-// Process executes a request and buffers the full response body, returning it as
-// a string and re-wrapping resp.Body so it can be read again.
-//
-// Deprecated: Process buffers the entire response in memory and writes to the
-// configured OutputFile/stdout as a side effect. Prefer the Curl* functions,
-// which stream the live response body and never touch stdout. Process is
-// retained for backward compatibility.
-func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response, string, error) {
-	resp, err := doRequest(ctx, opts)
-	if err != nil {
-		return nil, "", err
-	}
-
-	bodyBytes, err := readBodyWithLimit(resp.Body, opts.ResponseBodyLimit)
-	resp.Body.Close()
-	if err != nil {
-		return nil, "", err
-	}
-	bodyString := string(bodyBytes)
-
-	// Handle output (OutputFile / stdout) — a Process-only side effect.
-	if err := HandleOutput(bodyString, opts); err != nil {
-		return nil, "", err
-	}
-
-	printConnectionClose(opts)
-
-	// Recreate the response body so callers can read it again.
-	resp.Body = io.NopCloser(strings.NewReader(bodyString))
-
-	return resp, bodyString, nil
-}
-
 // doRequest runs the shared request pipeline (validate, client, build, retries,
 // verbose, decompress) and returns the live response with its body unread and
 // open. It performs NO output side effects, so library callers control the body.
@@ -108,23 +75,6 @@ func failOnStatus(resp *http.Response, opts *options.RequestOptions) error {
 		return nil
 	}
 	return ServerStatusError(opts.URL, resp.StatusCode)
-}
-
-// readBodyWithLimit reads body fully, enforcing an optional size limit.
-func readBodyWithLimit(body io.Reader, limit int64) ([]byte, error) {
-	if limit > 0 {
-		limited := io.LimitReader(body, limit+1) // +1 to detect overflow
-		b, err := io.ReadAll(limited)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response body: %v", err)
-		}
-		if int64(len(b)) > limit {
-			return nil, fmt.Errorf("response body size (%d bytes) exceeds limit of %d bytes",
-				len(b)-1, limit)
-		}
-		return b, nil
-	}
-	return io.ReadAll(body)
 }
 
 // limitedBody wraps a response body to enforce a maximum size while streaming.
@@ -503,21 +453,4 @@ func ApplyMiddleware(req *http.Request, middleware []middlewares.MiddlewareFunc)
 		}
 	}
 	return req, nil
-}
-
-func HandleOutput(body string, opts *options.RequestOptions) error {
-	if opts.OutputFile != "" {
-		err := os.WriteFile(opts.OutputFile, []byte(body), 0644)
-		if err != nil {
-			return fmt.Errorf("failed to write response to file: %v", err)
-		}
-	} else if !opts.Silent {
-		_, err := fmt.Fprint(os.Stdout, body)
-		if err != nil {
-			return fmt.Errorf("failed to write response to stdout: %v", err)
-		}
-	}
-
-	return nil
-
 }

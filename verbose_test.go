@@ -28,7 +28,7 @@ func TestVerbose_Disabled(t *testing.T) {
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = false // Explicitly disabled
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestVerbose_RequestHeaders(t *testing.T) {
 	opts.Headers.Set("Content-Type", "application/json")
 	opts.Headers.Set("X-Custom-Header", "test-value")
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestVerbose_ResponseHeaders(t *testing.T) {
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = true
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestVerbose_SensitiveDataRedacted(t *testing.T) {
 	opts.Headers.Set("Cookie", "session=abc123")
 	opts.Headers.Set("X-Api-Key", "super-secret-key")
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestVerbose_CustomWriter(t *testing.T) {
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = true
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
@@ -235,7 +235,7 @@ func TestVerbose_ConcurrentSafe(t *testing.T) {
 			opts.Headers = make(http.Header)
 			opts.Headers.Set("X-Request-ID", fmt.Sprintf("%d", id))
 
-			_, _, err := Process(context.Background(), opts)
+			_, _, err := processForTest(context.Background(), opts)
 			if err != nil {
 				t.Errorf("Process failed for request %d: %v", id, err)
 			}
@@ -272,7 +272,7 @@ func TestVerbose_MatchesCurlFormat(t *testing.T) {
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = true
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
@@ -324,9 +324,10 @@ func verifyConnectionInfo(t *testing.T, output string) {
 	if !strings.Contains(output, "* Connected to") {
 		t.Errorf("Expected '* Connected to' info like curl, got: %s", output)
 	}
-	if !strings.Contains(output, "* Connection") || !strings.Contains(output, "left intact") {
-		t.Errorf("Expected connection close info like curl, got: %s", output)
-	}
+	// NOTE: curl's trailing "* Connection #0 ... left intact" line is intentionally
+	// NOT emitted by the streaming live path — the response body is handed to the
+	// caller unread, so the connection's final state is unknown at this point (it
+	// was a side effect of the removed buffering Process()).
 }
 
 // verifyRequestFormat checks for curl-style request formatting
@@ -368,7 +369,7 @@ func TestVerbose_HTTPSConnectionInfo(t *testing.T) {
 	opts.Verbose = true
 	opts.Insecure = true // Required for self-signed cert
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
