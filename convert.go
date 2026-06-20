@@ -16,13 +16,13 @@ import (
 	"github.com/maniartech/gocurl/tokenizer"
 )
 
-// ArgsToOptions converts raw curl-style arguments into RequestOptions.
+// argsToOptions converts raw curl-style arguments into RequestOptions.
 //
 // As a convenience for direct callers, it expands environment variables
 // ($VAR / ${VAR}) in each argument. The higher-level Curl* entry points perform
 // their own (single) expansion step and call convertTokensToRequestOptions
 // directly, so expansion is never applied twice.
-func ArgsToOptions(args []string) (*options.RequestOptions, error) {
+func argsToOptions(args []string) (*options.RequestOptions, error) {
 	tokens := make([]tokenizer.Token, 0, len(args))
 	for _, arg := range args {
 		tokens = append(tokens, tokenizer.Token{Type: tokenizer.TokenValue, Value: expandVariables(arg)})
@@ -414,7 +414,7 @@ func processTLSFlags(tokens []tokenizer.Token, i int, flag string, o *options.Re
 		return i + 1, true, nil
 	case "--tls-max":
 		return argSetter(tokens, i, flag, func(v string) error {
-			version, err := ParseTLSVersion(v)
+			version, err := parseTLSVersion(v)
 			if err != nil {
 				return err
 			}
@@ -423,7 +423,7 @@ func processTLSFlags(tokens []tokenizer.Token, i int, flag string, o *options.Re
 		})
 	case "--ciphers":
 		return argSetter(tokens, i, flag, func(v string) error {
-			suites, err := ParseCipherSuites(v)
+			suites, err := parseCipherSuites(v)
 			if err != nil {
 				return err
 			}
@@ -432,7 +432,7 @@ func processTLSFlags(tokens []tokenizer.Token, i int, flag string, o *options.Re
 		})
 	case "--tls13-ciphers":
 		return argSetter(tokens, i, flag, func(v string) error {
-			suites, err := ParseTLS13CipherSuites(v)
+			suites, err := parseTLS13CipherSuites(v)
 			if err != nil {
 				return err
 			}
@@ -555,7 +555,7 @@ func finalizeRequestOptions(st *parseState) error {
 	}
 
 	// TLS configuration (certs, CA, version, ciphers, insecure) is built lazily
-	// and authoritatively in LoadTLSConfig from these option fields — see
+	// and authoritatively in loadTLSConfig from these option fields — see
 	// security.go. We intentionally do NOT pre-build o.TLSConfig here so there is
 	// a single source of truth.
 
@@ -649,7 +649,7 @@ func parseSeconds(v string) (time.Duration, error) {
 }
 
 // expandVariables expands environment variables within a string (used by
-// ArgsToOptions only; the Curl* entry points expand before conversion).
+// argsToOptions only; the Curl* entry points expand before conversion).
 func expandVariables(s string) string {
 	return os.ExpandEnv(s)
 }

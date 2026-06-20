@@ -66,7 +66,7 @@ func TestCustomClient_NotUsedWhenNil(t *testing.T) {
 	t.Skip("Skipping network test - verifies standard client creation when CustomClient is nil")
 
 	// This test verifies that when CustomClient is nil,
-	// the standard CreateHTTPClient is used instead
+	// the standard createHTTPClient is used instead
 	opts := &options.RequestOptions{
 		URL:          "https://httpbin.org/get",
 		CustomClient: nil, // Explicitly nil

@@ -70,7 +70,7 @@ func TestLoadTLSConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := LoadTLSConfig(tt.opts)
+			cfg, err := loadTLSConfig(tt.opts)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -86,7 +86,7 @@ func TestLoadTLSConfig(t *testing.T) {
 }
 
 func TestLoadTLSConfigNilOptions(t *testing.T) {
-	cfg, err := LoadTLSConfig(nil)
+	cfg, err := loadTLSConfig(nil)
 	assert.Error(t, err)
 	assert.Nil(t, cfg)
 }
@@ -123,7 +123,7 @@ func TestVerifyCertificatePin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := VerifyCertificatePin(tt.rawCerts, tt.fingerprints)
+			err := verifyCertificatePin(tt.rawCerts, tt.fingerprints)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -183,7 +183,7 @@ func TestValidateTLSConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTLSConfig(tt.tlsConfig, tt.opts)
+			err := validateTLSConfig(tt.tlsConfig, tt.opts)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -245,7 +245,7 @@ func TestValidateRequestOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateRequestOptions(tt.opts)
+			err := validateRequestOptions(tt.opts)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -260,7 +260,7 @@ func TestValidateRequestOptions(t *testing.T) {
 }
 
 func TestSecureDefaults(t *testing.T) {
-	cfg := SecureDefaults()
+	cfg := secureDefaults()
 
 	assert.NotNil(t, cfg)
 	assert.Equal(t, uint16(tls.VersionTLS12), cfg.MinVersion, "Should use TLS 1.2 minimum")
@@ -312,7 +312,7 @@ func TestValidateVariables(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateVariables(tt.vars)
+			err := validateVariables(tt.vars)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -361,7 +361,7 @@ EKTcWGekdmdDPsHloRNtsiCa697B2O9IFA==
 		KeyFile:  keyFile.Name(),
 	}
 
-	cfg, err := LoadTLSConfig(opts)
+	cfg, err := loadTLSConfig(opts)
 	require.NoError(t, err)
 	assert.NotNil(t, cfg)
 	assert.Len(t, cfg.Certificates, 1, "Should load one certificate")
@@ -375,7 +375,7 @@ func BenchmarkLoadTLSConfig(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		LoadTLSConfig(opts)
+		loadTLSConfig(opts)
 	}
 }
 
@@ -387,6 +387,6 @@ func BenchmarkValidateRequestOptions(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ValidateRequestOptions(opts)
+		validateRequestOptions(opts)
 	}
 }

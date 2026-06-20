@@ -1,9 +1,7 @@
-package gocurl_test
+package gocurl
 
 import (
 	"testing"
-
-	"github.com/maniartech/gocurl"
 )
 
 // These benchmarks measure the ONE-TIME, authoring-time parse/expand cost — the
@@ -25,7 +23,7 @@ func BenchmarkRequestConstruction(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := gocurl.ArgsToOptions(args)
+		_, err := argsToOptions(args)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -34,7 +32,7 @@ func BenchmarkRequestConstruction(b *testing.B) {
 
 // BenchmarkVariableExpansion measures the one-time cost of ${VAR} substitution.
 func BenchmarkVariableExpansion(b *testing.B) {
-	vars := gocurl.Variables{
+	vars := Variables{
 		"token": "my-secret-token",
 		"url":   "https://example.com",
 		"data":  "important data",
@@ -45,7 +43,7 @@ func BenchmarkVariableExpansion(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := gocurl.ExpandVariables(text, vars)
+		_, err := ExpandVariables(text, vars)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -58,7 +56,7 @@ func BenchmarkConcurrentRequests(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			_, err := gocurl.ArgsToOptions([]string{
+			_, err := argsToOptions([]string{
 				"curl", "-X", "GET",
 				"https://example.com",
 			})

@@ -19,13 +19,13 @@ func TestValidateOptions(t *testing.T) {
 		opts := &options.RequestOptions{
 			URL: "https://example.com",
 		}
-		err := ValidateOptions(opts)
+		err := validateOptions(opts)
 		assert.NoError(t, err)
 	})
 
 	t.Run("Missing URL", func(t *testing.T) {
 		opts := &options.RequestOptions{}
-		err := ValidateOptions(opts)
+		err := validateOptions(opts)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "URL is required")
 	})
@@ -37,7 +37,7 @@ func TestCreateHTTPClient(t *testing.T) {
 	t.Run("Default client", func(t *testing.T) {
 		ctx := context.Background()
 		opts := &options.RequestOptions{}
-		client, err := CreateHTTPClient(ctx, opts)
+		client, err := createHTTPClient(ctx, opts)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
 	})
@@ -47,7 +47,7 @@ func TestCreateHTTPClient(t *testing.T) {
 		opts := &options.RequestOptions{
 			Timeout: 5 * time.Second,
 		}
-		client, err := CreateHTTPClient(ctx, opts)
+		client, err := createHTTPClient(ctx, opts)
 		assert.NoError(t, err)
 		assert.Equal(t, 5*time.Second, client.Timeout)
 	})
@@ -58,7 +58,7 @@ func TestCreateHTTPClient(t *testing.T) {
 		opts := &options.RequestOptions{
 			Timeout: 5 * time.Second, // Should be ignored
 		}
-		client, err := CreateHTTPClient(ctx, opts)
+		client, err := createHTTPClient(ctx, opts)
 		assert.NoError(t, err)
 		// When context has deadline, client.Timeout should be 0 (context controls)
 		assert.Equal(t, time.Duration(0), client.Timeout)
@@ -72,7 +72,7 @@ func TestCreateRequest(t *testing.T) {
 		opts := &options.RequestOptions{
 			URL: "https://example.com",
 		}
-		req, err := CreateRequest(context.Background(), opts)
+		req, err := createRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Equal(t, "GET", req.Method)
 		assert.Equal(t, "https://example.com", req.URL.String())
@@ -84,7 +84,7 @@ func TestCreateRequest(t *testing.T) {
 			URL:    "https://example.com",
 			Body:   "test data",
 		}
-		req, err := CreateRequest(context.Background(), opts)
+		req, err := createRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Equal(t, "POST", req.Method)
 		body, _ := io.ReadAll(req.Body)
@@ -99,7 +99,7 @@ func TestCreateRequest(t *testing.T) {
 				"key2": []string{"value2"},
 			},
 		}
-		req, err := CreateRequest(context.Background(), opts)
+		req, err := createRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Contains(t, req.URL.String(), "key1=value1")
 		assert.Contains(t, req.URL.String(), "key2=value2")
@@ -112,7 +112,7 @@ func TestCreateRequest(t *testing.T) {
 				"X-Custom-Header": []string{"CustomValue"},
 			},
 		}
-		req, err := CreateRequest(context.Background(), opts)
+		req, err := createRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Equal(t, "CustomValue", req.Header.Get("X-Custom-Header"))
 	})
@@ -125,7 +125,7 @@ func TestCreateRequest(t *testing.T) {
 				Password: "pass",
 			},
 		}
-		req, err := CreateRequest(context.Background(), opts)
+		req, err := createRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		username, password, ok := req.BasicAuth()
 		assert.True(t, ok)
@@ -138,7 +138,7 @@ func TestCreateRequest(t *testing.T) {
 			URL:         "https://example.com",
 			BearerToken: "token123",
 		}
-		req, err := CreateRequest(context.Background(), opts)
+		req, err := createRequest(context.Background(), opts)
 		assert.NoError(t, err)
 		assert.Equal(t, "Bearer token123", req.Header.Get("Authorization"))
 	})
@@ -152,7 +152,7 @@ func TestApplyMiddleware(t *testing.T) {
 		}
 
 		req, _ := http.NewRequest("GET", "https://example.com", nil)
-		modifiedReq, err := ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware})
+		modifiedReq, err := applyMiddleware(req, []middlewares.MiddlewareFunc{middleware})
 
 		assert.NoError(t, err)
 		assert.Equal(t, "Applied", modifiedReq.Header.Get("X-Middleware"))
@@ -169,7 +169,7 @@ func TestApplyMiddleware(t *testing.T) {
 		}
 
 		req, _ := http.NewRequest("GET", "https://example.com", nil)
-		modifiedReq, err := ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware1, middleware2})
+		modifiedReq, err := applyMiddleware(req, []middlewares.MiddlewareFunc{middleware1, middleware2})
 
 		assert.NoError(t, err)
 		assert.Equal(t, "Applied1", modifiedReq.Header.Get("X-Middleware-1"))
@@ -182,7 +182,7 @@ func TestApplyMiddleware(t *testing.T) {
 		}
 
 		req, _ := http.NewRequest("GET", "https://example.com", nil)
-		_, err := ApplyMiddleware(req, []middlewares.MiddlewareFunc{middleware})
+		_, err := applyMiddleware(req, []middlewares.MiddlewareFunc{middleware})
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "middleware error")

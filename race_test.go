@@ -33,7 +33,7 @@ func TestConcurrentRequestConstruction(t *testing.T) {
 					"https://example.com/test",
 				}
 
-				_, err := ArgsToOptions(args)
+				_, err := argsToOptions(args)
 				if err != nil {
 					errors <- err
 					return
@@ -146,7 +146,7 @@ func TestConcurrentBufferPool(t *testing.T) {
 					"https://example.com/api/test",
 				}
 
-				_, err := ArgsToOptions(args)
+				_, err := argsToOptions(args)
 				if err != nil {
 					errors <- err
 					return
@@ -184,7 +184,7 @@ func TestHighConcurrencyStress(t *testing.T) {
 					"https://api.example.com/data",
 				}
 
-				_, err := ArgsToOptions(args)
+				_, err := argsToOptions(args)
 				if err != nil {
 					errorCount.Add(1)
 					return
@@ -254,7 +254,7 @@ func TestConcurrentSecurityValidation(t *testing.T) {
 				vars := testVars[j%len(testVars)]
 
 				// Test variable validation
-				err := ValidateVariables(vars)
+				err := validateVariables(vars)
 				if err != nil {
 					errors <- err
 					return
@@ -296,7 +296,7 @@ func TestConcurrentMixedOperations(t *testing.T) {
 			switch opType {
 			case 0:
 				// Request parsing
-				_, _ = ArgsToOptions([]string{"curl", "https://example.com"})
+				_, _ = argsToOptions([]string{"curl", "https://example.com"})
 
 			case 1:
 				// Variable expansion
@@ -311,7 +311,7 @@ func TestConcurrentMixedOperations(t *testing.T) {
 			case 3:
 				// Security validation
 				vars := Variables{"key": "value"}
-				_ = ValidateVariables(vars)
+				_ = validateVariables(vars)
 
 			case 4:
 				// Header redaction
@@ -512,7 +512,7 @@ func TestStressTest_10kGoroutines(t *testing.T) {
 				"https://example.com/test/" + string(rune('0'+id%10)),
 			}
 
-			_, err := ArgsToOptions(args)
+			_, err := argsToOptions(args)
 			if err != nil {
 				errors <- err
 				return

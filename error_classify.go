@@ -23,7 +23,7 @@ const (
 	KindUnknown Kind = iota
 	// KindParse — tokenize/convert of a curl command failed.
 	KindParse
-	// KindValidation — ValidateRequestOptions rejected the prepared request.
+	// KindValidation — validateRequestOptions rejected the prepared request.
 	KindValidation
 	// KindConnect — dial / connection refused / DNS / proxy connect failure.
 	KindConnect

@@ -22,7 +22,7 @@ import (
 // verbose, decompress) and returns the live response with its body unread and
 // open. It performs NO output side effects, so library callers control the body.
 func doRequest(ctx context.Context, opts *options.RequestOptions) (*http.Response, error) {
-	if err := ValidateOptions(opts); err != nil {
+	if err := validateOptions(opts); err != nil {
 		return nil, err
 	}
 
@@ -30,19 +30,19 @@ func doRequest(ctx context.Context, opts *options.RequestOptions) (*http.Respons
 	if opts.CustomClient != nil {
 		httpClient = opts.CustomClient
 	} else {
-		client, err := CreateHTTPClient(ctx, opts)
+		client, err := createHTTPClient(ctx, opts)
 		if err != nil {
 			return nil, err
 		}
 		httpClient = client
 	}
 
-	req, err := CreateRequest(ctx, opts)
+	req, err := createRequest(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err = ApplyMiddleware(req, opts.Middleware)
+	req, err = applyMiddleware(req, opts.Middleware)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func doRequest(ctx context.Context, opts *options.RequestOptions) (*http.Respons
 	printResponseVerbose(opts, resp)
 
 	if opts.Compress {
-		if err := DecompressResponse(resp); err != nil {
+		if err := decompressResponse(resp); err != nil {
 			resp.Body.Close()
 			return nil, fmt.Errorf("failed to decompress response: %w", err)
 		}
@@ -99,12 +99,12 @@ func (l *limitedBody) Read(p []byte) (int, error) {
 
 func (l *limitedBody) Close() error { return l.rc.Close() }
 
-func ValidateOptions(opts *options.RequestOptions) error {
+func validateOptions(opts *options.RequestOptions) error {
 	// Use the new security validation
-	return ValidateRequestOptions(opts)
+	return validateRequestOptions(opts)
 }
 
-func CreateHTTPClient(ctx context.Context, opts *options.RequestOptions) (*http.Client, error) {
+func createHTTPClient(ctx context.Context, opts *options.RequestOptions) (*http.Client, error) {
 	// Obtain a (possibly cached) round tripper so connections are reused across
 	// requests that share the same connection-relevant configuration.
 	transport, err := getRoundTripper(opts)
@@ -226,7 +226,7 @@ func configureCookieJar(client *http.Client, opts *options.RequestOptions) error
 	return nil
 }
 
-func CreateRequest(ctx context.Context, opts *options.RequestOptions) (*http.Request, error) {
+func createRequest(ctx context.Context, opts *options.RequestOptions) (*http.Request, error) {
 	method := getMethod(opts)
 	url := buildURL(opts)
 	body, contentType, err := createRequestBody(opts)
@@ -430,7 +430,7 @@ func applyCookies(req *http.Request, opts *options.RequestOptions) {
 // applyCompression applies compression headers to the request
 func applyCompression(req *http.Request, opts *options.RequestOptions) {
 	if opts.Compress {
-		acceptEncoding := GetAcceptEncodingHeader(opts.Compress, opts.CompressionMethods)
+		acceptEncoding := getAcceptEncodingHeader(opts.Compress, opts.CompressionMethods)
 		if acceptEncoding != "" && req.Header.Get("Accept-Encoding") == "" {
 			req.Header.Set("Accept-Encoding", acceptEncoding)
 		}
@@ -444,7 +444,7 @@ func applyRequestID(req *http.Request, opts *options.RequestOptions) {
 	}
 }
 
-func ApplyMiddleware(req *http.Request, middleware []middlewares.MiddlewareFunc) (*http.Request, error) {
+func applyMiddleware(req *http.Request, middleware []middlewares.MiddlewareFunc) (*http.Request, error) {
 	var err error
 	for _, mw := range middleware {
 		req, err = mw(req)

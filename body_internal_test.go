@@ -213,7 +213,7 @@ func TestCreateRequest_BodyStreamSetsLenAndGetBody(t *testing.T) {
 	opts.Headers = nil
 	opts.BodyStream = BytesBody([]byte("12345"))
 
-	req, err := CreateRequest(context.Background(), opts)
+	req, err := createRequest(context.Background(), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestCreateRequest_MultipartContentType(t *testing.T) {
 	opts.Method = "POST"
 	opts.BodyStream = MultipartBody(map[string]string{"a": "b"})
 
-	req, err := CreateRequest(context.Background(), opts)
+	req, err := createRequest(context.Background(), opts)
 	if err != nil {
 		t.Fatal(err)
 	}

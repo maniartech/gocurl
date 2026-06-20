@@ -26,9 +26,9 @@ func TestTLSConfig_Clone(t *testing.T) {
 	opts.TLSConfig = originalTLS
 
 	// Load TLS config (should clone it)
-	loadedTLS, err := LoadTLSConfig(opts)
+	loadedTLS, err := loadTLSConfig(opts)
 	if err != nil {
-		t.Fatalf("LoadTLSConfig failed: %v", err)
+		t.Fatalf("loadTLSConfig failed: %v", err)
 	}
 
 	// Verify it's a different object (cloned)
@@ -60,9 +60,9 @@ func TestTLSConfig_ClonePreservesSettings(t *testing.T) {
 	opts.TLSConfig = originalTLS
 
 	// Load TLS config
-	loadedTLS, err := LoadTLSConfig(opts)
+	loadedTLS, err := loadTLSConfig(opts)
 	if err != nil {
-		t.Fatalf("LoadTLSConfig failed: %v", err)
+		t.Fatalf("loadTLSConfig failed: %v", err)
 	}
 
 	// Verify settings are preserved
@@ -96,9 +96,9 @@ func TestInsecure_Warning(t *testing.T) {
 	opts.Silent = false // Ensure warning is shown
 
 	// Load TLS config (should print warning)
-	_, err := LoadTLSConfig(opts)
+	_, err := loadTLSConfig(opts)
 	if err != nil {
-		t.Fatalf("LoadTLSConfig failed: %v", err)
+		t.Fatalf("loadTLSConfig failed: %v", err)
 	}
 
 	// Restore stderr
@@ -136,9 +136,9 @@ func TestInsecure_NoWarningWhenSilent(t *testing.T) {
 	opts.Silent = true // Suppress warning
 
 	// Load TLS config
-	_, err := LoadTLSConfig(opts)
+	_, err := loadTLSConfig(opts)
 	if err != nil {
-		t.Fatalf("LoadTLSConfig failed: %v", err)
+		t.Fatalf("loadTLSConfig failed: %v", err)
 	}
 
 	// Restore stderr
@@ -169,9 +169,9 @@ func TestInsecure_WarningWithVerbose(t *testing.T) {
 	opts.Silent = true // Even with Silent, Verbose should show warning
 
 	// Load TLS config
-	_, err := LoadTLSConfig(opts)
+	_, err := loadTLSConfig(opts)
 	if err != nil {
-		t.Fatalf("LoadTLSConfig failed: %v", err)
+		t.Fatalf("loadTLSConfig failed: %v", err)
 	}
 
 	// Restore stderr
@@ -233,9 +233,9 @@ func TestTLSConfig_SecureDefaults(t *testing.T) {
 	opts := options.NewRequestOptions("https://example.com")
 	// Don't set custom TLSConfig - use defaults
 
-	tlsConfig, err := LoadTLSConfig(opts)
+	tlsConfig, err := loadTLSConfig(opts)
 	if err != nil {
-		t.Fatalf("LoadTLSConfig failed: %v", err)
+		t.Fatalf("loadTLSConfig failed: %v", err)
 	}
 
 	// Verify secure defaults
@@ -258,9 +258,9 @@ func TestTLSConfig_NilConfig(t *testing.T) {
 	opts.TLSConfig = nil // Explicitly nil
 
 	// Should use secure defaults
-	tlsConfig, err := LoadTLSConfig(opts)
+	tlsConfig, err := loadTLSConfig(opts)
 	if err != nil {
-		t.Fatalf("LoadTLSConfig failed with nil config: %v", err)
+		t.Fatalf("loadTLSConfig failed with nil config: %v", err)
 	}
 
 	if tlsConfig == nil {

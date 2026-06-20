@@ -32,7 +32,7 @@ func executeWithRetries(client options.HTTPClient, req *http.Request, opts *opti
 		rnd = newRand()
 	}
 
-	// Body replay setup: prefer GetBody (net/http convention, set by CreateRequest
+	// Body replay setup: prefer GetBody (net/http convention, set by createRequest
 	// for rewindable BodySource). Otherwise buffer once, capped — a body that
 	// exceeds the cap is sent on attempt 1 but is not replayable afterwards.
 	bodyBytes, replayable, err := setupReplay(req, policy.replayCap())
