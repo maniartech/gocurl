@@ -25,7 +25,7 @@ import (
 // Run: go test -run=^$ -fuzz=FuzzParseCommand -fuzztime=30s .
 func FuzzParseCommand(f *testing.F) {
 	orig := readFile
-	readFile = func(string) ([]byte, error) { return nil, errors.New("fuzz: filesystem disabled") }
+	readFile = func(string, int64) ([]byte, error) { return nil, errors.New("fuzz: filesystem disabled") }
 	f.Cleanup(func() { readFile = orig })
 
 	for _, c := range corpus.Load() {

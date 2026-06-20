@@ -3,6 +3,7 @@ package gocurl
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -213,11 +214,41 @@ func processDataFlags(tokens []tokenizer.Token, i int, flag string, st *parseSta
 	}
 }
 
+// Parse-time file-read caps. gocurl executes curl-syntax strings that may come
+// from untrusted sources (see SECURITY.md), and these reads happen at PARSE time,
+// before request validation. An uncapped read of a hostile or endless path
+// (e.g. `-b /dev/zero` or `-d @/huge/file`) would OOM or hang the process, so the
+// reads are bounded: data files at the in-memory body cap, cookie files much
+// tighter. They are vars (not consts) only so tests can lower them cheaply.
+var (
+	maxDataFileBytes   int64 = options.MaxBodySize // 10 MiB, matches validateBody
+	maxCookieFileBytes int64 = 256 << 10           // 256 KiB
+)
+
 // readFile is the seam every convert-time file read goes through (-d @file,
-// --data-urlencode name@file, -b cookiefile). It defaults to os.ReadFile;
-// fuzz tests stub it so the parse path is filesystem-free and cannot be made to
-// read an arbitrary or endless host file at parse time.
-var readFile = os.ReadFile
+// --data-urlencode name@file, -b cookiefile). It reads at most max bytes and
+// errors if the file is larger, so a hostile/endless path cannot be read
+// unboundedly. Overridable so fuzz tests can make the parse path filesystem-free.
+var readFile = readFileLimited
+
+// readFileLimited reads up to max bytes from path and errors if the file exceeds
+// max. It reads max+1 bytes so the overflow is detected without buffering the
+// whole (potentially huge or endless) file.
+func readFileLimited(path string, max int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > max {
+		return nil, fmt.Errorf("file %q exceeds the %d-byte parse-time read limit", path, max)
+	}
+	return b, nil
+}
 
 // readDataValue resolves a -d/--data value, reading @file references for all
 // forms except --data-raw. For --data, CR/LF are stripped (curl behavior); for
@@ -226,7 +257,7 @@ func readDataValue(flag, value string) (string, error) {
 	if flag == "--data-raw" || !strings.HasPrefix(value, "@") {
 		return value, nil
 	}
-	content, err := readFile(value[1:])
+	content, err := readFile(value[1:], maxDataFileBytes)
 	if err != nil {
 		return "", fmt.Errorf("failed to read data file: %w", err)
 	}
@@ -243,7 +274,7 @@ func dataURLEncode(value string) (string, error) {
 		name, sep, rest := value[:idx], value[idx], value[idx+1:]
 		content := rest
 		if sep == '@' {
-			b, err := readFile(rest)
+			b, err := readFile(rest, maxDataFileBytes)
 			if err != nil {
 				return "", fmt.Errorf("failed to read data file: %w", err)
 			}
@@ -641,7 +672,7 @@ func parseCookies(cookieStr string) []*http.Cookie {
 
 // readCookiesFromFile reads cookies from a file in "name=value;" form.
 func readCookiesFromFile(filename string) ([]*http.Cookie, error) {
-	content, err := readFile(filename)
+	content, err := readFile(filename, maxCookieFileBytes)
 	if err != nil {
 		return nil, err
 	}

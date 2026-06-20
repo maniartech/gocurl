@@ -57,5 +57,12 @@ understanding:
   `Transfer-Encoding` are managed automatically and rejected if set), and
   body/form/query-count caps. Streaming bodies are exempt from the in-memory body
   cap.
+- **Parse-time file reads.** Curl flags that read a file into memory at parse time
+  — `-d @file` / `--data[-binary] @file`, `--data-urlencode name@file`, and
+  `-b <cookiefile>` — are bounded (data files at the 10 MiB in-memory body cap,
+  cookie files at 256 KiB) so an untrusted command string pointing at a huge or
+  endless path (e.g. `-b /dev/zero`) fails closed instead of exhausting memory.
+  Streaming `-T`/`-F @file` uploads are read at execution and not buffered, so they
+  are unaffected.
 
 Reports that improve any of the above are welcome.
