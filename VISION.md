@@ -32,34 +32,41 @@ Verify in the shell, paste into Go. One representation, not two.
 
 ## Who it's for
 
-GoCurl is at its best wherever HTTP is **glue, not the hot path**:
+GoCurl fits any Go service that talks to HTTP APIs and wants the curl command to *be* the code:
 
-- **Integrating a new third-party API** — copy the doc's curl example and go.
-- **Prototypes and internal tooling** — wire up a call in seconds, harden later.
+- **Third-party API integration** — copy the doc's curl example and run it in production, with
+  retries, timeouts, tracing, and metrics around it.
+- **Service-to-service HTTP** — a pooled `Client` with circuit breaking, rate limiting, and SSRF
+  protection.
 - **Scripts, CI checks, and API smoke tests** — the CLI-to-code loop is the workflow.
 - **Config-driven / declarative HTTP** — store curl commands as data and execute them.
 - **Onboarding** — a new teammate reads the curl in the docs and already understands the code.
 
-When you later need a typed, hand-tuned client on a high-throughput path, write one with
-`net/http` — GoCurl got you to a working integration first.
+Built on `net/http` with **parse once, execute many** (`Prepare` a request once, `Do` it many
+times over a pooled `Client`), the per-request overhead above a hand-written request is small and
+constant — so the curl ergonomics never cost you reliability or predictability under load.
 
 ## What GoCurl is
 
 - A **curl-ergonomic HTTP client built on `net/http`**, with a CLI that shares the exact
   same syntax.
-- An honest convenience layer: it parses real curl commands (string or `[]string`),
-  expands variables, executes the request, and hands you a standard `*http.Response`
-  plus typed helpers (`CurlString`, `CurlBytes`, `CurlJSON`, `CurlDownload`).
+- It parses real curl commands (string or `[]string`), expands variables, executes the
+  request, and hands you a standard `*http.Response` plus typed helpers (`CurlString`,
+  `CurlBytes`, `CurlJSON`, `CurlDownload`).
+- A **production middleware stack** on the reusable, pooled `Client`: idempotency-aware
+  retries with backoff, a circuit breaker, a rate limiter, tracing/metrics/logging hooks
+  (with OpenTelemetry and Prometheus adapters), an opt-in SSRF guard, secret redaction, TLS
+  pinning, and typed, classifiable errors.
 - Faithful to curl's HTTP/HTTPS semantics for the flags that appear in real API docs.
 
 ## What GoCurl is *not*
 
-- **Not a `net/http` replacement.** It's built on `net/http` and embraces it. Use a
-  reusable client for high-throughput services; GoCurl is for getting integrations
-  working fast.
-- **Not a performance play.** We make no zero-allocation / "faster than net/http"
-  claims. Any performance statement in our docs will be backed by a reproducible,
-  un-skipped benchmark or it won't be made.
+- **Not a `net/http` replacement.** It's built on `net/http` and embraces it — GoCurl adds
+  curl ergonomics and a production middleware stack (resilience, observability, security) on
+  top of the standard engine rather than replacing it.
+- **Not a performance play.** We make no zero-allocation / "faster than net/http" claims; the
+  target is parity with a well-tuned `net/http` client. Any performance statement in our docs
+  is backed by a reproducible, un-skipped benchmark or it isn't made.
 - **Not full curl.** HTTP/HTTPS only — no FTP/SMTP/etc., and only the HTTP flags that
   show up in real-world API documentation.
 - **Not a code generator or SDK builder.** The curl command is the interface.
