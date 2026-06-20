@@ -77,6 +77,20 @@ func TestNoProxyShouldBypassProxy(t *testing.T) {
 			noProxyList:  []string{"192.168.1.1"},
 			shouldBypass: true,
 		},
+		{
+			name:         "literal IP matches CIDR entry",
+			targetURL:    "http://192.168.1.42/path",
+			noProxyList:  []string{"192.168.1.0/24"},
+			shouldBypass: true,
+		},
+		{
+			// A non-IP host must NOT be resolved to test against a CIDR (no live
+			// DNS on the request path); it is a deterministic non-match here.
+			name:         "hostname vs CIDR is a non-match without DNS",
+			targetURL:    "http://api.internal.example/path",
+			noProxyList:  []string{"192.168.1.0/24"},
+			shouldBypass: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -284,9 +298,8 @@ func TestHTTPProxyWithHTTPSTarget(t *testing.T) {
 
 func BenchmarkShouldBypassProxy(b *testing.B) {
 	noProxyList := []string{"localhost", ".internal", "192.168.1.0/24", "*.local"}
-	// Literal-IP host: matchCIDR short-circuits on net.ParseIP and never calls
-	// net.LookupIP, so this benchmark stays hermetic (a hostname here would trigger
-	// a live, unbounded DNS resolution). Still exercises the CIDR-match path.
+	// Literal-IP host so the CIDR entry is actually exercised (matchCIDR only
+	// matches literal IPs and never resolves hostnames, so this is hermetic).
 	targetURL := "http://192.168.1.42/endpoint"
 
 	b.ResetTimer()

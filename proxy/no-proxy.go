@@ -143,25 +143,23 @@ func splitHostPort(hostPort string) (host, port string, hasPort bool) {
 	return
 }
 
-// matchCIDR checks if an IP address or hostname matches a CIDR pattern
+// matchCIDR reports whether host (a literal IP) falls within the CIDR pattern.
+//
+// A NO_PROXY CIDR entry matches only literal-IP targets: a non-IP host is treated
+// as a non-match WITHOUT resolving it. Resolving here would mean a live, unbounded
+// DNS lookup on the request path for every CIDR entry, which a slow/failing/
+// black-holing resolver could stall for seconds (or fail on a sandboxed host).
+// This is also closer to curl, which matches NO_PROXY by host/domain, not by
+// resolving names into IP ranges. Use a hostname/domain-suffix NO_PROXY entry to
+// bypass a named host.
 func matchCIDR(host, cidr string) bool {
-	// Parse the CIDR
 	_, ipNet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return false
 	}
-
-	// Try to parse host as IP
 	ip := net.ParseIP(host)
 	if ip == nil {
-		// If host is a domain name, try to resolve it
-		ips, err := net.LookupIP(host)
-		if err != nil || len(ips) == 0 {
-			return false
-		}
-		// Check first resolved IP
-		ip = ips[0]
+		return false // non-IP host: no DNS, no match
 	}
-
 	return ipNet.Contains(ip)
 }
