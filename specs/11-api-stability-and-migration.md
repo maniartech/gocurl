@@ -112,14 +112,15 @@ exists. Disposition:
 | Current symbol | File | v1 disposition |
 | --- | --- | --- |
 | `Process` (`(resp, body, err)`) | `process.go` | **Removed at v1.** Deprecated now (already marked). Tests pin its `(resp,body,err)` shape and `HandleOutput` stdout behavior — keep through v0. Replaced by `Client.Do` + caller-side body read. |
-| `Execute`, `Request`, `RequestWithContext`, `Response` | `api.go` | **Removed at v1.** Already marked Deprecated. The `Response` wrapper (buffering `String/Bytes/JSON`) is superseded by `CurlString/CurlBytes/CurlJSON`. |
+| `Execute` | `api.go` | **Retained.** Re-exposed as `Execute(ctx, *options.RequestOptions) (*http.Response, error)` — the typed/builder counterpart to `Curl*`, so `options.NewRequestOptionsBuilder().…​.Build()` stays runnable. Streams the body like `Curl`. Removing it (an earlier draft) orphaned the builder. |
+| `Request`, `RequestWithContext`, `Response` | `api.go` | **Removed at v1.** Already marked Deprecated. The `Response` wrapper (buffering `String/Bytes/JSON`) is superseded by `CurlString/CurlBytes/CurlJSON`. |
 | `CreateHTTPClient` | `process.go` | **Unexport → `internal/engine`** (or `createHTTPClient`). Pure machinery; `Client` owns client construction. |
 | `CreateRequest` | `process.go` | **Unexport/move to internal.** |
 | `ApplyMiddleware` | `process.go` | **Unexport/move to internal.** Public middleware composition is via `WithMiddleware` + the `Middleware`/`Handler` types. |
 | `HandleOutput` | `process.go` | **Move to `cmd/gocurl` (unexported).** It writes to `OutputFile`/stdout — a CLI concern, never library behavior (per VISION principle 2). |
 | `ValidateOptions` / `ValidateRequestOptions` | `process.go`, `security.go` | **Unexport/move to internal.** Validation is an engine step, not API. |
 | `ArgsToOptions` | `convert.go` | **Unexport/move to internal.** `Client.Prepare` is the public parse entry. |
-| `options.RequestOptions` & fields | `options/` | **Demote from the public contract.** It currently appears in `Process`/`Execute` signatures; once those go, no v1 root signature references it. It becomes an internal config carrier behind `Request`/`Option`. |
+| `options.RequestOptions` & fields | `options/` | **Public by design.** Retained as the input to `Execute` and the output of the `options.RequestOptionsBuilder`; also surfaces via `Request.Options()` and the `RequestOption` functional-option type. Its exported surface (and the builder's) is locked by the `api_options.txt` guard. |
 | `CreateProxyTransport`, `getRoundTripper`, transport cache | `clientpool.go`, `process.go` | Already unexported (`getRoundTripper`, `newTransport`, `transportKey`) or trivially so. Move under `internal/engine` with the rest. |
 | `DecompressResponse`, `GetAcceptEncodingHeader`, `ConfigureCompressionForTransport` | `compression.go` | **Unexport/move to internal.** Implementation detail of streaming. |
 | `IsSensitiveHeader`, `RedactHeaders` | `errors.go` | **Keep exported** — `cmd/gocurl/main.go` consumes `gocurl.IsSensitiveHeader` for verbose redaction, and they are genuinely useful to embedders. In the keep-list as a small "redaction" group. |
@@ -153,18 +154,20 @@ existing `Curl*` caller needs to change a line to move from v0.x to v1.
 
 ## Behavior & edge cases
 
-- **Deprecated-but-present (v0.x):** `Process`, `Execute`, `Request`, `RequestWithContext`,
+- **Deprecated-but-present (v0.x):** `Process`, `Request`, `RequestWithContext`,
   `Response`, and the to-be-unexported helpers stay exported and functional through every
   `v0.x` tag, each carrying a `// Deprecated:` doc comment naming its replacement so `go vet`
-  / `staticcheck` (SA1019) and IDEs flag usages. Their existing tests
-  (`process_test.go`, `process2_test.go`) keep pinning current behavior until removal.
+  / `staticcheck` (SA1019) and IDEs flag usages. (`Execute` is **not** in this list — it is a
+  retained, supported API, not deprecated.) Their existing tests keep pinning current behavior
+  until removal.
 - **Removal happens only at the v1.0.0 boundary**, never inside v0.x, and never silently —
   each removal is listed in the `[1.0.0]` CHANGELOG `### Removed` section with the v0 minor in
   which it was deprecated.
-- **`options.RequestOptions` exposure:** any embedder constructing it directly (via
-  `Execute`/`Process`) loses that path at v1. The migration guide shows the `Client.Prepare` +
-  `Option` equivalent. Because `RequestOptions` is large and field-mutable, it is explicitly
-  *not* promised stable even in v0.
+- **`options.RequestOptions` exposure:** it remains a supported public input via `Execute` and
+  the `options.RequestOptionsBuilder`. `Client.Prepare` + `Option` is the curl-string-oriented
+  alternative. Because `RequestOptions` is large and field-mutable its *fields* are not promised
+  stable pre-v1, but its and the builder's exported surface is now guarded (`api_options.txt`) so
+  any change is explicit.
 - **Default-Client semantics:** the lazy default `Client` must reproduce today's behavior
   exactly — cached idle-tuned transports (`clientpool.go`), env-var expansion on values only,
   no stdout writes. A regression here is a compatibility break even though signatures match.

@@ -70,7 +70,7 @@ func uploadFile(ctx context.Context, url, fieldName, filepath string) error {
 		Build()
 
 	// Execute
-	httpResp, _, err := gocurl.Process(ctx, opts)
+	httpResp, err := gocurl.Execute(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("upload failed: %w", err)
 	}

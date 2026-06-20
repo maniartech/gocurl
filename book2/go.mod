@@ -6,4 +6,10 @@ go 1.22.3
 
 require github.com/maniartech/gocurl v0.0.0
 
+require (
+	github.com/andybalholm/brotli v1.2.0 // indirect
+	golang.org/x/net v0.30.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
+)
+
 replace github.com/maniartech/gocurl => ../

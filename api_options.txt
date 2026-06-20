@@ -1,0 +1,163 @@
+const MaxBodySize
+const MaxFormFields
+const MaxHeaderSize
+const MaxHeaders
+const MaxQueryParams
+const MaxURLLength
+func (*RequestOptions) AddHeader(key, value string)
+func (*RequestOptions) AddQueryParam(key, value string)
+func (*RequestOptions) Clone() *RequestOptions
+func (*RequestOptions) SetBasicAuth(username, password string)
+func (*RequestOptions) SetHeader(key, value string)
+func (*RequestOptions) SetQueryParam(key, value string)
+func (*RequestOptions) ToJSON() (string, error)
+func (*RequestOptionsBuilder) AddHeader(key, value string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) AddQueryParam(key, value string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) BearerAuth(token string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) Build() *RequestOptions
+func (*RequestOptionsBuilder) Cleanup()
+func (*RequestOptionsBuilder) Delete(url string, headers http.Header) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) Form(data url.Values) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) Get(url string, headers http.Header) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) GetContext() context.Context
+func (*RequestOptionsBuilder) JSON(body interface{}) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) Patch(url string, body string, headers http.Header) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) Post(url string, body string, headers http.Header) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) Put(url string, body string, headers http.Header) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) QuickTimeout() *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetBasicAuth(username, password string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetBearerToken(token string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetBody(body string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetCAFile(caFile string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetCertFile(certFile string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetCompress(compress bool) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetConnectTimeout(connectTimeout time.Duration) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetCookie(cookie *http.Cookie) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetFileUpload(fileUpload *FileUpload) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetFollowRedirects(follow bool) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetForm(form url.Values) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetHTTP2(http2 bool) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetHTTP2Only(http2Only bool) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetHeaders(headers http.Header) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetInsecure(insecure bool) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetKeyFile(keyFile string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetMaxRedirects(maxRedirects int) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetMethod(method string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetOutputFile(outputFile string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetProxy(proxy string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetQueryParams(queryParams url.Values) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetReferer(referer string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetRetryConfig(retryConfig *RetryConfig) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetSilent(silent bool) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetTLSConfig(tlsConfig *tls.Config) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetTimeout(timeout time.Duration) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetURL(url string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetUserAgent(userAgent string) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetVerbose(verbose bool) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SlowTimeout() *RequestOptionsBuilder
+func (*RequestOptionsBuilder) Validate() error
+func (*RequestOptionsBuilder) WithContext(ctx context.Context) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) WithDefaultRetry() *RequestOptionsBuilder
+func (*RequestOptionsBuilder) WithExponentialBackoff(maxRetries int, initialDelay time.Duration) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) WithTimeout(timeout time.Duration) *RequestOptionsBuilder
+func NewRequestOptions(url string) *RequestOptions
+func NewRequestOptionsBuilder() *RequestOptionsBuilder
+func ValidateRequest(opts *RequestOptions) error
+type BasicAuth struct {
+	Username	string	`json:"username"`
+	Password	string	`json:"password"`
+}
+type BodySource interface {
+	Open() (io.ReadCloser, error)
+
+	Len() (int64, bool)
+
+	Rewindable() bool
+}
+type ContentTyper interface {
+	ContentType() string
+}
+type FileUpload struct {
+	FieldName	string	`json:"field_name"`
+	FileName	string	`json:"file_name"`
+	FilePath	string	`json:"file_path"`
+}
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+type RequestOptions struct {
+	Method		string		`json:"method"`
+	URL		string		`json:"url"`
+	Headers		http.Header	`json:"headers,omitempty"`
+	Body		string		`json:"body"`
+	BodyStream	BodySource	`json:"-"`
+	Form		url.Values	`json:"form,omitempty"`
+	QueryParams	url.Values	`json:"query_params,omitempty"`
+
+	BasicAuth	*BasicAuth	`json:"basic_auth,omitempty"`
+	BearerToken	string		`json:"bearer_token,omitempty"`
+
+	CertFile		string		`json:"cert_file,omitempty"`
+	KeyFile			string		`json:"key_file,omitempty"`
+	CAFile			string		`json:"ca_file,omitempty"`
+	Insecure		bool		`json:"insecure,omitempty"`
+	TLSConfig		*tls.Config	`json:"-"`
+	CertPinFingerprints	[]string	`json:"cert_pin_fingerprints,omitempty"`
+	SNIServerName		string		`json:"sni_server_name,omitempty"`
+
+	TLSMinVersion		uint16		`json:"tls_min_version,omitempty"`
+	TLSMaxVersion		uint16		`json:"tls_max_version,omitempty"`
+	CipherSuites		[]uint16	`json:"cipher_suites,omitempty"`
+	TLS13CipherSuites	[]uint16	`json:"tls13_cipher_suites,omitempty"`
+
+	Proxy		string		`json:"proxy,omitempty"`
+	ProxyNoProxy	[]string	`json:"proxy_no_proxy,omitempty"`
+
+	ProxyCert	string	`json:"proxy_cert,omitempty"`
+	ProxyKey	string	`json:"proxy_key,omitempty"`
+	ProxyCACert	string	`json:"proxy_cacert,omitempty"`
+	ProxyInsecure	bool	`json:"proxy_insecure,omitempty"`
+
+	Timeout		time.Duration	`json:"timeout,omitempty"`
+	ConnectTimeout	time.Duration	`json:"connect_timeout,omitempty"`
+
+	FollowRedirects	bool	`json:"follow_redirects,omitempty"`
+	MaxRedirects	int	`json:"max_redirects,omitempty"`
+
+	FailOnError	bool	`json:"fail_on_error,omitempty"`
+
+	AllowInsecureAuth	bool	`json:"allow_insecure_auth,omitempty"`
+
+	Compress		bool		`json:"compress,omitempty"`
+	CompressionMethods	[]string	`json:"compression_methods,omitempty"`
+
+	HTTP2		bool	`json:"http2,omitempty"`
+	HTTP2Only	bool	`json:"http2_only,omitempty"`
+
+	Cookies		[]*http.Cookie	`json:"cookies,omitempty"`
+	CookieJar	http.CookieJar	`json:"-"`
+	CookieFile	string		`json:"cookie_file,omitempty"`
+
+	UserAgent	string	`json:"user_agent,omitempty"`
+	Referer		string	`json:"referer,omitempty"`
+
+	FileUpload	*FileUpload	`json:"file_upload,omitempty"`
+
+	RetryConfig	*RetryConfig	`json:"retry_config,omitempty"`
+
+	OutputFile	string	`json:"output_file,omitempty"`
+	Silent		bool	`json:"silent,omitempty"`
+	Verbose		bool	`json:"verbose,omitempty"`
+
+	RequestID		string				`json:"request_id,omitempty"`
+	Middleware		[]middlewares.MiddlewareFunc	`json:"-"`
+	ResponseBodyLimit	int64				`json:"response_body_limit,omitempty"`
+	CustomClient		HTTPClient			`json:"-"`
+}
+type RequestOptionsBuilder struct {
+}
+type RetryConfig struct {
+	MaxRetries	int		`json:"max_retries"`
+	RetryDelay	time.Duration	`json:"retry_delay"`
+	RetryOnHTTP	[]int		`json:"retry_on_http"`
+}

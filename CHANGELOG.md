@@ -13,21 +13,28 @@ The exported root surface was trimmed to the intended v1 contract while gocurl i
 untagged (no compatibility promise yet). **No `v1.0.0` tag is cut** — this only locks a clean
 surface for a future release.
 
-- **Removed deprecated one-shot engine API:** `Process`, `Execute`, the `Response` wrapper
+- **Removed deprecated one-shot engine API:** `Process`, the `Response` wrapper
   (`String`/`Bytes`/`JSON`), and `HandleOutput` (the library no longer writes to stdout/files).
   Migrate: use `CurlString`/`CurlBytes`/`CurlJSON` for buffered bodies, `Curl` for the streamed
   body, or a `Client` + `Prepare`/`Do`.
+- **Retained the typed/builder executor:** `Execute(ctx, *options.RequestOptions) (*http.Response, error)`
+  is kept (not removed) as the programmatic counterpart to the `Curl*` helpers, so a request
+  assembled with `options.NewRequestOptionsBuilder()` stays runnable. `*options.RequestOptions`
+  therefore remains a public input by design. (An earlier draft of this trim removed `Execute` and
+  orphaned the builder — its `Build()` had no public executor; that was reverted.)
 - **Unexported the execution machinery** (it was never meant to be public): `CreateHTTPClient`,
   `CreateRequest`, `ApplyMiddleware`, `ValidateOptions`, `ValidateRequestOptions`, `ArgsToOptions`,
   `LoadTLSConfig`, `ValidateTLSConfig`, `VerifyCertificatePin`, `SecureDefaults`,
   `ParseTLSVersion`/`ParseCipherSuites`/`ParseTLS13CipherSuites` (+ the `GetSupported*` helpers),
   `DecompressResponse`/`GetAcceptEncodingHeader`/`ConfigureCompressionForTransport`,
   `ValidateVariables`, the verbose-trace writer `VerboseWriter` (now `verboseWriter`), and the
-  redundant root `HTTPClient` interface. `options.RequestOptions` no longer appears in any public
-  signature. Deleted the unused `SanitizeHeadersForLogging` (use `RedactHeaders`).
-- **API-surface guard:** the exported surface is now locked by `api.txt` + `TestAPISurface`; any
-  change must regenerate the golden (`GOCURL_UPDATE_API=1 go test -run TestAPISurface .`) and be
-  recorded here.
+  redundant root `HTTPClient` interface. Deleted the unused `SanitizeHeadersForLogging` (use
+  `RedactHeaders`).
+- **API-surface guard (two packages):** the exported surface of both the root package (`api.txt`)
+  and the `options` package (`api_options.txt`, which locks the `RequestOptionsBuilder` and
+  `RequestOptions`) is guarded by `TestAPISurface`. Covering `options` is deliberate — a root-only
+  guard could not catch the builder being orphaned. Any surface change must regenerate the goldens
+  (`GOCURL_UPDATE_API=1 go test -run TestAPISurface .`) and be recorded here.
 
 ### Fixed — streaming response body limit (`limitedBody`)
 - The `ResponseBodyLimit` streaming guard now caps the slice handed to the underlying reader, so it

@@ -120,7 +120,7 @@ func uploadWithProgress(ctx context.Context, url, fieldName, filepath string) er
 		SetBody(uploadBuffer.String()).
 		Build()
 
-	httpResp, _, err := gocurl.Process(ctx, opts)
+	httpResp, err := gocurl.Execute(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("upload failed: %w", err)
 	}

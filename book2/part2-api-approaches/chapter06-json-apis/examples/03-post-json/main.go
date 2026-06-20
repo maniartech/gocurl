@@ -59,7 +59,7 @@ func main() {
 		Build()
 
 	// Execute request
-	httpResp, _, err := gocurl.Process(ctx, opts)
+	httpResp, err := gocurl.Execute(ctx, opts)
 	if err != nil {
 		log.Fatalf("Request failed: %v", err)
 	}
