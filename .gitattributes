@@ -5,3 +5,6 @@
 *.md text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+
+# Golden API surface and other text fixtures must stay LF for byte-exact comparison.
+*.txt text eol=lf

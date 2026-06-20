@@ -292,7 +292,7 @@ func redactedHeaders(h http.Header) map[string][]string {
 - **Nil response on error:** `ResultInfo.StatusCode == 0` and the latency
   observation still fires so error latency is visible.
 - **CLI:** `cmd/gocurl` can opt into a stderr `Logger` adapter; `-v` verbose
-  output is unaffected and continues through `VerboseWriter`.
+  output is unaffected and continues through `verboseWriter`.
 
 ## Acceptance criteria / Definition of Done
 
@@ -342,7 +342,7 @@ func redactedHeaders(h http.Header) map[string][]string {
 - Builds directly on existing code: `process.go` (`doRequest`, `CreateRequest`,
   `ApplyMiddleware`, `applyRequestID`), `retry.go` (`retryLoop`, `needsRetry`),
   `errors.go` (`RedactHeaders`, `IsSensitiveHeader`, `sanitizeURL`),
-  `verbose.go` (`VerboseWriter`, redaction unification),
+  `verbose.go` (`verboseWriter`, redaction unification),
   `options/options.go` (`RequestID`).
 
 ## Open questions / decisions to confirm in review

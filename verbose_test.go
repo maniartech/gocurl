@@ -23,7 +23,7 @@ func TestVerbose_Disabled(t *testing.T) {
 
 	// Capture verbose output
 	var buf bytes.Buffer
-	VerboseWriter = &buf
+	verboseWriter = &buf
 
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = false // Explicitly disabled
@@ -50,7 +50,7 @@ func TestVerbose_RequestHeaders(t *testing.T) {
 
 	// Capture verbose output
 	var buf bytes.Buffer
-	VerboseWriter = &buf
+	verboseWriter = &buf
 
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = true
@@ -98,7 +98,7 @@ func TestVerbose_ResponseHeaders(t *testing.T) {
 
 	// Capture verbose output
 	var buf bytes.Buffer
-	VerboseWriter = &buf
+	verboseWriter = &buf
 
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = true
@@ -136,7 +136,7 @@ func TestVerbose_SensitiveDataRedacted(t *testing.T) {
 
 	// Capture verbose output
 	var buf bytes.Buffer
-	VerboseWriter = &buf
+	verboseWriter = &buf
 
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = true
@@ -186,7 +186,7 @@ func TestVerbose_CustomWriter(t *testing.T) {
 
 	// Use custom buffer
 	var customBuf bytes.Buffer
-	VerboseWriter = &customBuf
+	verboseWriter = &customBuf
 
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = true
@@ -220,7 +220,7 @@ func TestVerbose_ConcurrentSafe(t *testing.T) {
 	var mu sync.Mutex
 	var buf bytes.Buffer
 	safeWriter := &threadSafeWriter{w: &buf, mu: &mu}
-	VerboseWriter = safeWriter
+	verboseWriter = safeWriter
 
 	var wg sync.WaitGroup
 	numRequests := 10
@@ -267,7 +267,7 @@ func TestVerbose_MatchesCurlFormat(t *testing.T) {
 
 	// Capture verbose output
 	var buf bytes.Buffer
-	VerboseWriter = &buf
+	verboseWriter = &buf
 
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = true
@@ -363,7 +363,7 @@ func TestVerbose_HTTPSConnectionInfo(t *testing.T) {
 
 	// Capture verbose output
 	var buf bytes.Buffer
-	VerboseWriter = &buf
+	verboseWriter = &buf
 
 	opts := options.NewRequestOptions(server.URL)
 	opts.Verbose = true

@@ -398,10 +398,10 @@ func TestObservability_PanicRequestIDFuncRecovered(t *testing.T) {
 }
 
 func TestVerbose_UsesCanonicalRedaction(t *testing.T) {
-	old := VerboseWriter
+	old := verboseWriter
 	var buf bytes.Buffer
-	VerboseWriter = &buf
-	defer func() { VerboseWriter = old }()
+	verboseWriter = &buf
+	defer func() { verboseWriter = old }()
 
 	req, _ := http.NewRequest("GET", "http://h.example", nil)
 	req.Header.Set("X-Auth-Token", "supersecret")

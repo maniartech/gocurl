@@ -22,9 +22,9 @@ surface for a future release.
   `LoadTLSConfig`, `ValidateTLSConfig`, `VerifyCertificatePin`, `SecureDefaults`,
   `ParseTLSVersion`/`ParseCipherSuites`/`ParseTLS13CipherSuites` (+ the `GetSupported*` helpers),
   `DecompressResponse`/`GetAcceptEncodingHeader`/`ConfigureCompressionForTransport`,
-  `ValidateVariables`, and the redundant root `HTTPClient` interface. `options.RequestOptions` no
-  longer appears in any public signature. Deleted the unused `SanitizeHeadersForLogging` (use
-  `RedactHeaders`).
+  `ValidateVariables`, the verbose-trace writer `VerboseWriter` (now `verboseWriter`), and the
+  redundant root `HTTPClient` interface. `options.RequestOptions` no longer appears in any public
+  signature. Deleted the unused `SanitizeHeadersForLogging` (use `RedactHeaders`).
 - **API-surface guard:** the exported surface is now locked by `api.txt` + `TestAPISurface`; any
   change must regenerate the golden (`GOCURL_UPDATE_API=1 go test -run TestAPISurface .`) and be
   recorded here.

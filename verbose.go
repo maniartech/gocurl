@@ -10,8 +10,8 @@ import (
 	"github.com/maniartech/gocurl/options"
 )
 
-// VerboseWriter is the default writer for verbose output (stderr like curl)
-var VerboseWriter io.Writer = os.Stderr
+// verboseWriter is the default writer for verbose output (stderr like curl)
+var verboseWriter io.Writer = os.Stderr
 
 // printConnectionInfo prints connection details before the request (curl -v style)
 func printConnectionInfo(opts *options.RequestOptions, req *http.Request) {
@@ -19,7 +19,7 @@ func printConnectionInfo(opts *options.RequestOptions, req *http.Request) {
 		return
 	}
 
-	w := VerboseWriter
+	w := verboseWriter
 	if w == nil {
 		return
 	}
@@ -70,7 +70,7 @@ func printRequestVerbose(opts *options.RequestOptions, req *http.Request) {
 		return
 	}
 
-	w := VerboseWriter
+	w := verboseWriter
 	if w == nil {
 		return
 	}
@@ -102,7 +102,7 @@ func printResponseVerbose(opts *options.RequestOptions, resp *http.Response) {
 		return
 	}
 
-	w := VerboseWriter
+	w := verboseWriter
 	if w == nil {
 		return
 	}

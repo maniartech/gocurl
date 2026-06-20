@@ -167,36 +167,126 @@ func WithTimeout(d time.Duration) Option
 func WithTracer(t Tracer) Option
 func WithTransport(rt http.RoundTripper) Option
 func WithUserAgent(ua string) Option
-type Attempt
-type Backoff
-type BreakerConfig
-type Client
-type Field
-type GocurlError
-type Handler
-type Hooks
-type Kind
-type Level
-type Limiter
-type Logger
-type Metrics
-type Middleware
-type MultipartFile
-type Option
-type PersistentCookieJar
-type RedirectPolicy
-type Request
-type RequestInfo
-type RequestOption
-type ResponseReader
-type ResultInfo
-type RetryBudget
-type RetryPolicy
-type SSRFPolicy
-type Span
-type TokenBucket
-type Tracer
-type Variables
+type Attempt struct {
+	Method		string
+	Number		int
+	Response	*http.Response
+	Err		error
+	Started		time.Time
+}
+type Backoff interface {
+	Delay(attempt int, rnd *rand.Rand) time.Duration
+}
+type BreakerConfig struct {
+	FailureThreshold	float64
+	MinRequests		int
+	Window			time.Duration
+	OpenTimeout		time.Duration
+	KeyFunc			func(*http.Request) string
+	IsFailure		func(*http.Response, error) bool
+}
+type Client struct {
+}
+type Field struct {
+	Key	string
+	Value	any
+}
+type GocurlError struct {
+	Op	string
+	Kind	Kind
+	Command	string
+	URL	string
+	Status	int
+	Attempt	int
+	Err	error
+}
+type Handler func(*http.Request) (*http.Response, error)
+type Hooks struct {
+	OnRequest	func(ctx context.Context, req *http.Request)
+	OnRetry		func(ctx context.Context, req *http.Request, attempt int, lastErr error, lastResp *http.Response)
+	OnResponse	func(ctx context.Context, req *http.Request, resp *http.Response, elapsed time.Duration)
+	OnError		func(ctx context.Context, req *http.Request, err error, kind Kind)
+}
+type Kind int
+type Level int8
+type Limiter interface {
+	Wait(ctx context.Context) error
+}
+type Logger interface {
+	Log(ctx context.Context, level Level, msg string, fields ...Field)
+}
+type Metrics interface {
+	IncRequest(info RequestInfo)
+	IncInFlight(delta int)
+	ObserveLatency(d time.Duration, info ResultInfo)
+	IncRetry(info RequestInfo)
+	IncError(kind Kind, info RequestInfo)
+}
+type Middleware func(next Handler) Handler
+type MultipartFile struct {
+	Field		string
+	FileName	string
+	Path		string
+	Reader		io.Reader
+}
+type Option func(*config) error
+type PersistentCookieJar struct {
+}
+type RedirectPolicy struct {
+	Follow	bool
+	Max	int
+	Allow	func(req *http.Request, via []*http.Request) error
+}
+type Request struct {
+}
+type RequestInfo struct {
+	Method	string
+	Host	string
+}
+type RequestOption func(*options.RequestOptions) error
+type ResponseReader struct {
+}
+type ResultInfo struct {
+	RequestInfo
+	StatusCode	int
+	Kind		Kind
+}
+type RetryBudget struct {
+	Ratio	float64
+
+	MinPerSec	float64
+}
+type RetryPolicy struct {
+	MaxAttempts		int
+	Backoff			Backoff
+	MaxElapsed		time.Duration
+	PerAttempt		time.Duration
+	RetryOnStatus		[]int
+	RespectRetryAfter	bool
+	AllowMethods		[]string
+	Retryable		func(*Attempt) bool
+	Budget			*RetryBudget
+}
+type SSRFPolicy struct {
+	BlockLoopback		bool
+	BlockLinkLocal		bool
+	BlockPrivate		bool
+	BlockCloudMetadata	bool
+	AllowHosts		[]string
+	AllowIPs		[]string
+}
+type Span interface {
+	SetAttributes(attrs ...Field)
+	AddEvent(name string, attrs ...Field)
+	RecordError(err error)
+	End()
+}
+type TokenBucket struct {
+}
+type Tracer interface {
+	StartSpan(ctx context.Context, name string, attrs ...Field) (context.Context, Span)
+}
+type Variables map[string]string
 var ErrBodyRead
 var ErrCanceled
 var ErrCircuitOpen
@@ -209,5 +299,4 @@ var ErrTLS
 var ErrTimeout
 var ErrTooManyRedirects
 var ErrValidation
-var VerboseWriter
 var Version
