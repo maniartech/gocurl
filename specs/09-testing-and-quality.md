@@ -223,7 +223,7 @@ CI extends the current `.github/workflows/ci.yml` (gofmt-clean excluding `book2/
 summary) with: (1) a coverage-floor gate that fails if overall `go tool cover -func`
 drops below 75%; (2) a short fuzz smoke step (`go test -run=^$ -fuzz=Fuzz -fuzztime=30s`
 on tokenizer + parser) so fuzz targets are kept compiling and seeds green; (3) the Go
-version matrix stays aligned with `go.mod` (`go 1.22.3`).
+version matrix stays aligned with `go.mod` (`go 1.23.0`).
 
 ## Behavior & edge cases
 

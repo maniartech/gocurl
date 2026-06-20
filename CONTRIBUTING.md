@@ -19,7 +19,7 @@ go build ./...
 go install ./cmd/gocurl
 ```
 
-Requires Go 1.22+.
+Requires Go 1.23+.
 
 ## Testing
 
