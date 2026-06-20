@@ -1,4 +1,4 @@
-package gocurl_test
+package gocurl
 
 import (
 	"bytes"
@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maniartech/gocurl"
 	"github.com/maniartech/gocurl/options"
 )
 
@@ -34,7 +33,7 @@ func TestConcurrentRequestConstruction(t *testing.T) {
 					"https://example.com/test",
 				}
 
-				_, err := gocurl.ArgsToOptions(args)
+				_, err := ArgsToOptions(args)
 				if err != nil {
 					errors <- err
 					return
@@ -56,7 +55,7 @@ func TestConcurrentVariableExpansion(t *testing.T) {
 	const goroutines = 100
 	const iterations = 100
 
-	vars := gocurl.Variables{
+	vars := Variables{
 		"token": "my-secret-token",
 		"url":   "https://example.com",
 		"data":  "important data",
@@ -71,7 +70,7 @@ func TestConcurrentVariableExpansion(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				text := "Authorization: Bearer ${token}, URL: ${url}, Data: ${data}"
-				_, err := gocurl.ExpandVariables(text, vars)
+				_, err := ExpandVariables(text, vars)
 				if err != nil {
 					errors <- err
 					return
@@ -97,7 +96,7 @@ func TestConcurrentRequestAPI(t *testing.T) {
 	const goroutines = 10
 	const iterations = 10
 
-	vars := gocurl.Variables{
+	vars := Variables{
 		"url": "http://localhost:8080/test",
 	}
 
@@ -109,7 +108,7 @@ func TestConcurrentRequestAPI(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
-				resp, err := gocurl.CurlWithVars(context.Background(), vars, "curl ${url}")
+				resp, err := CurlWithVars(context.Background(), vars, "curl ${url}")
 				if err != nil {
 					errors <- err
 					return
@@ -147,7 +146,7 @@ func TestConcurrentBufferPool(t *testing.T) {
 					"https://example.com/api/test",
 				}
 
-				_, err := gocurl.ArgsToOptions(args)
+				_, err := ArgsToOptions(args)
 				if err != nil {
 					errors <- err
 					return
@@ -185,7 +184,7 @@ func TestHighConcurrencyStress(t *testing.T) {
 					"https://api.example.com/data",
 				}
 
-				_, err := gocurl.ArgsToOptions(args)
+				_, err := ArgsToOptions(args)
 				if err != nil {
 					errorCount.Add(1)
 					return
@@ -217,9 +216,9 @@ func TestConcurrentErrorHandling(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				// Create various error scenarios
-				err := gocurl.ParseError("curl -X GET https://example.com",
-					gocurl.ValidationError("test", gocurl.RequestError("https://example.com",
-						gocurl.ResponseError("https://example.com", gocurl.RetryError("https://example.com", 3, nil)))))
+				err := ParseError("curl -X GET https://example.com",
+					ValidationError("test", RequestError("https://example.com",
+						ResponseError("https://example.com", RetryError("https://example.com", 3, nil)))))
 
 				// Verify error formatting is consistent
 				errStr := err.Error()
@@ -241,7 +240,7 @@ func TestConcurrentSecurityValidation(t *testing.T) {
 	var wg sync.WaitGroup
 	errors := make(chan error, goroutines*iterations)
 
-	testVars := []gocurl.Variables{
+	testVars := []Variables{
 		{"token": "secret123", "url": "https://example.com"},
 		{"key": "value", "data": "test"},
 		{"api_key": "sensitive", "endpoint": "/api/v1"},
@@ -255,14 +254,14 @@ func TestConcurrentSecurityValidation(t *testing.T) {
 				vars := testVars[j%len(testVars)]
 
 				// Test variable validation
-				err := gocurl.ValidateVariables(vars)
+				err := ValidateVariables(vars)
 				if err != nil {
 					errors <- err
 					return
 				}
 
 				// Test variable expansion
-				_, err = gocurl.ExpandVariables("${token}:${url}", vars)
+				_, err = ExpandVariables("${token}:${url}", vars)
 				if err != nil {
 					// Expected for some variable combinations
 					continue
@@ -297,22 +296,22 @@ func TestConcurrentMixedOperations(t *testing.T) {
 			switch opType {
 			case 0:
 				// Request parsing
-				_, _ = gocurl.ArgsToOptions([]string{"curl", "https://example.com"})
+				_, _ = ArgsToOptions([]string{"curl", "https://example.com"})
 
 			case 1:
 				// Variable expansion
-				vars := gocurl.Variables{"url": "https://example.com"}
-				_, _ = gocurl.ExpandVariables("${url}/api", vars)
+				vars := Variables{"url": "https://example.com"}
+				_, _ = ExpandVariables("${url}/api", vars)
 
 			case 2:
 				// Error creation
-				err := gocurl.ParseError("curl test", gocurl.RequestError("https://example.com", nil))
+				err := ParseError("curl test", RequestError("https://example.com", nil))
 				_ = err.Error()
 
 			case 3:
 				// Security validation
-				vars := gocurl.Variables{"key": "value"}
-				_ = gocurl.ValidateVariables(vars)
+				vars := Variables{"key": "value"}
+				_ = ValidateVariables(vars)
 
 			case 4:
 				// Header redaction
@@ -320,7 +319,7 @@ func TestConcurrentMixedOperations(t *testing.T) {
 					"Authorization": {"Bearer token"},
 					"Content-Type":  {"application/json"},
 				}
-				_ = gocurl.RedactHeaders(headers)
+				_ = RedactHeaders(headers)
 			}
 		}(i, operationType)
 	}
@@ -366,7 +365,7 @@ func TestConcurrentResponseBufferPool(t *testing.T) {
 					Silent: true, // Don't print response bodies to stdout
 				}
 
-				resp, _, err := gocurl.Process(context.Background(), opts)
+				resp, _, err := processForTest(context.Background(), opts)
 				if err != nil {
 					t.Errorf("Request failed: %v", err)
 					return
@@ -424,7 +423,7 @@ func TestConcurrentRetryLogic(t *testing.T) {
 				},
 			}
 
-			resp, _, err := gocurl.Process(context.Background(), opts)
+			resp, _, err := processForTest(context.Background(), opts)
 			if err != nil {
 				errors <- err
 				return
@@ -451,7 +450,7 @@ func TestConcurrentVariableSubstitution(t *testing.T) {
 		iterations = 10
 	}
 
-	vars := gocurl.Variables{
+	vars := Variables{
 		"host":  "example.com",
 		"token": "secret123",
 		"path":  "/api/v1",
@@ -466,7 +465,7 @@ func TestConcurrentVariableSubstitution(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				text := "https://${host}${path}?token=${token}&id=" + string(rune('0'+id%10))
-				result, err := gocurl.ExpandVariables(text, vars)
+				result, err := ExpandVariables(text, vars)
 				if err != nil {
 					errors <- err
 					return
@@ -513,7 +512,7 @@ func TestStressTest_10kGoroutines(t *testing.T) {
 				"https://example.com/test/" + string(rune('0'+id%10)),
 			}
 
-			_, err := gocurl.ArgsToOptions(args)
+			_, err := ArgsToOptions(args)
 			if err != nil {
 				errors <- err
 				return

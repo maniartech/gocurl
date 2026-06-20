@@ -38,7 +38,7 @@ func TestRequestOptions_ConcurrentCloneIsSafe(t *testing.T) {
 			cloned.Form.Add("test", fmt.Sprintf("value-%d", id))
 
 			// Execute request with cloned options
-			_, _, err := Process(context.Background(), cloned)
+			_, _, err := processForTest(context.Background(), cloned)
 			if err != nil {
 				t.Errorf("Request failed for goroutine %d: %v", id, err)
 			}
@@ -82,7 +82,7 @@ func TestRequestOptions_ConcurrentReadsAreSafe(t *testing.T) {
 			_ = opts.Form.Get("key")
 
 			// Execute request (reads options)
-			_, _, err := Process(context.Background(), opts)
+			_, _, err := processForTest(context.Background(), opts)
 			if err != nil {
 				t.Errorf("Request failed for reader %d: %v", id, err)
 			}
@@ -207,7 +207,7 @@ func TestRequestOptions_BuilderConcurrentContextIsSafe(t *testing.T) {
 			opts.Headers = make(http.Header)
 			opts.SetHeader("X-Request-ID", fmt.Sprintf("req-%d", id))
 
-			_, _, err := Process(context.Background(), opts)
+			_, _, err := processForTest(context.Background(), opts)
 			if err != nil {
 				t.Errorf("Request failed for goroutine %d: %v", id, err)
 			}

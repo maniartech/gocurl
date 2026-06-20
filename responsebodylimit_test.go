@@ -27,7 +27,7 @@ func TestResponseBodyLimit_NoLimit(t *testing.T) {
 	opts.Silent = true         // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 0 // No limit
 
-	resp, body, err := Process(context.Background(), opts)
+	resp, body, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestResponseBodyLimit_WithinLimit(t *testing.T) {
 	opts.Silent = true            // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit
 
-	resp, body, err := Process(context.Background(), opts)
+	resp, body, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Expected no error for body within limit, got: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestResponseBodyLimit_ExceedsLimit(t *testing.T) {
 	opts.Silent = true            // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit, but server returns 2MB
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err == nil {
 		t.Fatal("Expected error for body exceeding limit, got nil")
 	}
@@ -115,7 +115,7 @@ func TestResponseBodyLimit_ExactLimit(t *testing.T) {
 	opts.ResponseBodyLimit = 1024 // 1KB limit
 	opts.Silent = true            // Don't print 1KB of 'B' characters to stdout
 
-	resp, body, err := Process(context.Background(), opts)
+	resp, body, err := processForTest(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Expected no error for body at exact limit, got: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestResponseBodyLimit_OneByteOver(t *testing.T) {
 	opts.Silent = true            // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 1024 // 1KB limit
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err == nil {
 		t.Fatal("Expected error for body 1 byte over limit, got nil")
 	}
@@ -180,7 +180,7 @@ func TestResponseBodyLimit_DoSProtection(t *testing.T) {
 	opts.Silent = true                  // Prevent large bodies from spamming stdout
 	opts.ResponseBodyLimit = 100 * 1024 // 100KB limit (protect against 10MB response)
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err == nil {
 		t.Fatal("Expected error for DoS-sized response, got nil")
 	}
@@ -217,7 +217,7 @@ func TestResponseBodyLimit_Integration(t *testing.T) {
 		RetryOnHTTP: []int{500}, // Don't retry on our error
 	}
 
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 	if err == nil {
 		t.Fatal("Expected error for oversized response, got nil")
 	}

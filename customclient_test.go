@@ -39,7 +39,7 @@ func TestCustomClient_IsUsedWhenSet(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	resp, body, err := Process(ctx, opts)
+	resp, body, err := processForTest(ctx, opts)
 
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
@@ -73,7 +73,7 @@ func TestCustomClient_NotUsedWhenNil(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	resp, _, err := Process(ctx, opts)
+	resp, _, err := processForTest(ctx, opts)
 
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
@@ -104,7 +104,7 @@ func TestCustomClient_WithRetries(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	resp, body, err := Process(ctx, opts)
+	resp, body, err := processForTest(ctx, opts)
 
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
@@ -145,7 +145,7 @@ func TestCustomClient_WithMiddleware(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	resp, _, err := Process(ctx, opts)
+	resp, _, err := processForTest(ctx, opts)
 
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
@@ -185,7 +185,7 @@ func TestCustomClient_ClonePreservesReference(t *testing.T) {
 
 	// Verify cloned options work with the same mock client
 	ctx := context.Background()
-	resp, _, err := Process(ctx, cloned)
+	resp, _, err := processForTest(ctx, cloned)
 
 	if err != nil {
 		t.Fatalf("Process with cloned options failed: %v", err)

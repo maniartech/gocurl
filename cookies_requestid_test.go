@@ -12,6 +12,16 @@ import (
 	"github.com/maniartech/gocurl/options"
 )
 
+// execTest runs the live one-shot engine for option-driven whitebox tests and
+// closes the response body. It replaces the removed deprecated Execute() helper.
+func execTest(opts *options.RequestOptions) error {
+	resp, err := doRequest(context.Background(), opts)
+	if resp != nil {
+		resp.Body.Close()
+	}
+	return err
+}
+
 // TestCookies_SingleCookie verifies that a single cookie is properly added to the request
 func TestCookies_SingleCookie(t *testing.T) {
 	// Create a test server that echoes back cookies
@@ -35,7 +45,7 @@ func TestCookies_SingleCookie(t *testing.T) {
 	}
 
 	// Execute request
-	_, err := Execute(context.Background(), opts)
+	err := execTest(opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -78,7 +88,7 @@ func TestCookies_MultipleCookies(t *testing.T) {
 		{Name: "lang", Value: "en"},
 	}
 
-	_, err := Execute(context.Background(), opts)
+	err := execTest(opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -98,7 +108,7 @@ func TestCookies_EmptyArray(t *testing.T) {
 	opts := options.NewRequestOptions(server.URL)
 	opts.Cookies = []*http.Cookie{} // Empty array
 
-	_, err := Execute(context.Background(), opts)
+	err := execTest(opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -114,7 +124,7 @@ func TestCookies_NilArray(t *testing.T) {
 	opts := options.NewRequestOptions(server.URL)
 	opts.Cookies = nil // Nil array
 
-	_, err := Execute(context.Background(), opts)
+	err := execTest(opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -167,7 +177,7 @@ func TestCookies_WithCookieJar(t *testing.T) {
 	// First request - populates jar
 	opts1 := options.NewRequestOptions(server.URL)
 	opts1.CookieJar = jar
-	_, err := Execute(context.Background(), opts1)
+	err := execTest(opts1)
 	if err != nil {
 		t.Fatalf("First request failed: %v", err)
 	}
@@ -178,7 +188,7 @@ func TestCookies_WithCookieJar(t *testing.T) {
 	opts2.Cookies = []*http.Cookie{
 		{Name: "manual_cookie", Value: "from_opts"},
 	}
-	_, err = Execute(context.Background(), opts2)
+	err = execTest(opts2)
 	if err != nil {
 		t.Fatalf("Second request failed: %v", err)
 	}
@@ -204,7 +214,7 @@ func TestCookies_ConcurrentSafe(t *testing.T) {
 				{Name: "id", Value: fmt.Sprintf("%d", id)}, // Use valid cookie value
 			}
 
-			_, err := Execute(context.Background(), opts)
+			err := execTest(opts)
 			if err != nil {
 				t.Errorf("Goroutine %d failed: %v", id, err)
 			}
@@ -230,7 +240,7 @@ func TestRequestID_Added(t *testing.T) {
 	opts := options.NewRequestOptions(server.URL)
 	opts.RequestID = expectedID
 
-	_, err := Execute(context.Background(), opts)
+	err := execTest(opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -250,7 +260,7 @@ func TestRequestID_Empty(t *testing.T) {
 	opts := options.NewRequestOptions(server.URL)
 	opts.RequestID = "" // Empty string
 
-	_, err := Execute(context.Background(), opts)
+	err := execTest(opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -273,7 +283,7 @@ func TestRequestID_UUIDFormat(t *testing.T) {
 	opts := options.NewRequestOptions(server.URL)
 	opts.RequestID = expectedID
 
-	_, err := Execute(context.Background(), opts)
+	err := execTest(opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -303,7 +313,7 @@ func TestRequestID_ConcurrentSafe(t *testing.T) {
 			opts := options.NewRequestOptions(server.URL)
 			opts.RequestID = fmt.Sprintf("req-%d", id) // Use valid string format
 
-			_, err := Execute(context.Background(), opts)
+			err := execTest(opts)
 			if err != nil {
 				t.Errorf("Goroutine %d failed: %v", id, err)
 			}
@@ -342,7 +352,7 @@ func TestRequestID_OverridesExisting(t *testing.T) {
 	opts.Headers.Set("X-Request-ID", "will-be-overridden")
 	opts.RequestID = expectedID // Should override the header
 
-	_, err := Execute(context.Background(), opts)
+	err := execTest(opts)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}

@@ -409,71 +409,11 @@ func CurlDownloadArgs(ctx context.Context, filepath string, args ...string) (int
 // BACKWARD COMPATIBILITY (Deprecated - use Curl functions instead)
 // ============================================================================
 
-// Response wraps http.Response with convenience methods (DEPRECATED)
-type Response struct {
-	*http.Response
-	bodyBytes []byte
-	bodyRead  bool
-}
-
-// NOTE: the former Request()/RequestWithContext() helpers were removed — the name
-// Request is now the prepared-request type (see request.go). Use Curl/CurlWithVars
-// for the one-shot API, or a Client + Prepare/Do for the reusable API.
-
-// Execute runs a request with pre-built RequestOptions (DEPRECATED)
-func Execute(ctx context.Context, opts *options.RequestOptions) (*Response, error) {
-	httpResp, _, err := Process(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Response{
-		Response: httpResp,
-	}, nil
-}
-
-// String returns the response body as a string
-func (r *Response) String() (string, error) {
-	b, err := r.Bytes()
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-// Bytes reads the response body once and caches it
-func (r *Response) Bytes() ([]byte, error) {
-	if r.bodyRead {
-		return r.bodyBytes, nil
-	}
-
-	if r.Response == nil || r.Response.Body == nil {
-		return nil, fmt.Errorf("response body is nil")
-	}
-
-	data, err := readResponseBody(r.Response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	r.bodyBytes = data
-	r.bodyRead = true
-	return r.bodyBytes, nil
-}
-
-// JSON unmarshals the response body into the provided struct
-func (r *Response) JSON(v interface{}) error {
-	data, err := r.Bytes()
-	if err != nil {
-		return err
-	}
-
-	if err := json.Unmarshal(data, v); err != nil {
-		return fmt.Errorf("failed to unmarshal JSON: %w", err)
-	}
-
-	return nil
-}
+// NOTE: the former Request()/RequestWithContext()/Execute() helpers and the
+// Response wrapper were removed — the name Request is now the prepared-request
+// type (see request.go). Use Curl/CurlWithVars for the one-shot API (CurlString/
+// CurlBytes/CurlJSON for buffered bodies), or a Client + Prepare/Do for the
+// reusable API.
 
 // ============================================================================
 // HELPER FUNCTIONS

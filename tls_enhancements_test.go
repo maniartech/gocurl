@@ -208,7 +208,7 @@ func TestInsecure_IntegrationWithHTTPS(t *testing.T) {
 	opts.Silent = false
 
 	// Should succeed with Insecure=true
-	_, _, err := Process(context.Background(), opts)
+	_, _, err := processForTest(context.Background(), opts)
 
 	// Restore stderr
 	w.Close()
