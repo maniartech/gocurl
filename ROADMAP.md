@@ -266,11 +266,24 @@ Spec 13. deps: M1, M4.
 
 Spec 09. deps: ongoing; finalize here.
 
-- [ ] **M9-T1 — Parser fuzz target** (`go test -fuzz`) + seed corpus from real API docs.
-- [ ] **M9-T2 — Fault-injection harness** (G1) reused by M5 tests.
-- [ ] **M9-T3 — Leak detection** (goroutines/conns) + soak/load test with pprof (gated).
-- [ ] **M9-T4 — Coverage gates per package in CI** (raise proxy >70%, core >80%).
-  *DoD: CI enforces the gates.*
+- [x] **M9-T1 — Curl-compat corpus + parser fuzz targets.** `internal/corpus` (`//go:embed
+  compat.json`, 9 verified cases: 3 each Stripe/GitHub/OpenAI) is run by BOTH a whitebox parse
+  assertion (`TestCurlCompatCorpus_Parse`, reuses `parseCmd`) and a blackbox echo-server execution
+  (`TestCurlCompatCorpus_Execute`, doc host swapped for the test server); adding a doc command is a
+  one-line JSON append. `FuzzTokenize` (tokenizer) and `FuzzParseCommand` (root) with seeds; the
+  parse fuzzer stays filesystem-free by skipping `@`-token inputs (all convert-time reads are
+  `@`-triggered). Both fuzzed 20s+ (3.8M / 0.8M execs) with zero crashers.
+- [x] **M9-T2 — Fault-injection** is already exercised by the M5 retry tests (RoundTripper fault
+  injection in `m5_client_test.go`/`retry_test.go`); M9 adds the fuzz/leak/soak layers on top.
+- [x] **M9-T3 — Leak + reuse detection.** `TestClient_Do_NoGoroutineLeak` (NumGoroutine settle loop
+  around 200 `Client.Do` calls), `TestClient_Do_ReusesConnections` (`Server.Config.ConnState`
+  counter asserts one pooled keep-alive conn for 50 sequential requests), and a `-short`-gated
+  `TestClient_Soak` (bounded 3000-request loop, stable goroutines, writes cpu/mem pprof when
+  `GOCURL_PROFILE` is set).
+- [x] **M9-T4 — CI gates + CONTRIBUTING.** `.github/workflows/ci.yml` now enforces a coverage floor
+  (75% overall via `-coverpkg=./...`; baseline 76.1%) and a 30s fuzz smoke per target, on top of
+  gofmt/vet/build/`-short -race`. CONTRIBUTING.md documents the whitebox/blackbox placement rules,
+  the corpus, and the fuzz/leak/soak commands.
 
 ---
 

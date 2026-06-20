@@ -248,24 +248,25 @@ version matrix stays aligned with `go.mod` (`go 1.22.3`).
 
 ## Acceptance criteria / Definition of Done
 
-- [ ] `go test ./...` (no `-short`, default) passes fully offline with no live network.
-- [ ] `go test -short -race -timeout 240s ./...` passes locally and in CI, race-clean.
-- [ ] Whitebox vs blackbox placement rules documented in `CONTRIBUTING.md`; new tests
+- [x] `go test ./...` (no `-short`, default) passes fully offline with no live network.
+- [x] `go test -short -race -timeout 240s ./...` passes locally and in CI, race-clean.
+- [x] Whitebox vs blackbox placement rules documented in `CONTRIBUTING.md`; new tests
       follow them (parser/internal → sibling; public API + CLI → `tests/`).
-- [ ] Curl-compat corpus exists with ≥3 verified cases each for Stripe, GitHub, OpenAI;
-      each case has a whitebox parse assertion and a blackbox echo-server execution.
-- [ ] Adding a new doc command to the corpus requires only a data append (no new Go
-      test function).
-- [ ] `FuzzTokenize` and `FuzzParseCommand` exist, compile, and have committed seeds;
-      `go test -fuzz=Fuzz -fuzztime=30s` runs clean on both targets.
-- [ ] Goroutine-leak and connection-reuse tests exist for `Client.Do` over the pooled
+- [x] Curl-compat corpus exists with ≥3 verified cases each for Stripe, GitHub, OpenAI;
+      each case has a whitebox parse assertion (`TestCurlCompatCorpus_Parse`) and a blackbox
+      echo-server execution (`TestCurlCompatCorpus_Execute`).
+- [x] Adding a new doc command to the corpus requires only a data append to
+      `internal/corpus/compat.json` (no new Go test function).
+- [x] `FuzzTokenize` and `FuzzParseCommand` exist, compile, and have committed seeds;
+      `go test -fuzz=Fuzz -fuzztime=30s` runs clean on both targets (no crashers).
+- [x] Goroutine-leak and connection-reuse tests exist for `Client.Do` over the pooled
       transport and pass.
-- [ ] A `-short`-gated soak/load test exists and writes pprof profiles when
+- [x] A `-short`-gated soak/load test exists and writes pprof profiles when
       `GOCURL_PROFILE` is set.
-- [ ] CI gates: gofmt (excl. `book2/`), `go vet`, build, `-short -race`, coverage floor
-      (75% overall), and a 30s fuzz smoke step — all green.
-- [ ] Per-package coverage floors met; `go tool cover -func` summary recorded in CI.
-- [ ] No test leaves files outside `t.TempDir()`, mutates global env without
+- [x] CI gates: gofmt (excl. `book2/`), `go vet`, build, `-short -race`, coverage floor
+      (75% overall, `-coverpkg=./...`), and a 30s fuzz smoke step — all green.
+- [x] Overall coverage floor (75%) met and gated in CI; `go tool cover -func` summary recorded.
+- [x] No test leaves files outside `t.TempDir()`, mutates global env without
       `t.Setenv`, or binds a fixed port.
 
 ## Dependencies

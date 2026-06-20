@@ -213,6 +213,12 @@ func processDataFlags(tokens []tokenizer.Token, i int, flag string, st *parseSta
 	}
 }
 
+// readFile is the seam every convert-time file read goes through (-d @file,
+// --data-urlencode name@file, -b cookiefile). It defaults to os.ReadFile;
+// fuzz tests stub it so the parse path is filesystem-free and cannot be made to
+// read an arbitrary or endless host file at parse time.
+var readFile = os.ReadFile
+
 // readDataValue resolves a -d/--data value, reading @file references for all
 // forms except --data-raw. For --data, CR/LF are stripped (curl behavior); for
 // --data-binary the file content is preserved verbatim.
@@ -220,7 +226,7 @@ func readDataValue(flag, value string) (string, error) {
 	if flag == "--data-raw" || !strings.HasPrefix(value, "@") {
 		return value, nil
 	}
-	content, err := os.ReadFile(value[1:])
+	content, err := readFile(value[1:])
 	if err != nil {
 		return "", fmt.Errorf("failed to read data file: %w", err)
 	}
@@ -237,7 +243,7 @@ func dataURLEncode(value string) (string, error) {
 		name, sep, rest := value[:idx], value[idx], value[idx+1:]
 		content := rest
 		if sep == '@' {
-			b, err := os.ReadFile(rest)
+			b, err := readFile(rest)
 			if err != nil {
 				return "", fmt.Errorf("failed to read data file: %w", err)
 			}
@@ -635,7 +641,7 @@ func parseCookies(cookieStr string) []*http.Cookie {
 
 // readCookiesFromFile reads cookies from a file in "name=value;" form.
 func readCookiesFromFile(filename string) ([]*http.Cookie, error) {
-	content, err := os.ReadFile(filename)
+	content, err := readFile(filename)
 	if err != nil {
 		return nil, err
 	}

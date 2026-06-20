@@ -1,0 +1,126 @@
+[
+  {
+    "name": "stripe_create_charge",
+    "vendor": "stripe",
+    "source": "https://stripe.com/docs/api/charges/create",
+    "command": "curl https://api.stripe.com/v1/charges -u sk_test_123: -d amount=2000 -d currency=usd -d source=tok_visa",
+    "want": {
+      "method": "POST",
+      "url": "https://api.stripe.com/v1/charges",
+      "basic_user": "sk_test_123",
+      "basic_pass": "",
+      "body": "amount=2000&currency=usd&source=tok_visa"
+    }
+  },
+  {
+    "name": "stripe_retrieve_charge",
+    "vendor": "stripe",
+    "source": "https://stripe.com/docs/api/charges/retrieve",
+    "command": "curl https://api.stripe.com/v1/charges/ch_123 -u sk_test_123:",
+    "want": {
+      "method": "GET",
+      "url": "https://api.stripe.com/v1/charges/ch_123",
+      "basic_user": "sk_test_123",
+      "basic_pass": ""
+    }
+  },
+  {
+    "name": "stripe_create_customer",
+    "vendor": "stripe",
+    "source": "https://stripe.com/docs/api/customers/create",
+    "command": "curl https://api.stripe.com/v1/customers -u sk_test_123: -d email=jenny@example.com -d name=Jenny",
+    "want": {
+      "method": "POST",
+      "url": "https://api.stripe.com/v1/customers",
+      "basic_user": "sk_test_123",
+      "basic_pass": "",
+      "body": "email=jenny@example.com&name=Jenny"
+    }
+  },
+  {
+    "name": "github_get_user",
+    "vendor": "github",
+    "source": "https://docs.github.com/en/rest/users/users#get-the-authenticated-user",
+    "command": "curl -H \"Authorization: Bearer ghp_123\" -H \"Accept: application/vnd.github+json\" https://api.github.com/user",
+    "want": {
+      "method": "GET",
+      "url": "https://api.github.com/user",
+      "headers": {
+        "Authorization": "Bearer ghp_123",
+        "Accept": "application/vnd.github+json"
+      }
+    }
+  },
+  {
+    "name": "github_create_issue",
+    "vendor": "github",
+    "source": "https://docs.github.com/en/rest/issues/issues#create-an-issue",
+    "command": "curl -X POST -H \"Authorization: Bearer ghp_123\" -H \"Accept: application/vnd.github+json\" https://api.github.com/repos/octocat/Hello-World/issues -d '{\"title\":\"Found a bug\",\"body\":\"details\"}'",
+    "want": {
+      "method": "POST",
+      "url": "https://api.github.com/repos/octocat/Hello-World/issues",
+      "headers": {
+        "Authorization": "Bearer ghp_123",
+        "Accept": "application/vnd.github+json"
+      },
+      "body": "{\"title\":\"Found a bug\",\"body\":\"details\"}"
+    }
+  },
+  {
+    "name": "github_patch_issue",
+    "vendor": "github",
+    "source": "https://docs.github.com/en/rest/issues/issues#update-an-issue",
+    "command": "curl -X PATCH -H \"Authorization: Bearer ghp_123\" https://api.github.com/repos/octocat/Hello-World/issues/1 -d '{\"state\":\"closed\"}'",
+    "want": {
+      "method": "PATCH",
+      "url": "https://api.github.com/repos/octocat/Hello-World/issues/1",
+      "headers": {
+        "Authorization": "Bearer ghp_123"
+      },
+      "body": "{\"state\":\"closed\"}"
+    }
+  },
+  {
+    "name": "openai_chat_completion",
+    "vendor": "openai",
+    "source": "https://platform.openai.com/docs/api-reference/chat/create",
+    "command": "curl https://api.openai.com/v1/chat/completions -H \"Content-Type: application/json\" -H \"Authorization: Bearer sk-123\" -d '{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}]}'",
+    "want": {
+      "method": "POST",
+      "url": "https://api.openai.com/v1/chat/completions",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer sk-123"
+      },
+      "body": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}]}"
+    }
+  },
+  {
+    "name": "openai_list_models",
+    "vendor": "openai",
+    "source": "https://platform.openai.com/docs/api-reference/models/list",
+    "command": "curl https://api.openai.com/v1/models -H \"Authorization: Bearer sk-123\"",
+    "want": {
+      "method": "GET",
+      "url": "https://api.openai.com/v1/models",
+      "headers": {
+        "Authorization": "Bearer sk-123"
+      }
+    }
+  },
+  {
+    "name": "openai_embeddings",
+    "vendor": "openai",
+    "source": "https://platform.openai.com/docs/api-reference/embeddings/create",
+    "command": "curl https://api.openai.com/v1/embeddings -H \"Content-Type: application/json\" -H \"Authorization: Bearer sk-123\" -d '{\"input\":\"hello\",\"model\":\"text-embedding-3-small\"}'",
+    "want": {
+      "method": "POST",
+      "url": "https://api.openai.com/v1/embeddings",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer sk-123"
+      },
+      "body": "{\"input\":\"hello\",\"model\":\"text-embedding-3-small\"}"
+    }
+  }
+]

@@ -23,25 +23,52 @@ Requires Go 1.22+.
 
 ## Testing
 
-The library uses two test layers:
+The library uses two test layers. **Put each new test in the right layer:**
 
-- **Whitebox tests** live next to the code as `<file>_test.go` in the same package.
-  They exercise internal helpers and edge cases.
-- **Blackbox tests** live in `tests/` as an external package. They exercise the
-  public API and the `gocurl` CLI exactly as a consumer would — across all
-  commands, flags, and options.
+- **Whitebox tests** live next to the code as `<file>_test.go` in the same package
+  (`package gocurl` or a subpackage) and may touch unexported identifiers. Use them
+  for parser/tokenizer correctness (drive the real pipeline via the `parseCmd` helper
+  in `parser_internal_test.go`), variable-expansion internals, `RequestOptions`
+  finalization, retry-loop helpers, TLS config construction, and error classification
+  — anything needing internal state.
+- **Blackbox tests** live in `tests/` as `package tests` and import gocurl exactly as
+  a consumer would. Use them for the public API (`Curl*`, `Client`/`Prepare`/`Do`),
+  CLI behavior and exit codes (`tests/cli_blackbox_test.go` builds `cmd/gocurl` once
+  in `TestMain`), and end-to-end request semantics against an `httptest` server.
 
 Run everything:
 
 ```bash
-go test ./...                  # all packages + blackbox suite
-go test -race ./...            # race detector
-go test -short ./...           # skip any network-dependent tests
+go test ./...                  # all packages + blackbox suite (offline, incl. soak)
+go test -short -race ./...     # canonical fast/CI path; hermetic
 go test -cover ./...           # coverage
 ```
 
-Tests must be **hermetic**: use `httptest` servers, never live internet endpoints.
-Any test that requires the network must be gated behind `testing.Short()`.
+Tests must be **hermetic**: use `httptest` servers, never live internet endpoints;
+temp files via `t.TempDir()`, env via `t.Setenv`. Any test needing real network must
+be gated behind `testing.Short()` **and** an opt-in env var.
+
+### The curl-compat corpus
+
+The headline promise — "paste any curl command from the docs and it works" — is
+guarded by [`internal/corpus/compat.json`](internal/corpus/compat.json): each entry
+is a verbatim doc command plus its expected parse, run by **both** layers
+(`TestCurlCompatCorpus_Parse` whitebox + `TestCurlCompatCorpus_Execute` blackbox).
+**Adding a documented command is a one-line append to `compat.json`** — no new Go
+test function. Use obviously-fake tokens; never commit real credentials.
+
+### Fuzz, leak, and soak
+
+```bash
+go test -run='^$' -fuzz='FuzzTokenize$'     -fuzztime=30s ./tokenizer/
+go test -run='^$' -fuzz='FuzzParseCommand$' -fuzztime=30s .
+go test -run 'TestClient_Do_(NoGoroutineLeak|ReusesConnections)' .
+GOCURL_PROFILE=$(mktemp -d) go test -run TestClient_Soak .   # writes cpu/mem pprof
+```
+
+Fuzz targets must never panic; minimized crashers are committed under `testdata/fuzz/`
+as permanent regression seeds. CI enforces a coverage floor (75% overall, measured
+with `-coverpkg=./...`) and a 30s fuzz smoke per target.
 
 ## Code style
 

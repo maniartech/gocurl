@@ -7,6 +7,18 @@ a tagged release.
 
 ## [Unreleased]
 
+### Internal — testing & quality hardening (Milestone 9)
+- **Curl-compat regression corpus** (`internal/corpus/compat.json`): real doc commands (Stripe,
+  GitHub, OpenAI) mapped to their expected parse, run by both a whitebox parse assertion and a
+  blackbox echo-server execution — the regression guard for the "paste curl from the docs" promise.
+  Adding a command is a one-line JSON append.
+- **Parser fuzzing:** `FuzzTokenize` (tokenizer) and `FuzzParseCommand` (root) with seeds; the parse
+  fuzzer stays filesystem-free. No behavior change; no crashers found.
+- **Leak/soak coverage:** goroutine-leak and connection-reuse tests for `Client.Do` over the pooled
+  transport, plus a `-short`-gated soak test that writes pprof profiles under `GOCURL_PROFILE`.
+- **CI gates:** coverage floor (75% overall, `-coverpkg=./...`) and a 30s fuzz smoke per target added
+  to `.github/workflows/ci.yml`; CONTRIBUTING.md documents the whitebox/blackbox rules and the corpus.
+
 ### Changed — CLI hardening (Milestone 8)
 - `cmd/gocurl`'s `main` is refactored to a testable `run(args []string, stdout, stderr io.Writer) int`
   entry point. It is reentrant — flags are parsed on a local `flag.FlagSet`, never the global
