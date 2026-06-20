@@ -274,6 +274,15 @@ func createRequest(ctx context.Context, opts *options.RequestOptions) (*http.Req
 		return nil, err
 	}
 
+	// curl --http1.0: Go's net/http client cannot write an HTTP/1.0 request line,
+	// so we approximate 1.0 with the part that IS reachable — Connection: close
+	// (curl's 1.0 no-keep-alive default) — and warn about the deviation. The
+	// HTTP/1.1-only transport pin is handled separately in clientpool.go.
+	if opts.HTTP10 {
+		req.Close = true
+		warnHTTP10Limitation(opts)
+	}
+
 	// For a streaming BodySource, set Content-Length when known and a GetBody so
 	// retries/redirects can replay a rewindable body without buffering it.
 	if opts.BodyStream != nil {
@@ -298,6 +307,16 @@ func createRequest(ctx context.Context, opts *options.RequestOptions) (*http.Req
 	printRequestVerbose(opts, req)
 
 	return req, nil
+}
+
+// warnHTTP10Limitation prints the --http1.0 caveat to stderr (unless silenced),
+// mirroring the --insecure warning: Go's net/http client always writes an
+// HTTP/1.1 request line, so true HTTP/1.0-on-the-wire cannot be reproduced.
+func warnHTTP10Limitation(opts *options.RequestOptions) {
+	if opts.Verbose || !opts.Silent {
+		fmt.Fprintln(os.Stderr, "WARNING: --http1.0: Go's net/http client always writes an HTTP/1.1 request line;")
+		fmt.Fprintln(os.Stderr, "WARNING: sending as HTTP/1.1 with Connection: close (no HTTP/2). True HTTP/1.0 is not supported.")
+	}
 }
 
 // getMethod returns the HTTP method, defaulting to GET

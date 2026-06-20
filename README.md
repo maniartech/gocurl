@@ -199,7 +199,10 @@ real API integrations need. Everything below is opt-in via functional options on
 GoCurl targets the HTTP/HTTPS flags that appear in real API documentation, including:
 HTTP methods (`-X`), headers (`-H`), data/body (`-d`), form and file upload (`-F`),
 basic and bearer auth (`-u`), output to file (`-o`), TLS options (`--cert`, `--key`,
-`--cacert`, `-k`), proxies (`-x`, including SOCKS5), and compression (`--compressed`).
+`--cacert`, `-k`), proxies (`-x`, including SOCKS5), compression (`--compressed`), and
+HTTP version selection (`--http2`, `--http2-only`, `--http1.1`; `--http1.0`/`-0` is
+accepted as a best-effort 1.1 pin + `Connection: close`, since Go's `net/http` cannot
+emit a true HTTP/1.0 request line).
 
 It deliberately does **not** implement curl's non-HTTP protocols (FTP, SMTP, etc.) or
 flags that don't map to HTTP API usage. Flag coverage is expanding — see [VISION.md](VISION.md).

@@ -140,6 +140,7 @@ func WithDefaultHeader(key, value string) Option
 func WithExpectContinueTimeout(d time.Duration) Option
 func WithFailOnStatus(fail bool) Option
 func WithFollowRedirects(follow bool) Option
+func WithHTTP11() Option
 func WithHTTP2(enabled bool) Option
 func WithHTTP2Only(allowCleartext bool) Option
 func WithHooks(h Hooks) Option

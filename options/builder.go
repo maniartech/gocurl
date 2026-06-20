@@ -168,6 +168,20 @@ func (b *RequestOptionsBuilder) SetHTTP2Only(http2Only bool) *RequestOptionsBuil
 	return b
 }
 
+// SetHTTP11 pins HTTP/1.1 (HTTP/2 negotiation suppressed). Mutually exclusive
+// with the other HTTP-version setters.
+func (b *RequestOptionsBuilder) SetHTTP11(http11 bool) *RequestOptionsBuilder {
+	b.options.HTTP11 = http11
+	return b
+}
+
+// SetHTTP10 requests curl's --http1.0 behavior. Best-effort: net/http cannot
+// emit a 1.0 request line, so this pins HTTP/1.1 and sends Connection: close.
+func (b *RequestOptionsBuilder) SetHTTP10(http10 bool) *RequestOptionsBuilder {
+	b.options.HTTP10 = http10
+	return b
+}
+
 // SetCookie adds a cookie to the request.
 func (b *RequestOptionsBuilder) SetCookie(cookie *http.Cookie) *RequestOptionsBuilder {
 	b.options.Cookies = append(b.options.Cookies, cookie)

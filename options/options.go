@@ -120,9 +120,14 @@ type RequestOptions struct {
 	Compress           bool     `json:"compress,omitempty"`
 	CompressionMethods []string `json:"compression_methods,omitempty"` // Specific methods: gzip, deflate, br
 
-	// HTTP version specific
+	// HTTP version specific. These are mutually exclusive (curl semantics:
+	// last flag wins); the parser sets at most one. HTTP11 pins HTTP/1.1 (h2
+	// suppressed); HTTP10 is the best-effort --http1.0 (pins HTTP/1.1 on the wire
+	// — net/http cannot emit a 1.0 request line — plus Connection: close).
 	HTTP2     bool `json:"http2,omitempty"`
 	HTTP2Only bool `json:"http2_only,omitempty"`
+	HTTP11    bool `json:"http1_1,omitempty"`
+	HTTP10    bool `json:"http1_0,omitempty"`
 
 	// Cookie handling
 	Cookies    []*http.Cookie `json:"cookies,omitempty"`
