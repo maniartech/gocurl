@@ -68,7 +68,9 @@ GOCURL_PROFILE=$(mktemp -d) go test -run TestClient_Soak .   # writes cpu/mem pp
 
 Fuzz targets must never panic; minimized crashers are committed under `testdata/fuzz/`
 as permanent regression seeds. CI enforces a coverage floor (75% overall, measured
-with `-coverpkg=./...`) and a 30s fuzz smoke per target.
+with `go test -short -count=1 -coverpkg=./...`) and a 30s fuzz smoke per target. The
+`-count=1` is required: without it, cached packages reuse stale coverage profiles and the
+aggregate reads artificially low.
 
 ## Public API surface
 
