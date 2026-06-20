@@ -36,14 +36,31 @@ func TestAPISurface(t *testing.T) {
 		return
 	}
 
-	want, err := os.ReadFile(golden)
+	wantBytes, err := os.ReadFile(golden)
 	if err != nil {
 		t.Fatalf("read %s: %v (run `GOCURL_UPDATE_API=1 go test -run TestAPISurface .` to create it)", golden, err)
 	}
-	if string(want) != got {
+	// Normalize CRLF so a Windows checkout (core.autocrlf=true) doesn't flake the
+	// byte-exact compare; .gitattributes also pins *.txt to LF.
+	want := strings.ReplaceAll(string(wantBytes), "\r\n", "\n")
+	if want != got {
 		t.Errorf("exported API surface changed.\nIf intentional, update the golden + CHANGELOG:\n"+
-			"  GOCURL_UPDATE_API=1 go test -run TestAPISurface .\n\n%s", diff(string(want), got))
+			"  GOCURL_UPDATE_API=1 go test -run TestAPISurface .\n\n%s", diff(want, got))
 	}
+}
+
+// embeddedName returns the type name of an embedded struct field (T, *T, or
+// pkg.T), or "" if it cannot be determined.
+func embeddedName(t ast.Expr) string {
+	switch e := t.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.StarExpr:
+		return embeddedName(e.X)
+	case *ast.SelectorExpr:
+		return e.Sel.Name
+	}
+	return ""
 }
 
 // collectAPISurface parses the root package's non-test sources and returns a
@@ -69,6 +86,40 @@ func collectAPISurface(t *testing.T) string {
 		return sb.String()
 	}
 
+	// typeBody renders a type's definition so the guard catches member changes
+	// (interface methods, func-type signatures, exported struct fields), not just
+	// the name. For structs only the EXPORTED fields are kept — a change to an
+	// unexported field is not a public-API change and would only add churn.
+	typeBody := func(t ast.Expr) string {
+		st, ok := t.(*ast.StructType)
+		if !ok || st.Fields == nil {
+			return render(t)
+		}
+		var kept []*ast.Field
+		for _, f := range st.Fields.List {
+			if len(f.Names) == 0 { // embedded field
+				if n := embeddedName(f.Type); n != "" && ast.IsExported(n) {
+					kept = append(kept, f)
+				}
+				continue
+			}
+			var names []*ast.Ident
+			for _, n := range f.Names {
+				if n.IsExported() {
+					names = append(names, n)
+				}
+			}
+			if len(names) > 0 {
+				nf := *f
+				nf.Names = names
+				kept = append(kept, &nf)
+			}
+		}
+		clone := *st
+		clone.Fields = &ast.FieldList{List: kept}
+		return render(&clone)
+	}
+
 	var lines []string
 	for _, file := range pkg.Files {
 		for _, decl := range file.Decls {
@@ -92,7 +143,7 @@ func collectAPISurface(t *testing.T) string {
 					switch s := spec.(type) {
 					case *ast.TypeSpec:
 						if s.Name.IsExported() {
-							lines = append(lines, "type "+s.Name.Name)
+							lines = append(lines, "type "+s.Name.Name+" "+typeBody(s.Type))
 						}
 					case *ast.ValueSpec:
 						kind := "var"
