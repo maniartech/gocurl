@@ -1,9 +1,11 @@
 # gocurl Production Specs
 
-> Status: **Draft for review.** No implementation has started. These specs define the
-> evolution of gocurl from a curl-ergonomic convenience client into a production-grade,
-> mission-critical HTTP client — **without abandoning the curl ergonomics**. Read [Spec 00]
-> first, then ratify the decisions below, then work the [ROADMAP](../ROADMAP.md).
+> Status: **Implemented (pre-1.0).** Milestones M1–M11 from the [ROADMAP](../ROADMAP.md) have
+> shipped on `master`. These specs are the **design of record** for gocurl as a production-grade,
+> mission-critical HTTP client that keeps its curl ergonomics. Read [Spec 00] first for the
+> architecture. Individual specs still carry their original DoD checklists, which may lag the
+> code — the [CHANGELOG](../CHANGELOG.md) and the `api.txt`/`api_options.txt` surface guards are
+> the authoritative record of what shipped.
 
 The organizing principle is **parse once, execute many**: a curl command is an *authoring*
 convenience, parsed once into an immutable `Request`, then executed many times over a
@@ -44,11 +46,11 @@ others **reference**, never redefine:
 - **Middleware contract** (`Handler`/`Middleware`) → **Spec 12**.
 - **Transport defaults & redirect policy** → **Spec 03**.
 
-## Decisions to ratify before implementation (Milestone 0)
+## Design decisions (ratified — historical record)
 
-These come from the adversarial consistency/completeness review of the drafts. Each has a
-**recommendation** — approve, or tell me to change it. ROADMAP Milestone 0 applies the
-ratified set back into the specs so they're internally consistent before code.
+These came from the adversarial consistency/completeness review of the drafts and were
+**ratified and implemented** across M1–M11. They are kept here as the design record; where the
+shipped code refined a decision, the relevant spec body and the CHANGELOG are authoritative.
 
 ### A. `Request` surface (Spec 02 is sole owner)
 - **A1 — `Prepare` env default:** `Prepare(cmd)` **expands env vars** (mirrors today's

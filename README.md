@@ -9,34 +9,40 @@ resp, err := gocurl.Curl(ctx, `
 `)
 ```
 
-GoCurl is a curl-ergonomic HTTP client for Go, built on `net/http`, with a CLI that
-shares the exact same syntax. It exists to remove the tax every Go developer pays when
-integrating a new API: mentally compiling a curl snippet from the docs into
-`http.NewRequest`, headers, body encoding, and auth.
+GoCurl is a **production-grade**, curl-ergonomic HTTP client for Go, built on `net/http`,
+with a CLI that shares the exact same syntax. It removes the tax every Go developer pays
+when integrating a new API — mentally compiling a curl snippet from the docs into
+`http.NewRequest`, headers, body encoding, and auth — and backs it with the retries,
+circuit breaking, observability, SSRF protection, secret redaction, and typed errors that
+real integrations need in production.
 
 > See [VISION.md](VISION.md) for what we're building and why.
 
 ## Project status
 
-**Pre-1.0 and under active development.** The public API may still change and curl-flag
-coverage is still expanding, so pin a version and check the [CHANGELOG](CHANGELOG.md) when
-upgrading. The core is hardened and tested — race-clean, fuzzed, with a coverage gate in
-CI — but treat anything pre-1.0 as subject to refinement. Feedback and contributions are
-very welcome.
+**Production-grade, pre-1.0.** The engine is hardened and tested — race-clean, fuzzed, with
+a coverage gate in CI, streaming bodies, connection pooling, and the resilience/observability/
+security stack below. The remaining pre-1.0 caveat is the *contract*, not the quality: the
+public API may still change and curl-flag coverage is still expanding, so pin a version and
+check the [CHANGELOG](CHANGELOG.md) when upgrading. Feedback and contributions are very welcome.
 
 ## Why GoCurl
 
 Every REST API documents itself with curl. Almost none ship a Go SDK for their long-tail
 endpoints. GoCurl makes the curl command *be* the code, so you can:
 
-- **Integrate a new third-party API** by copy-pasting its documented curl example.
-- **Prototype and build internal tooling** in seconds.
+- **Integrate a third-party API** by copy-pasting its documented curl example — then run it
+  in production with retries, timeouts, tracing, and metrics around it.
+- **Operate service-to-service HTTP** through a pooled `Client` with circuit breaking, rate
+  limiting, and SSRF protection.
 - **Write scripts, CI checks, and API smoke tests** with one syntax for shell and code.
 - **Drive HTTP from config** by storing curl commands as data and executing them.
 
-It's at its best wherever HTTP is glue rather than the hot path. For a high-throughput
-production client, reach for a hand-tuned `net/http` client — GoCurl gets your
-integration working first.
+Built on `net/http` and organized around **parse once, execute many** — `Prepare` a request
+once, then `Do` it repeatedly over a pooled `Client` — so the per-request overhead above
+hand-written `net/http` is small and constant. The goal is parity with a well-tuned
+`net/http` client plus the ergonomics and reliability above; we make no "faster than
+net/http" claims.
 
 ## Installation
 
@@ -135,6 +141,22 @@ if err != nil {
     log.Fatal(err)
 }
 resp, err = client.Do(ctx, req)
+```
+
+### Typed request building
+
+Prefer typed, IDE-discoverable configuration over a curl string? Assemble a request with the
+options builder and run it with `Execute`:
+
+```go
+opts := options.NewRequestOptionsBuilder().
+    SetURL("https://api.example.com/v1/items").
+    SetMethod("POST").
+    AddHeader("Authorization", "Bearer "+token).
+    SetBody(`{"name":"widget"}`).
+    Build()
+
+resp, err := gocurl.Execute(ctx, opts)
 ```
 
 ### Variable substitution
