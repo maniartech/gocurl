@@ -6,8 +6,8 @@ This is the umbrella spec for evolving **gocurl** from a curl-ergonomic convenie
 layer into a **serious, production-grade HTTP client** — without abandoning the curl
 ergonomics that are its reason to exist. Every other spec (01–11) references this one for
 shared vocabulary, layering, and guiding principles. It supersedes the framing in the
-legacy `design.md` (the "zero-allocation / military-grade / faster than net/http" language
-there is dead and must not be reintroduced).
+now-removed legacy planning docs (their "zero-allocation / military-grade / faster than
+net/http" language is dead and must not be reintroduced).
 
 ## Goals
 
@@ -251,8 +251,9 @@ Production gocurl is an additive layer over today's internals, not a rewrite:
 - [ ] This document is the single referenced anchor; Specs 01–11 cite it for the layering
       diagram and the locked names (`Client`, `New`, `Option`, `Request`, `Prepare`, `Do`,
       `Handler`, `Middleware`).
-- [ ] The legacy `design.md` is marked superseded (no "zero-allocation / military-grade /
-      faster-than-net-http" language survives in any active spec).
+- [x] The legacy planning docs (`design.md`, `objective*.md`, `plan/`, `wip-notes/`, `book/`)
+      are removed; no "zero-allocation / military-grade / faster-than-net-http" language
+      survives in any active doc.
 - [ ] The parse-once/execute-many split is described in terms of the real functions it
       replaces (`CurlCommand`, `doRequest`, `executeWithRetries`, `getRoundTripper`).
 - [ ] The four guiding principles (honesty, hermetic-testability, back-compat,

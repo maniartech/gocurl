@@ -19,7 +19,8 @@ middleware reference the types defined *here*; they do not redefine them.
 
 ## Non-goals
 
-- Not a plugin system or DI framework (the legacy `objective.md` "plugin" idea stays dead).
+- Not a plugin system or DI framework (the early "plugin" idea from the now-removed planning
+  docs stays dead).
 - Not request *routing* or server-side middleware — this is a client round-trip chain only.
 
 ## Design

@@ -7,6 +7,15 @@ a tagged release.
 
 ## [Unreleased]
 
+### Removed — repository de-sprawl (pre-v1 cleanup)
+- Deleted the stale pre-implementation planning/audit archives now superseded by `specs/`,
+  `VISION.md`, `README.md`, and `docs/benchmarking.md`: `design.md`, `objective.md`,
+  `objective-gaps.md`, `README_NEW.md`, and the `plan/`, `wip-notes/`, and `book/` directories.
+  These carried the old aspirational "zero-allocation / faster-than-net/http / 10k-req/s"
+  language; deleting them (rather than banner-superseding) removes the last non-authoritative
+  performance claims from the repo. No code, no module behavior affected (`book2/` and `scripts/`
+  remain separate modules; `fixtures/` test data is kept).
+
 ### Internal — benchmarking & performance methodology (Milestone 10)
 - **Comparative round-trip suite** (`bench_roundtrip_test.go`): gocurl (prepared + per-call-parse)
   vs a well-tuned `net/http` client over one shared httptest server, plus concurrent

@@ -18,8 +18,8 @@
   guarded by a green, un-skipped benchmark and an allocation budget.
 - Document a **profiling workflow** (pprof CPU/heap, latency p50/p99) that any contributor
   can run to investigate a regression.
-- Replace the stale, dishonest performance narrative in `wip-notes/PERFORMANCE_TESTING.md`
-  ("Week 2 target: 0 allocs/op", "10k req/s target") with this methodology.
+- Replace the stale, dishonest performance narrative ("Week 2 target: 0 allocs/op", "10k
+  req/s target") — since removed with the legacy planning docs — with this methodology.
 
 ## Non-goals
 
@@ -193,10 +193,10 @@ gated (skipped in the fast CI test job) and informational, not pass/fail.
       guards run in the normal test job.
 - [x] `docs/benchmarking.md` documents the methodology, the pprof workflow, the p50/p99
       latency harness, and the "parity, not superiority" claim policy.
-- [x] `wip-notes/PERFORMANCE_TESTING.md`'s zero-allocation / 10k-req/s targets are superseded by
-      a banner pointing to `docs/benchmarking.md`; the legacy planning docs (`design.md`,
-      `objective.md`, `objective-gaps.md`, `README_NEW.md`, `plan/`) are banner-superseded so no
-      authoritative doc retains a "faster than net/http" or "zero-allocation" claim.
+- [x] The legacy planning docs that carried the zero-allocation / 10k-req/s / faster-than-net-http
+      narrative (`PERFORMANCE_TESTING.md`, `design.md`, `objective*.md`, `README_NEW.md`, `plan/`,
+      `book/`) are **removed**; `docs/benchmarking.md` is the authoritative methodology, and no
+      active doc retains a "faster than net/http" or "zero-allocation" claim.
 - [x] A comparison of `Gocurl_Prepared` vs `NetHTTP` is recorded in `docs/benchmarking.md` with
       machine/Go/OS provenance and the overhead delta (the honest parity number); `benchstat`
       with `-count=10` is documented as the reproducible method.
