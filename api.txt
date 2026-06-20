@@ -91,6 +91,7 @@ func DefaultRetryPolicy(maxAttempts int) RetryPolicy
 func DefaultSSRFPolicy() SSRFPolicy
 func Duration(k string, v time.Duration) Field
 func Err(err error) Field
+func Execute(ctx context.Context, opts *options.RequestOptions) (*http.Response, error)
 func ExpandVariables(text string, vars Variables) (string, error)
 func ExponentialJitter(base, max time.Duration) Backoff
 func FileBody(path string) options.BodySource

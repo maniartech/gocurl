@@ -108,6 +108,24 @@ func executeOpts(ctx context.Context, opts *options.RequestOptions) (*http.Respo
 	return resp, nil
 }
 
+// Execute runs a request described by a typed *options.RequestOptions and returns
+// the live response. It is the programmatic counterpart to the curl-string Curl*
+// helpers: use it when you build the request with the options builder
+// (options.NewRequestOptionsBuilder().…​.Build()) or by populating
+// options.RequestOptions directly, rather than from a pasted curl command.
+//
+// The response body is streamed and is subject to opts.ResponseBodyLimit; the
+// caller owns reading and closing resp.Body. With opts.FailOnError set, a >=400
+// status is returned as a typed error alongside the still-inspectable response
+// (see failOnStatus). For a reusable, middleware-configured client, prefer
+// Client.Prepare/Do; Execute is the one-shot path and shares its engine.
+func Execute(ctx context.Context, opts *options.RequestOptions) (*http.Response, error) {
+	if opts == nil {
+		return nil, ValidationError("options", fmt.Errorf("request options cannot be nil"))
+	}
+	return executeOpts(ctx, opts)
+}
+
 // CurlArgs executes a curl command from variadic arguments.
 // Each argument is a separate token (like os.Args).
 // Environment variables are automatically expanded.

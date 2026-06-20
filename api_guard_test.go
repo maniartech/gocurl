@@ -25,9 +25,20 @@ import (
 // `go test` job; it does not freeze the surface for v1 yet (gocurl is pre-tag),
 // it just makes every change to it explicit and reviewable.
 func TestAPISurface(t *testing.T) {
-	got := collectAPISurface(t)
+	// Guard both packages that carry public surface a caller depends on: the root
+	// engine AND the options package (the typed builder + RequestOptions). Covering
+	// options is deliberate — when a removal orphaned the builder from its executor,
+	// a root-only guard could not catch it; now a change to either fails here.
+	checkSurface(t, ".", "gocurl", "api.txt")
+	checkSurface(t, "options", "options", "api_options.txt")
+}
 
-	const golden = "api.txt"
+// checkSurface compares one package's live exported surface to its golden file,
+// regenerating the golden instead when GOCURL_UPDATE_API=1.
+func checkSurface(t *testing.T, dir, pkgName, golden string) {
+	t.Helper()
+	got := collectAPISurface(t, dir, pkgName)
+
 	if os.Getenv("GOCURL_UPDATE_API") == "1" {
 		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
 			t.Fatal(err)
@@ -44,8 +55,8 @@ func TestAPISurface(t *testing.T) {
 	// byte-exact compare; .gitattributes also pins *.txt to LF.
 	want := strings.ReplaceAll(string(wantBytes), "\r\n", "\n")
 	if want != got {
-		t.Errorf("exported API surface changed.\nIf intentional, update the golden + CHANGELOG:\n"+
-			"  GOCURL_UPDATE_API=1 go test -run TestAPISurface .\n\n%s", diff(want, got))
+		t.Errorf("exported API surface of package %q changed.\nIf intentional, update the golden + CHANGELOG:\n"+
+			"  GOCURL_UPDATE_API=1 go test -run TestAPISurface .\n\n%s", pkgName, diff(want, got))
 	}
 }
 
@@ -63,21 +74,21 @@ func embeddedName(t ast.Expr) string {
 	return ""
 }
 
-// collectAPISurface parses the root package's non-test sources and returns a
+// collectAPISurface parses pkgName's non-test sources under dir and returns a
 // sorted, newline-joined list of its exported declarations (funcs with
 // signatures, exported-receiver methods, and types/vars/consts by name).
-func collectAPISurface(t *testing.T) string {
+func collectAPISurface(t *testing.T, dir, pkgName string) string {
 	t.Helper()
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(fi fs.FileInfo) bool {
+	pkgs, err := parser.ParseDir(fset, dir, func(fi fs.FileInfo) bool {
 		return !strings.HasSuffix(fi.Name(), "_test.go")
 	}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pkg := pkgs["gocurl"]
+	pkg := pkgs[pkgName]
 	if pkg == nil {
-		t.Fatal("package gocurl not found in .")
+		t.Fatalf("package %q not found in %s", pkgName, dir)
 	}
 
 	render := func(n ast.Node) string {
