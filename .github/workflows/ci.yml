@@ -37,5 +37,18 @@ jobs:
       - name: Test (race, hermetic)
         run: go test -short -race -timeout 240s ./...
 
-      - name: Coverage
-        run: go test -short -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | tail -1
+      - name: Coverage (floor 75%)
+        run: |
+          go test -short -coverpkg=./... -coverprofile=coverage.out ./...
+          total=$(go tool cover -func=coverage.out | tail -1 | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+          echo "Total coverage: ${total}%"
+          floor=75.0
+          if awk "BEGIN{exit !(${total} < ${floor})}"; then
+            echo "::error::coverage ${total}% is below the ${floor}% floor"
+            exit 1
+          fi
+
+      - name: Fuzz smoke (30s per target)
+        run: |
+          go test -run='^$' -fuzz='FuzzTokenize$' -fuzztime=30s ./tokenizer/
+          go test -run='^$' -fuzz='FuzzParseCommand$' -fuzztime=30s .
