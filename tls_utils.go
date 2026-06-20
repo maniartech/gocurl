@@ -40,15 +40,15 @@ var tls13CipherSuiteMap = map[string]uint16{
 	"TLS_CHACHA20_POLY1305_SHA256": tls.TLS_CHACHA20_POLY1305_SHA256,
 }
 
-// ParseCipherSuites parses colon-separated cipher suite names (curl format).
+// parseCipherSuites parses colon-separated cipher suite names (curl format).
 //
 // Examples:
 //
-//	ParseCipherSuites("ECDHE-RSA-AES256-GCM-SHA384")
-//	ParseCipherSuites("ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256")
+//	parseCipherSuites("ECDHE-RSA-AES256-GCM-SHA384")
+//	parseCipherSuites("ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256")
 //
 // Returns error if any cipher suite name is unknown.
-func ParseCipherSuites(cipherStr string) ([]uint16, error) {
+func parseCipherSuites(cipherStr string) ([]uint16, error) {
 	if cipherStr == "" {
 		return nil, nil
 	}
@@ -76,15 +76,15 @@ func ParseCipherSuites(cipherStr string) ([]uint16, error) {
 	return suites, nil
 }
 
-// ParseTLS13CipherSuites parses TLS 1.3 cipher suite names (colon-separated).
+// parseTLS13CipherSuites parses TLS 1.3 cipher suite names (colon-separated).
 //
 // Examples:
 //
-//	ParseTLS13CipherSuites("TLS_AES_256_GCM_SHA384")
-//	ParseTLS13CipherSuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
+//	parseTLS13CipherSuites("TLS_AES_256_GCM_SHA384")
+//	parseTLS13CipherSuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
 //
 // Returns error if any cipher suite name is unknown.
-func ParseTLS13CipherSuites(cipherStr string) ([]uint16, error) {
+func parseTLS13CipherSuites(cipherStr string) ([]uint16, error) {
 	if cipherStr == "" {
 		return nil, nil
 	}
@@ -112,7 +112,7 @@ func ParseTLS13CipherSuites(cipherStr string) ([]uint16, error) {
 	return suites, nil
 }
 
-// ParseTLSVersion parses a TLS version string to its uint16 constant.
+// parseTLSVersion parses a TLS version string to its uint16 constant.
 //
 // Supported formats:
 //   - "1.0" -> tls.VersionTLS10
@@ -121,7 +121,7 @@ func ParseTLS13CipherSuites(cipherStr string) ([]uint16, error) {
 //   - "1.3" -> tls.VersionTLS13
 //
 // Returns error if the version string is invalid.
-func ParseTLSVersion(version string) (uint16, error) {
+func parseTLSVersion(version string) (uint16, error) {
 	switch version {
 	case "1.0":
 		return tls.VersionTLS10, nil
@@ -136,8 +136,8 @@ func ParseTLSVersion(version string) (uint16, error) {
 	}
 }
 
-// GetSupportedCipherSuites returns a list of all supported cipher suite names.
-func GetSupportedCipherSuites() []string {
+// getSupportedCipherSuites returns a list of all supported cipher suite names.
+func getSupportedCipherSuites() []string {
 	suites := make([]string, 0, len(cipherSuiteMap))
 	for name := range cipherSuiteMap {
 		suites = append(suites, name)
@@ -145,8 +145,8 @@ func GetSupportedCipherSuites() []string {
 	return suites
 }
 
-// GetSupportedTLS13CipherSuites returns a list of all supported TLS 1.3 cipher suite names.
-func GetSupportedTLS13CipherSuites() []string {
+// getSupportedTLS13CipherSuites returns a list of all supported TLS 1.3 cipher suite names.
+func getSupportedTLS13CipherSuites() []string {
 	suites := make([]string, 0, len(tls13CipherSuiteMap))
 	for name := range tls13CipherSuiteMap {
 		suites = append(suites, name)

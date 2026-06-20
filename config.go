@@ -78,7 +78,7 @@ type config struct {
 
 	// Security (Spec 07). ssrfPolicy (opt-in) guards the initial request and every
 	// redirect hop. allowInsecureAuth opts out of the plaintext-auth check.
-	// tlsConfig is a caller-supplied *tls.Config merged by LoadTLSConfig.
+	// tlsConfig is a caller-supplied *tls.Config merged by loadTLSConfig.
 	ssrfPolicy        *SSRFPolicy
 	allowInsecureAuth bool
 	tlsConfig         *tls.Config
@@ -132,7 +132,7 @@ func (c *config) baseOptions() *options.RequestOptions {
 	o.Proxy = c.proxy
 	o.Insecure = c.insecure
 	o.ConnectTimeout = c.connectTimeout
-	o.TLSConfig = c.tlsConfig // merged by LoadTLSConfig when non-nil
+	o.TLSConfig = c.tlsConfig // merged by loadTLSConfig when non-nil
 	return o
 }
 
@@ -498,7 +498,7 @@ func WithAllowInsecureAuth(allow bool) Option {
 	}
 }
 
-// WithTLSConfig supplies a *tls.Config that LoadTLSConfig merges over the secure
+// WithTLSConfig supplies a *tls.Config that loadTLSConfig merges over the secure
 // defaults for every request (curl flags still apply on top). Use for custom
 // root pools, client certs, or pinning beyond the curl-flag surface.
 func WithTLSConfig(cfg *tls.Config) Option {

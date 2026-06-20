@@ -1,5 +1,5 @@
 // File: gocurl/convert_tokens_test.go
-package gocurl_test
+package gocurl
 
 import (
 	"net/http"
@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maniartech/gocurl"
 	"github.com/maniartech/gocurl/options"
 	"github.com/stretchr/testify/assert"
 )
@@ -347,7 +346,7 @@ func runTests(t *testing.T, tests []struct {
 }) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			options, err := gocurl.ArgsToOptions(tt.tokens)
+			options, err := argsToOptions(tt.tokens)
 			if tt.expectError {
 				assert.Error(t, err)
 				return

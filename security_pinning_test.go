@@ -30,7 +30,7 @@ func TestLoadTLSConfig_PinningFailsClosed(t *testing.T) {
 		opts := options.NewRequestOptions(srv.URL)
 		opts.TLSConfig = &tls.Config{RootCAs: pool} // trust the test CA (chain verification on)
 		opts.CertPinFingerprints = []string{pin}
-		cfg, err := LoadTLSConfig(opts)
+		cfg, err := loadTLSConfig(opts)
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func TestLoadTLSConfig_MergesSecureDefaults(t *testing.T) {
 	opts := options.NewRequestOptions("https://example.com")
 	opts.TLSConfig = &tls.Config{RootCAs: pool} // only RootCAs set; MinVersion/ciphers zero
 
-	cfg, err := LoadTLSConfig(opts)
+	cfg, err := loadTLSConfig(opts)
 	if err != nil {
 		t.Fatal(err)
 	}

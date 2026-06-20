@@ -55,32 +55,32 @@ func TestParseCipherSuites(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseCipherSuites(tt.input)
+			got, err := parseCipherSuites(tt.input)
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("ParseCipherSuites() expected error, got nil")
+					t.Errorf("parseCipherSuites() expected error, got nil")
 					return
 				}
 				if tt.errSubstr != "" && !contains(err.Error(), tt.errSubstr) {
-					t.Errorf("ParseCipherSuites() error = %v, want substring %v", err, tt.errSubstr)
+					t.Errorf("parseCipherSuites() error = %v, want substring %v", err, tt.errSubstr)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("ParseCipherSuites() unexpected error = %v", err)
+				t.Errorf("parseCipherSuites() unexpected error = %v", err)
 				return
 			}
 
 			if len(got) != len(tt.want) {
-				t.Errorf("ParseCipherSuites() got %d suites, want %d", len(got), len(tt.want))
+				t.Errorf("parseCipherSuites() got %d suites, want %d", len(got), len(tt.want))
 				return
 			}
 
 			for i := range got {
 				if got[i] != tt.want[i] {
-					t.Errorf("ParseCipherSuites() got[%d] = %v, want %v", i, got[i], tt.want[i])
+					t.Errorf("parseCipherSuites() got[%d] = %v, want %v", i, got[i], tt.want[i])
 				}
 			}
 		})
@@ -132,32 +132,32 @@ func TestParseTLS13CipherSuites(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseTLS13CipherSuites(tt.input)
+			got, err := parseTLS13CipherSuites(tt.input)
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("ParseTLS13CipherSuites() expected error, got nil")
+					t.Errorf("parseTLS13CipherSuites() expected error, got nil")
 					return
 				}
 				if tt.errSubstr != "" && !contains(err.Error(), tt.errSubstr) {
-					t.Errorf("ParseTLS13CipherSuites() error = %v, want substring %v", err, tt.errSubstr)
+					t.Errorf("parseTLS13CipherSuites() error = %v, want substring %v", err, tt.errSubstr)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("ParseTLS13CipherSuites() unexpected error = %v", err)
+				t.Errorf("parseTLS13CipherSuites() unexpected error = %v", err)
 				return
 			}
 
 			if len(got) != len(tt.want) {
-				t.Errorf("ParseTLS13CipherSuites() got %d suites, want %d", len(got), len(tt.want))
+				t.Errorf("parseTLS13CipherSuites() got %d suites, want %d", len(got), len(tt.want))
 				return
 			}
 
 			for i := range got {
 				if got[i] != tt.want[i] {
-					t.Errorf("ParseTLS13CipherSuites() got[%d] = %v, want %v", i, got[i], tt.want[i])
+					t.Errorf("parseTLS13CipherSuites() got[%d] = %v, want %v", i, got[i], tt.want[i])
 				}
 			}
 		})
@@ -182,32 +182,32 @@ func TestParseTLSVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseTLSVersion(tt.input)
+			got, err := parseTLSVersion(tt.input)
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("ParseTLSVersion() expected error, got nil")
+					t.Errorf("parseTLSVersion() expected error, got nil")
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("ParseTLSVersion() unexpected error = %v", err)
+				t.Errorf("parseTLSVersion() unexpected error = %v", err)
 				return
 			}
 
 			if got != tt.want {
-				t.Errorf("ParseTLSVersion() = %v, want %v", got, tt.want)
+				t.Errorf("parseTLSVersion() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
 func TestGetSupportedCipherSuites(t *testing.T) {
-	suites := GetSupportedCipherSuites()
+	suites := getSupportedCipherSuites()
 
 	if len(suites) == 0 {
-		t.Error("GetSupportedCipherSuites() returned empty list")
+		t.Error("getSupportedCipherSuites() returned empty list")
 	}
 
 	// Check that some expected ciphers are present
@@ -226,16 +226,16 @@ func TestGetSupportedCipherSuites(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("GetSupportedCipherSuites() missing expected cipher: %s", exp)
+			t.Errorf("getSupportedCipherSuites() missing expected cipher: %s", exp)
 		}
 	}
 }
 
 func TestGetSupportedTLS13CipherSuites(t *testing.T) {
-	suites := GetSupportedTLS13CipherSuites()
+	suites := getSupportedTLS13CipherSuites()
 
 	if len(suites) == 0 {
-		t.Error("GetSupportedTLS13CipherSuites() returned empty list")
+		t.Error("getSupportedTLS13CipherSuites() returned empty list")
 	}
 
 	// Check that expected TLS 1.3 ciphers are present
@@ -254,7 +254,7 @@ func TestGetSupportedTLS13CipherSuites(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("GetSupportedTLS13CipherSuites() missing expected cipher: %s", exp)
+			t.Errorf("getSupportedTLS13CipherSuites() missing expected cipher: %s", exp)
 		}
 	}
 }

@@ -50,7 +50,7 @@ func TestGetAcceptEncodingHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GetAcceptEncodingHeader(tt.compress, tt.methods)
+			result := getAcceptEncodingHeader(tt.compress, tt.methods)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -61,11 +61,11 @@ func TestConfigureCompressionForTransport(t *testing.T) {
 
 	// When compress is true, DisableCompression should be true
 	// (we handle decompression manually)
-	ConfigureCompressionForTransport(transport, true)
+	configureCompressionForTransport(transport, true)
 	assert.True(t, transport.DisableCompression, "DisableCompression should be true when manually handling compression")
 
 	transport2 := &http.Transport{}
-	ConfigureCompressionForTransport(transport2, false)
+	configureCompressionForTransport(transport2, false)
 	assert.True(t, transport2.DisableCompression, "DisableCompression should be true to prevent automatic handling")
 }
 
@@ -86,7 +86,7 @@ func TestDecompressResponseGzip(t *testing.T) {
 	}
 
 	// Decompress
-	err := DecompressResponse(resp)
+	err := decompressResponse(resp)
 	require.NoError(t, err)
 
 	// Read decompressed content
@@ -116,7 +116,7 @@ func TestDecompressResponseBrotli(t *testing.T) {
 	}
 
 	// Decompress
-	err := DecompressResponse(resp)
+	err := decompressResponse(resp)
 	require.NoError(t, err)
 
 	// Read decompressed content
@@ -137,7 +137,7 @@ func TestDecompressResponseNoEncoding(t *testing.T) {
 	}
 
 	// Should not modify response without Content-Encoding
-	err := DecompressResponse(resp)
+	err := decompressResponse(resp)
 	require.NoError(t, err)
 
 	result, _ := io.ReadAll(resp.Body)
@@ -154,7 +154,7 @@ func TestDecompressResponseUnknownEncoding(t *testing.T) {
 	}
 
 	// Should not error, just leave as-is
-	err := DecompressResponse(resp)
+	err := decompressResponse(resp)
 	require.NoError(t, err)
 
 	result, _ := io.ReadAll(resp.Body)
@@ -162,7 +162,7 @@ func TestDecompressResponseUnknownEncoding(t *testing.T) {
 }
 
 func TestDecompressResponseNilResponse(t *testing.T) {
-	err := DecompressResponse(nil)
+	err := decompressResponse(nil)
 	assert.NoError(t, err, "Should handle nil response gracefully")
 }
 
@@ -183,7 +183,7 @@ func TestCompressionPooling(t *testing.T) {
 			Body: io.NopCloser(bytes.NewReader(buf.Bytes())),
 		}
 
-		err := DecompressResponse(resp)
+		err := decompressResponse(resp)
 		require.NoError(t, err)
 
 		io.ReadAll(resp.Body)
@@ -216,7 +216,7 @@ func TestCompressionConcurrentAccess(t *testing.T) {
 				Body: io.NopCloser(bytes.NewReader(buf.Bytes())),
 			}
 
-			err := DecompressResponse(resp)
+			err := decompressResponse(resp)
 			assert.NoError(t, err)
 
 			decompressed, err := io.ReadAll(resp.Body)
@@ -261,7 +261,7 @@ func TestCompressionIntegration(t *testing.T) {
 	defer resp.Body.Close()
 
 	// Decompress
-	err = DecompressResponse(resp)
+	err = decompressResponse(resp)
 	require.NoError(t, err)
 
 	body, err := io.ReadAll(resp.Body)
@@ -287,7 +287,7 @@ func BenchmarkDecompressGzip(b *testing.B) {
 			Body: io.NopCloser(bytes.NewReader(compressed)),
 		}
 
-		DecompressResponse(resp)
+		decompressResponse(resp)
 		io.ReadAll(resp.Body)
 		resp.Body.Close()
 	}
@@ -310,7 +310,7 @@ func BenchmarkDecompressBrotli(b *testing.B) {
 			Body: io.NopCloser(bytes.NewReader(compressed)),
 		}
 
-		DecompressResponse(resp)
+		decompressResponse(resp)
 		io.ReadAll(resp.Body)
 		resp.Body.Close()
 	}

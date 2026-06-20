@@ -26,7 +26,7 @@ func TestDeflate_ZlibWrapped(t *testing.T) {
 		Header: http.Header{"Content-Encoding": []string{"deflate"}},
 		Body:   io.NopCloser(bytes.NewReader(buf.Bytes())),
 	}
-	if err := DecompressResponse(resp); err != nil {
+	if err := decompressResponse(resp); err != nil {
 		t.Fatal(err)
 	}
 	out, err := io.ReadAll(resp.Body)
@@ -48,7 +48,7 @@ func TestDeflate_RawFlate(t *testing.T) {
 		Header: http.Header{"Content-Encoding": []string{"deflate"}},
 		Body:   io.NopCloser(bytes.NewReader(buf.Bytes())),
 	}
-	if err := DecompressResponse(resp); err != nil {
+	if err := decompressResponse(resp); err != nil {
 		t.Fatal(err)
 	}
 	out, err := io.ReadAll(resp.Body)
@@ -68,15 +68,15 @@ func TestCertPin_SHA256Matches(t *testing.T) {
 	sum := sha256.Sum256(cert.Raw)
 	pin := fmt.Sprintf("%x", sum[:])
 
-	if err := VerifyCertificatePin([][]byte{cert.Raw}, []string{pin}); err != nil {
+	if err := verifyCertificatePin([][]byte{cert.Raw}, []string{pin}); err != nil {
 		t.Errorf("expected matching pin, got error: %v", err)
 	}
 	// Prefixed / upper-case form should also match.
-	if err := VerifyCertificatePin([][]byte{cert.Raw}, []string{"sha256//" + strings.ToUpper(pin)}); err != nil {
+	if err := verifyCertificatePin([][]byte{cert.Raw}, []string{"sha256//" + strings.ToUpper(pin)}); err != nil {
 		t.Errorf("expected prefixed pin to match, got error: %v", err)
 	}
 	// Wrong pin must fail.
-	if err := VerifyCertificatePin([][]byte{cert.Raw}, []string{"deadbeef"}); err == nil {
+	if err := verifyCertificatePin([][]byte{cert.Raw}, []string{"deadbeef"}); err == nil {
 		t.Error("expected non-matching pin to fail")
 	}
 }
@@ -87,7 +87,7 @@ func TestLoadTLSConfig_AppliesVersionAndCiphers(t *testing.T) {
 	opts.TLSMaxVersion = tls.VersionTLS13
 	opts.CipherSuites = []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
 
-	cfg, err := LoadTLSConfig(opts)
+	cfg, err := loadTLSConfig(opts)
 	if err != nil {
 		t.Fatal(err)
 	}

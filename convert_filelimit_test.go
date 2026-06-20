@@ -51,13 +51,13 @@ func TestParseTimeFileReadCaps(t *testing.T) {
 		old := maxDataFileBytes
 		maxDataFileBytes = 16
 		defer func() { maxDataFileBytes = old }()
-		_, err := ArgsToOptions([]string{"-d", "@" + dataFile, "http://x"})
+		_, err := argsToOptions([]string{"-d", "@" + dataFile, "http://x"})
 		if err == nil || !strings.Contains(err.Error(), "parse-time read limit") {
 			t.Fatalf("over-cap -d @file should fail closed with a read-limit error, got %v", err)
 		}
 	})
 	t.Run("data under cap works", func(t *testing.T) {
-		opts, err := ArgsToOptions([]string{"-d", "@" + dataFile, "http://x"})
+		opts, err := argsToOptions([]string{"-d", "@" + dataFile, "http://x"})
 		if err != nil {
 			t.Fatalf("under-cap -d @file should parse, got %v", err)
 		}
@@ -70,13 +70,13 @@ func TestParseTimeFileReadCaps(t *testing.T) {
 		old := maxCookieFileBytes
 		maxCookieFileBytes = 8
 		defer func() { maxCookieFileBytes = old }()
-		_, err := ArgsToOptions([]string{"-b", cookieFile, "http://x"})
+		_, err := argsToOptions([]string{"-b", cookieFile, "http://x"})
 		if err == nil || !strings.Contains(err.Error(), "parse-time read limit") {
 			t.Fatalf("over-cap -b cookiefile should fail closed, got %v", err)
 		}
 	})
 	t.Run("cookie under cap works", func(t *testing.T) {
-		if _, err := ArgsToOptions([]string{"-b", cookieFile, "http://x"}); err != nil {
+		if _, err := argsToOptions([]string{"-b", cookieFile, "http://x"}); err != nil {
 			t.Fatalf("under-cap -b cookiefile should parse, got %v", err)
 		}
 	})

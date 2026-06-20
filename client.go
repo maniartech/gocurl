@@ -12,16 +12,16 @@ import (
 	"github.com/maniartech/gocurl/options"
 )
 
-// HTTPClient is an interface for making HTTP requests.
+// httpClient is an interface for making HTTP requests.
 // This allows for mocking and custom client implementations. It remains the
 // low-level injection seam (see WithTransport); Client is the high-level,
 // configure-once/reuse type built on top of it.
-type HTTPClient interface {
+type httpClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
-// Ensure *http.Client implements HTTPClient
-var _ HTTPClient = (*http.Client)(nil)
+// Ensure *http.Client implements httpClient
+var _ httpClient = (*http.Client)(nil)
 
 // Client is a reusable, concurrency-safe HTTP client. Configure it once with
 // functional Options, then execute prepared Requests many times — connections
@@ -205,7 +205,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	}
 
 	opts := c.effectiveOptions(req)
-	if err := ValidateOptions(opts); err != nil {
+	if err := validateOptions(opts); err != nil {
 		return nil, err
 	}
 
@@ -222,7 +222,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 		allow:  c.cfg.redirectAllow,
 	})
 
-	httpReq, err := CreateRequest(ctx, opts)
+	httpReq, err := createRequest(ctx, opts)
 	if err != nil {
 		if cancel != nil {
 			cancel()
@@ -231,7 +231,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	}
 
 	// Legacy request-mutating middleware on the prepared request still runs.
-	httpReq, err = ApplyMiddleware(httpReq, opts.Middleware)
+	httpReq, err = applyMiddleware(httpReq, opts.Middleware)
 	if err != nil {
 		if cancel != nil {
 			cancel()
@@ -267,7 +267,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	printResponseVerbose(opts, resp)
 
 	if opts.Compress {
-		if derr := DecompressResponse(resp); derr != nil {
+		if derr := decompressResponse(resp); derr != nil {
 			resp.Body.Close()
 			if cancel != nil {
 				cancel()

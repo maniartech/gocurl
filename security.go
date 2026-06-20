@@ -11,15 +11,15 @@ import (
 	"github.com/maniartech/gocurl/options"
 )
 
-// LoadTLSConfig creates a TLS configuration from RequestOptions.
+// loadTLSConfig creates a TLS configuration from RequestOptions.
 // Supports client certificates, custom CA bundles, and SNI.
-func LoadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
+func loadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
 	if opts == nil {
 		return nil, fmt.Errorf("request options cannot be nil")
 	}
 
 	// Start with secure defaults
-	tlsConfig := SecureDefaults()
+	tlsConfig := secureDefaults()
 
 	// If user provided a custom TLS config, merge it OVER the secure defaults
 	// rather than replacing them. Cloning preserves the caller's RootCAs,
@@ -80,7 +80,7 @@ func LoadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
 		// CLOSED. Only when the caller ALSO passed --insecure (handled above, which
 		// sets InsecureSkipVerify) does the pin become the sole check.
 		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			return VerifyCertificatePin(rawCerts, opts.CertPinFingerprints)
+			return verifyCertificatePin(rawCerts, opts.CertPinFingerprints)
 		}
 	}
 
@@ -90,7 +90,7 @@ func LoadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
 	}
 
 	// Apply explicit TLS version and cipher constraints from curl flags. This
-	// makes LoadTLSConfig the single source of truth so --tlsv1.x / --tls-max /
+	// makes loadTLSConfig the single source of truth so --tlsv1.x / --tls-max /
 	// --ciphers take effect on every request, not only when a cert is also given.
 	if opts.TLSMinVersion != 0 {
 		tlsConfig.MinVersion = opts.TLSMinVersion
@@ -108,9 +108,9 @@ func LoadTLSConfig(opts *options.RequestOptions) (*tls.Config, error) {
 	return tlsConfig, nil
 }
 
-// VerifyCertificatePin checks if any certificate in the chain matches the provided fingerprints.
+// verifyCertificatePin checks if any certificate in the chain matches the provided fingerprints.
 // This implements certificate pinning for enhanced security.
-func VerifyCertificatePin(rawCerts [][]byte, fingerprints []string) error {
+func verifyCertificatePin(rawCerts [][]byte, fingerprints []string) error {
 	if len(fingerprints) == 0 {
 		return nil
 	}
@@ -141,8 +141,8 @@ func VerifyCertificatePin(rawCerts [][]byte, fingerprints []string) error {
 	return fmt.Errorf("certificate pin verification failed: no matching fingerprint found")
 }
 
-// ValidateTLSConfig checks TLS configuration for security issues
-func ValidateTLSConfig(tlsConfig *tls.Config, opts *options.RequestOptions) error {
+// validateTLSConfig checks TLS configuration for security issues
+func validateTLSConfig(tlsConfig *tls.Config, opts *options.RequestOptions) error {
 	if tlsConfig == nil {
 		return nil
 	}
@@ -183,8 +183,8 @@ func ValidateTLSConfig(tlsConfig *tls.Config, opts *options.RequestOptions) erro
 	return nil
 }
 
-// ValidateRequestOptions performs security validation on request options
-func ValidateRequestOptions(opts *options.RequestOptions) error {
+// validateRequestOptions performs security validation on request options
+func validateRequestOptions(opts *options.RequestOptions) error {
 	if opts == nil {
 		return fmt.Errorf("request options cannot be nil")
 	}
@@ -235,7 +235,7 @@ func validateURL(opts *options.RequestOptions) error {
 func validateTLSOptions(opts *options.RequestOptions) error {
 	// Validate TLS config if provided
 	if opts.TLSConfig != nil {
-		if err := ValidateTLSConfig(opts.TLSConfig, opts); err != nil {
+		if err := validateTLSConfig(opts.TLSConfig, opts); err != nil {
 			return ValidationError("TLS", err)
 		}
 	}
@@ -315,13 +315,8 @@ func validateRedirectsAndRetries(opts *options.RequestOptions) error {
 	return nil
 }
 
-// SanitizeHeadersForLogging redacts sensitive headers before logging
-func SanitizeHeadersForLogging(headers map[string][]string) map[string][]string {
-	return RedactHeaders(headers)
-}
-
-// ValidateVariables checks variable names and values for security issues
-func ValidateVariables(vars Variables) error {
+// validateVariables checks variable names and values for security issues
+func validateVariables(vars Variables) error {
 	if vars == nil {
 		return nil
 	}
@@ -346,8 +341,8 @@ func ValidateVariables(vars Variables) error {
 	return nil
 }
 
-// SecureDefaults returns a TLS configuration with secure defaults
-func SecureDefaults() *tls.Config {
+// secureDefaults returns a TLS configuration with secure defaults
+func secureDefaults() *tls.Config {
 	return &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		CipherSuites: []uint16{

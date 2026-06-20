@@ -35,10 +35,10 @@ var brotliReaderPool = sync.Pool{
 	},
 }
 
-// DecompressResponse handles automatic decompression of response bodies based on Content-Encoding.
+// decompressResponse handles automatic decompression of response bodies based on Content-Encoding.
 // It reuses gzip/zlib readers via a sync.Pool to reduce per-response allocations (not a
 // zero-allocation guarantee).
-func DecompressResponse(resp *http.Response) error {
+func decompressResponse(resp *http.Response) error {
 	if resp == nil || resp.Body == nil {
 		return nil
 	}
@@ -186,9 +186,9 @@ func (r *deflateReader) Close() error {
 	return err
 }
 
-// GetAcceptEncodingHeader returns the appropriate Accept-Encoding header value
+// getAcceptEncodingHeader returns the appropriate Accept-Encoding header value
 // based on the compression settings. This follows curl's behavior.
-func GetAcceptEncodingHeader(compress bool, methods []string) string {
+func getAcceptEncodingHeader(compress bool, methods []string) string {
 	if !compress {
 		return ""
 	}
@@ -201,10 +201,10 @@ func GetAcceptEncodingHeader(compress bool, methods []string) string {
 	return strings.Join(methods, ", ")
 }
 
-// ConfigureCompressionForTransport sets up the HTTP transport for compression handling.
+// configureCompressionForTransport sets up the HTTP transport for compression handling.
 // Note: DisableCompression should be set to true to prevent automatic decompression
 // by net/http, allowing us to handle it manually with pooled readers.
-func ConfigureCompressionForTransport(transport *http.Transport, compress bool) {
+func configureCompressionForTransport(transport *http.Transport, compress bool) {
 	// When compress is true, we want to:
 	// 1. Send Accept-Encoding header (done in request)
 	// 2. Manually decompress (to use our pooled readers)

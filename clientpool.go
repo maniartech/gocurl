@@ -29,7 +29,7 @@ var (
 // when the configuration is cacheable (no proxy, no opaque custom *tls.Config,
 // not HTTP/2-only).
 func getRoundTripper(opts *options.RequestOptions) (http.RoundTripper, error) {
-	tlsConfig, err := LoadTLSConfig(opts)
+	tlsConfig, err := loadTLSConfig(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load TLS config: %w", err)
 	}
@@ -72,7 +72,7 @@ func (c *config) buildTransport() (http.RoundTripper, error) {
 	}
 
 	base := c.baseOptions()
-	tlsConfig, err := LoadTLSConfig(base)
+	tlsConfig, err := loadTLSConfig(base)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load TLS config: %w", err)
 	}
@@ -127,7 +127,7 @@ func newTransport(opts *options.RequestOptions, tlsConfig *tls.Config) (*http.Tr
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	ConfigureCompressionForTransport(t, opts.Compress)
+	configureCompressionForTransport(t, opts.Compress)
 
 	if opts.HTTP2 {
 		if err := http2.ConfigureTransport(t); err != nil {

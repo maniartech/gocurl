@@ -10,12 +10,12 @@ import (
 // These are whitebox tests for the internal TLS-flag parsers. The former
 // live-network checks against www.howsmyssl.com were removed: gocurl's TLS
 // version/cipher application is verified hermetically by tls_enhancements_test.go
-// (LoadTLSConfig asserts MinVersion/MaxVersion/CipherSuites on the built config),
+// (loadTLSConfig asserts MinVersion/MaxVersion/CipherSuites on the built config),
 // and a real TLS handshake is exercised by security_pinning_test.go via
 // httptest.NewTLSServer.
 
 func TestCipherSuiteSelection(t *testing.T) {
-	cipherSuites, err := ParseCipherSuites("ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256")
+	cipherSuites, err := parseCipherSuites("ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256")
 	if err != nil {
 		t.Fatalf("Failed to parse cipher suites: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestCipherSuiteSelection(t *testing.T) {
 }
 
 func TestTLS13CipherSuites(t *testing.T) {
-	tls13Suites, err := ParseTLS13CipherSuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
+	tls13Suites, err := parseTLS13CipherSuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
 	if err != nil {
 		t.Fatalf("Failed to parse TLS 1.3 cipher suites: %v", err)
 	}
@@ -68,12 +68,12 @@ func TestTLSVersionParsing(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run("TLS_"+tt.version, func(t *testing.T) {
-			got, err := ParseTLSVersion(tt.version)
+			got, err := parseTLSVersion(tt.version)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
 			if got != tt.want {
-				t.Errorf("ParseTLSVersion(%q) = %v, want %v", tt.version, got, tt.want)
+				t.Errorf("parseTLSVersion(%q) = %v, want %v", tt.version, got, tt.want)
 			}
 		})
 	}
