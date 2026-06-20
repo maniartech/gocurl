@@ -99,6 +99,21 @@ func TestRun_IncludeHeaders(t *testing.T) {
 	}
 }
 
+func TestRun_HTTP11Flag(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok " + r.Proto))
+	}))
+	defer srv.Close()
+	// --http1.1 must pass through the CLI to the parser (not "unknown flag").
+	stdout, stderr, exit := runArgs("--http1.1", srv.URL)
+	if exit != 0 {
+		t.Fatalf("exit = %d, stderr = %q", exit, stderr)
+	}
+	if !strings.Contains(stdout, "ok HTTP/1.1") {
+		t.Errorf("--http1.1 request failed: %q", stdout)
+	}
+}
+
 func TestRun_Silent(t *testing.T) {
 	rs := newRecordingServer(t, 200, "shh")
 	stdout, stderr, exit := runArgs("-s", rs.URL)

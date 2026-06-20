@@ -284,3 +284,15 @@ func TestSetHeaders(t *testing.T) {
 		t.Errorf("expected Accept header to be application/json, got %s", requestOptions.Headers.Get("Accept"))
 	}
 }
+
+func TestSetHTTPVersion(t *testing.T) {
+	o11 := options.NewRequestOptionsBuilder().SetHTTP11(true).Build()
+	if !o11.HTTP11 || o11.HTTP10 || o11.HTTP2 {
+		t.Errorf("SetHTTP11(true): got HTTP11=%t HTTP10=%t HTTP2=%t", o11.HTTP11, o11.HTTP10, o11.HTTP2)
+	}
+
+	o10 := options.NewRequestOptionsBuilder().SetHTTP10(true).Build()
+	if !o10.HTTP10 || o10.HTTP11 || o10.HTTP2 {
+		t.Errorf("SetHTTP10(true): got HTTP10=%t HTTP11=%t HTTP2=%t", o10.HTTP10, o10.HTTP11, o10.HTTP2)
+	}
+}

@@ -36,6 +36,8 @@ func (*RequestOptionsBuilder) SetCookie(cookie *http.Cookie) *RequestOptionsBuil
 func (*RequestOptionsBuilder) SetFileUpload(fileUpload *FileUpload) *RequestOptionsBuilder
 func (*RequestOptionsBuilder) SetFollowRedirects(follow bool) *RequestOptionsBuilder
 func (*RequestOptionsBuilder) SetForm(form url.Values) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetHTTP10(http10 bool) *RequestOptionsBuilder
+func (*RequestOptionsBuilder) SetHTTP11(http11 bool) *RequestOptionsBuilder
 func (*RequestOptionsBuilder) SetHTTP2(http2 bool) *RequestOptionsBuilder
 func (*RequestOptionsBuilder) SetHTTP2Only(http2Only bool) *RequestOptionsBuilder
 func (*RequestOptionsBuilder) SetHeaders(headers http.Header) *RequestOptionsBuilder
@@ -133,6 +135,8 @@ type RequestOptions struct {
 
 	HTTP2		bool	`json:"http2,omitempty"`
 	HTTP2Only	bool	`json:"http2_only,omitempty"`
+	HTTP11		bool	`json:"http1_1,omitempty"`
+	HTTP10		bool	`json:"http1_0,omitempty"`
 
 	Cookies		[]*http.Cookie	`json:"cookies,omitempty"`
 	CookieJar	http.CookieJar	`json:"-"`

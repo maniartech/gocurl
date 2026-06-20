@@ -45,10 +45,11 @@ type config struct {
 	responseHeaderTimeout time.Duration
 	expectContinueTimeout time.Duration
 
-	// HTTP version selection.
+	// HTTP version selection (mutually exclusive; last option set wins).
 	http2     bool // attempt HTTP/2 upgrade over TLS (ForceAttemptHTTP2)
 	http2Only bool // use HTTP/2 exclusively (h2 / h2c)
 	h2c       bool // allow HTTP/2 cleartext when http2Only
+	http11    bool // pin HTTP/1.1, suppress h2
 
 	// transport, when set via WithTransport, overrides the Client's owned
 	// transport (advanced / testing — e.g. an httptest or mock RoundTripper).
@@ -388,6 +389,20 @@ func WithHTTP2Only(allowCleartext bool) Option {
 	return func(c *config) error {
 		c.http2Only = true
 		c.h2c = allowCleartext
+		return nil
+	}
+}
+
+// WithHTTP11 pins HTTP/1.1, suppressing HTTP/2 negotiation. Mutually exclusive
+// with the HTTP/2 options (last one set wins).
+//
+// There is deliberately no WithHTTP10: curl's --http1.0 implies Connection: close,
+// which would defeat a reusable Client's connection pool on every request. The
+// --http1.0 curl flag is supported on the one-shot Curl* path instead.
+func WithHTTP11() Option {
+	return func(c *config) error {
+		c.http11 = true
+		c.http2, c.http2Only = false, false
 		return nil
 	}
 }

@@ -7,6 +7,21 @@ a tagged release.
 
 ## [Unreleased]
 
+### Added — HTTP/1.x version pinning curl flags
+
+- **`--http1.1`** pins HTTP/1.1, suppressing HTTP/2 negotiation even against an h2-capable
+  server (via a non-nil empty `TLSNextProto` — the correct mechanism on the `go 1.23` floor,
+  where `http.Transport.Protocols` is unavailable). Exposed on the reusable `Client` as
+  `WithHTTP11()`, and on the typed builder as `SetHTTP11`/`SetHTTP10`. New `options.RequestOptions`
+  fields `HTTP11`/`HTTP10`.
+- **`--http1.0`/`-0`** is accepted as a **best-effort** flag: Go's `net/http` client cannot write
+  an HTTP/1.0 request line, so gocurl pins HTTP/1.1 and sends `Connection: close` (curl's 1.0
+  no-keep-alive default) with a stderr warning, rather than hard-failing the pasted command. True
+  1.0-on-the-wire is out of scope (documented in `specs/02`/`specs/03`). There is no `WithHTTP10()`
+  Client option — `Connection: close` on every request would defeat a pooled Client.
+- Version flags are mutually exclusive with curl's **last-wins** semantics, and the pin is part of
+  the transport cache key so a 1.1-pinned transport never collides with an h2-capable one.
+
 ### Security — dependency bumps (Dependabot)
 - **`golang.org/x/net` 0.30.0 → 0.38.0** across all modules (root, both observability adapters,
   book2), clearing GHSA-qxp5-gwg8-xv66 (HTTP proxy bypass via IPv6 Zone IDs) and

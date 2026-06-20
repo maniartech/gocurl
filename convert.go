@@ -111,9 +111,13 @@ func processSimpleFlag(flag string, i int, st *parseState) (int, bool) {
 	case "--compressed":
 		o.Compress = true
 	case "--http2":
-		o.HTTP2 = true
+		setHTTPVersion(o, true, false, false, false)
 	case "--http2-only", "--http2-prior-knowledge":
-		o.HTTP2Only = true
+		setHTTPVersion(o, false, true, false, false)
+	case "--http1.1":
+		setHTTPVersion(o, false, false, true, false)
+	case "--http1.0", "-0":
+		setHTTPVersion(o, false, false, false, true)
 	case "-k", "--insecure":
 		o.Insecure = true
 	case "-L", "--location":
@@ -136,6 +140,16 @@ func processSimpleFlag(flag string, i int, st *parseState) (int, bool) {
 		return 0, false
 	}
 	return i + 1, true
+}
+
+// setHTTPVersion applies a single HTTP-version selection, clearing the others so
+// the flags stay mutually exclusive with curl's last-flag-wins semantics
+// (e.g. `--http2 --http1.1` ends up as HTTP/1.1).
+func setHTTPVersion(o *options.RequestOptions, http2, http2Only, http11, http10 bool) {
+	o.HTTP2 = http2
+	o.HTTP2Only = http2Only
+	o.HTTP11 = http11
+	o.HTTP10 = http10
 }
 
 // processArgFlag handles flags that take an argument. It returns ok=true if the

@@ -105,7 +105,10 @@ func (c *config) buildTransport() (http.RoundTripper, error) {
 		// Client's decompression path owns it.
 		DisableCompression: true,
 	}
-	if c.http2 {
+	switch {
+	case c.http11:
+		forceHTTP11(t)
+	case c.http2:
 		if err := http2.ConfigureTransport(t); err != nil {
 			return nil, fmt.Errorf("failed to configure HTTP/2: %w", err)
 		}
@@ -129,7 +132,10 @@ func newTransport(opts *options.RequestOptions, tlsConfig *tls.Config) (*http.Tr
 
 	configureCompressionForTransport(t, opts.Compress)
 
-	if opts.HTTP2 {
+	switch {
+	case opts.HTTP11 || opts.HTTP10:
+		forceHTTP11(t)
+	case opts.HTTP2:
 		if err := http2.ConfigureTransport(t); err != nil {
 			return nil, fmt.Errorf("failed to configure HTTP/2: %v", err)
 		}
@@ -137,10 +143,29 @@ func newTransport(opts *options.RequestOptions, tlsConfig *tls.Config) (*http.Tr
 	return t, nil
 }
 
+// forceHTTP11 pins t to HTTP/1.1, suppressing HTTP/2 negotiation. The go.mod
+// floor is go 1.23, where the http.Transport.Protocols API (Go 1.24+) is not
+// available, so this uses the documented TLSNextProto mechanism: a non-nil EMPTY
+// map disables the runtime's automatic h2, and we strip "h2" from any ALPN list a
+// caller-supplied *tls.Config advertises so it cannot re-enable h2 over ALPN.
+func forceHTTP11(t *http.Transport) {
+	t.ForceAttemptHTTP2 = false
+	t.TLSNextProto = map[string]func(authority string, c *tls.Conn) http.RoundTripper{}
+	if t.TLSClientConfig != nil && len(t.TLSClientConfig.NextProtos) > 0 {
+		kept := make([]string, 0, len(t.TLSClientConfig.NextProtos))
+		for _, proto := range t.TLSClientConfig.NextProtos {
+			if proto != "h2" {
+				kept = append(kept, proto)
+			}
+		}
+		t.TLSClientConfig.NextProtos = kept
+	}
+}
+
 // transportKey builds a cache key from the connection-relevant options.
 func transportKey(opts *options.RequestOptions) string {
-	return fmt.Sprintf("ins=%t|min=%d|max=%d|ca=%s|cert=%s|key=%s|sni=%s|pins=%v|h2=%t|gz=%t",
+	return fmt.Sprintf("ins=%t|min=%d|max=%d|ca=%s|cert=%s|key=%s|sni=%s|pins=%v|h2=%t|h11=%t|h10=%t|gz=%t",
 		opts.Insecure, opts.TLSMinVersion, opts.TLSMaxVersion,
 		opts.CAFile, opts.CertFile, opts.KeyFile, opts.SNIServerName,
-		opts.CertPinFingerprints, opts.HTTP2, opts.Compress)
+		opts.CertPinFingerprints, opts.HTTP2, opts.HTTP11, opts.HTTP10, opts.Compress)
 }

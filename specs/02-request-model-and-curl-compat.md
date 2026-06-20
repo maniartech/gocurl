@@ -223,6 +223,13 @@ func (r *Request) Rebind(vars Variables) (*Request, error)
   by `validateHeaders` (options/validation.go) at prepare time.
 - **Insecure auth:** BasicAuth/Bearer over `http://` flagged by
   `validateSecureAuth` at prepare time (before any network call).
+- **HTTP version flags (`--http2`/`--http2-only`/`--http1.1`/`--http1.0`/`-0`):**
+  mutually exclusive, **last-wins** (curl-faithful) — the parser clears the other
+  version bits when it sets one, so at most one is ever active. Transport wiring
+  lives in Spec 03. `--http1.1` is an exact HTTP/1.1 pin (h2 suppressed).
+  `--http1.0`/`-0` is **best-effort**: Go's `net/http` client cannot write an
+  HTTP/1.0 request line, so gocurl maps it to an HTTP/1.1 pin + `Connection: close`
+  + a one-time warning rather than erroring; true 1.0-on-the-wire is out of scope.
 
 ### Supported curl flag matrix
 
@@ -236,7 +243,7 @@ Implemented today (verified in convert.go); these MUST keep working through the
 | TLS | `--cert`, `--key`, `--cacert`, `--tlsv1`/`.0`/`.1`/`.2`/`.3`, `--tls-max`, `--ciphers`, `--tls13-ciphers`, `-k/--insecure` |
 | Proxy | `-x/--proxy`, `--proxy-cert`, `--proxy-key`, `--proxy-cacert`, `--proxy-insecure`, `--noproxy` |
 | Network/redirect/retry | `--max-time`, `--connect-timeout`, `-L/--location`, `--max-redirs`, `--retry` |
-| Compression/HTTP | `--compressed`, `--http2`, `--http2-only`/`--http2-prior-knowledge` |
+| Compression/HTTP | `--compressed`, `--http2`, `--http2-only`/`--http2-prior-knowledge`, `--http1.1`, `--http1.0`/`-0` (best-effort, see note) |
 | Output (lib-level) | `-o/--output`, `-O/--remote-name` |
 | Behavior/diagnostic | `-v/--verbose`, `-s/--silent`, `-I/--head`, `--url` |
 
@@ -249,7 +256,7 @@ Planned (not yet implemented; add behind the same dispatch functions):
 | `--header @file` / `-H @file` | header file loading |
 | `--compressed-ssh` n/a; `--raw` | disable auto-decompress |
 | `--resolve`, `--connect-to` | custom host→addr mapping (transport) |
-| `--http1.0`, `--http1.1`, `--http3` | version pinning (HTTP/3 future) |
+| `--http3` | HTTP/3 version pinning (quic-go future add-on) |
 | `-:` / `--next` | multiple requests in one command (deferred; see Non-goals) |
 
 ### Non-goals / explicitly unsupported
