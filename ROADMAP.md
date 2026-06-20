@@ -310,15 +310,31 @@ Spec 10. deps: M2, M3.
 
 ## Milestone 11 — API stability & v1 release
 
-Spec 11. deps: all prior milestones.
+Spec 11. deps: all prior milestones. **Scope decision (user, 2026-06-20):** do the pre-v1
+*trim* now (no released users → breaking changes are free) but **do NOT tag v1.0.0** — keep
+the surface stable and ready, and validate it with real usage before committing to the SemVer
+promise.
 
-- [ ] **M11-T1 — Unexport/move internals to `internal/`** (`Process`, `CreateHTTPClient`,
-  `CreateRequest`, `HandleOutput`, `ApplyMiddleware`, `ArgsToOptions`). *DoD: public surface
-  matches the Spec 11 v1 keep-list; build green.*
-- [ ] **M11-T2 — Deprecations finalized** (`Process`/`Execute`/legacy `MiddlewareFunc`
-  adapter) with notices + migration guide. *DoD: MIGRATION.md written; godoc deprecation tags.*
-- [ ] **M11-T3 — Cut `v1.0.0`** — annotated tag, CHANGELOG, README/VISION aligned. *DoD:
-  tag pushed; `go install ...@v1.0.0` works.*
+- [x] **M11-T1 — Trim the public surface.** Removed the deprecated one-shot API (`Process`,
+  `Execute`, the `Response` wrapper, `HandleOutput` — the library no longer writes stdout) and
+  **unexported** the execution machinery in place (`createHTTPClient`, `createRequest`,
+  `applyMiddleware`, `validateOptions`/`validateRequestOptions`, `argsToOptions`, `loadTLSConfig`
+  + TLS parsers, compression helpers, `validateVariables`, the redundant root `HTTPClient`).
+  `options.RequestOptions` no longer appears in any public signature. (Unexport-in-place rather
+  than a physical `internal/` move — lower risk, same surface guarantee; `internal/corpus` already
+  exists.) Deleted the unrelated `cmd/` recipe_search demo. *DoD met: `go doc .` shows only the
+  keep-list; build/vet/`-short -race` green; `-coverpkg=./...` 80.2%.*
+- [x] **M11-T2 — Removals recorded.** With zero released users, deprecated symbols are **removed
+  outright** (no deprecation-shim cycle needed) and documented in `CHANGELOG.md` with their
+  replacements (the migration record); a standalone MIGRATION.md is deferred until there is a
+  release to migrate from. Package-level `Curl*` keep their per-command pooled engine (the M1-T5
+  deviation: a single default `Client` has one fixed transport and would regress per-command
+  `--insecure`/`--proxy`/`--cert`), so no behavior-changing default-Client rewrite was made.
+- [x] **M11 (added) — API-surface guard.** `api.txt` golden + `TestAPISurface` (stdlib `go/ast`,
+  dependency-free) fail the build on any unrecorded surface change; runs in the normal CI test job.
+- [ ] **M11-T3 — Cut `v1.0.0`** — **intentionally deferred** (user decision). The prep above makes
+  a future tag (`v0.1.0` to exit pseudo-version land, then `v1.0.0`) a near-trivial step once real
+  usage validates the API.
 
 ---
 

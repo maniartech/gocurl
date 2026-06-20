@@ -179,32 +179,33 @@ existing `Curl*` caller needs to change a line to move from v0.x to v1.
 
 ## Acceptance criteria / Definition of Done
 
-- [ ] `CHANGELOG.md` gains an explicit **versioning policy** paragraph (v0 = unstable, v1 =
-      SemVer promise) and the `[Unreleased]` section is split toward a concrete first tag.
-- [ ] Every symbol slated for removal/unexport carries a `// Deprecated: use X` comment; a
-      `staticcheck`/`go vet` run reports SA1019 on internal usages and the deprecation list
-      matches this spec's table.
-- [ ] An `internal/` tree exists and the root package imports inward; no external-importable
-      package exposes `CreateHTTPClient`, `CreateRequest`, `ApplyMiddleware`, `ArgsToOptions`,
-      validation, TLS-parsing, or compression internals.
-- [ ] `HandleOutput` no longer exists in the `gocurl` root package; equivalent logic lives
-      unexported in `cmd/gocurl`, and a test confirms the library produces zero stdout writes.
-- [ ] Package-level `Curl*` functions delegate to a lazily-initialized default `Client` and a
-      test asserts byte-identical behavior (status, headers, streamed body, redaction) vs. the
-      pre-refactor implementation.
-- [ ] A `MIGRATION.md` (or a `# Migration` section in the README) documents the one-shot →
-      `Client` path with side-by-side `Process`/`Execute`/`Request` → `Client.Do`/`Curl*`
-      examples and a `gofmt -r` recipe for the common rename.
-- [ ] An **API-surface guard** exists in CI: a golden `api.txt` (e.g. via `go run
-      golang.org/x/exp/cmd/apidiff` or `go doc`-diff) so any change to the exported root
-      surface fails the build until the golden file and CHANGELOG are updated.
-- [ ] The release process is documented and exercised once on a pre-release tag: annotated
-      `git tag v0.1.0`, push, and `Version` stamped via
-      `-ldflags "-X github.com/maniartech/gocurl.Version=0.1.0"` in `cmd/gocurl` builds.
-- [ ] `go build ./...`, `go vet ./...`, and `go test -short -race ./...` pass on the tagged
-      commit (the existing CI workflow already runs these).
-- [ ] A documented **deprecation timeline** maps each deprecated symbol to "deprecated in
-      v0.N, removed in v1.0.0".
+> **Scope note (decided in review, 2026-06-20):** because gocurl has no released users, the
+> deprecated symbols were **removed outright** rather than carried through a deprecation cycle,
+> and the engine internals were **unexported in place** rather than physically relocated to a new
+> `internal/engine` tree (same surface guarantee, far lower churn). The v1.0.0 tag is
+> intentionally **deferred** — this milestone trims and locks the surface but does not release.
+
+- [x] `CHANGELOG.md` carries the versioning policy and a `[Unreleased]` entry recording the
+      breaking surface trim with replacements (the migration record).
+- [~] Deprecation comments — **N/A**: with zero users the symbols are removed, not deprecated, so
+      there is no SA1019 transition window. (Removed set documented in CHANGELOG.)
+- [x] No external-importable package exposes `CreateHTTPClient`, `CreateRequest`,
+      `ApplyMiddleware`, `ArgsToOptions`, validation, TLS-parsing, or compression internals — they
+      are unexported in the root package (`internal/corpus` already exists; a physical `internal/`
+      move was judged unnecessary for the surface guarantee).
+- [x] `HandleOutput` no longer exists; the library produces **zero stdout writes** (the only
+      writer was the removed `Process`/`HandleOutput` path).
+- [~] Package-level `Curl*` delegating to a lazy default `Client` — **intentionally NOT done**:
+      per the M1-T5 deviation a single default `Client` has one fixed transport and would regress
+      per-command `--insecure`/`--proxy`/`--cert`; `Curl*` keep their per-command pooled engine.
+- [~] MIGRATION.md — deferred; the CHANGELOG removed→replacement table is the migration record
+      until there is a release to migrate from.
+- [x] An **API-surface guard** exists: golden `api.txt` + `TestAPISurface` (stdlib `go/ast`,
+      dependency-free), failing the build on any unrecorded surface change; runs in the normal
+      `go test -short ./...` CI job.
+- [ ] Release process exercised on a pre-release tag — **deferred** with M11-T3 (no tag yet).
+- [x] `go build ./...`, `go vet ./...`, and `go test -short -race ./...` pass.
+- [~] Deprecation timeline — **N/A** (symbols removed, not deprecated; see CHANGELOG).
 
 ## Dependencies
 
