@@ -7,7 +7,32 @@ a tagged release.
 
 ## [Unreleased]
 
+### Changed — pre-v1 public-surface trim (BREAKING, no released users)
+
+The exported root surface was trimmed to the intended v1 contract while gocurl is still
+untagged (no compatibility promise yet). **No `v1.0.0` tag is cut** — this only locks a clean
+surface for a future release.
+
+- **Removed deprecated one-shot engine API:** `Process`, `Execute`, the `Response` wrapper
+  (`String`/`Bytes`/`JSON`), and `HandleOutput` (the library no longer writes to stdout/files).
+  Migrate: use `CurlString`/`CurlBytes`/`CurlJSON` for buffered bodies, `Curl` for the streamed
+  body, or a `Client` + `Prepare`/`Do`.
+- **Unexported the execution machinery** (it was never meant to be public): `CreateHTTPClient`,
+  `CreateRequest`, `ApplyMiddleware`, `ValidateOptions`, `ValidateRequestOptions`, `ArgsToOptions`,
+  `LoadTLSConfig`, `ValidateTLSConfig`, `VerifyCertificatePin`, `SecureDefaults`,
+  `ParseTLSVersion`/`ParseCipherSuites`/`ParseTLS13CipherSuites` (+ the `GetSupported*` helpers),
+  `DecompressResponse`/`GetAcceptEncodingHeader`/`ConfigureCompressionForTransport`,
+  `ValidateVariables`, and the redundant root `HTTPClient` interface. `options.RequestOptions` no
+  longer appears in any public signature. Deleted the unused `SanitizeHeadersForLogging` (use
+  `RedactHeaders`).
+- **API-surface guard:** the exported surface is now locked by `api.txt` + `TestAPISurface`; any
+  change must regenerate the golden (`GOCURL_UPDATE_API=1 go test -run TestAPISurface .`) and be
+  recorded here.
+
 ### Removed — repository de-sprawl (pre-v1 cleanup)
+- Deleted the unrelated `cmd/` recipe_search demo (a standalone USDA food-API client that did not
+  use gocurl and whose non-hermetic test polluted the coverage gate). The real CLI, `cmd/gocurl`,
+  is untouched.
 - Deleted the stale pre-implementation planning/audit archives now superseded by `specs/`,
   `VISION.md`, `README.md`, and `docs/benchmarking.md`: `design.md`, `objective.md`,
   `objective-gaps.md`, `README_NEW.md`, and the `plan/`, `wip-notes/`, and `book/` directories.
