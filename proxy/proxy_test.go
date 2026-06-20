@@ -284,7 +284,10 @@ func TestHTTPProxyWithHTTPSTarget(t *testing.T) {
 
 func BenchmarkShouldBypassProxy(b *testing.B) {
 	noProxyList := []string{"localhost", ".internal", "192.168.1.0/24", "*.local"}
-	targetURL := "http://api.internal.company.com/endpoint"
+	// Literal-IP host: matchCIDR short-circuits on net.ParseIP and never calls
+	// net.LookupIP, so this benchmark stays hermetic (a hostname here would trigger
+	// a live, unbounded DNS resolution). Still exercises the CIDR-match path.
+	targetURL := "http://192.168.1.42/endpoint"
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

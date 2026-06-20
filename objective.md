@@ -1,5 +1,12 @@
 # GoCurl Project Objectives
 
+> ⚠️ **HISTORICAL / SUPERSEDED.** This is a pre-implementation planning document. Its
+> "zero-allocation", "faster than net/http" / "replace net/http", and "military-grade"
+> language was aspirational and is **not** a claim about the shipped library. The
+> authoritative, honest references are [specs/](specs/README.md), [VISION.md](VISION.md),
+> and [docs/benchmarking.md](docs/benchmarking.md) (parity with `net/http`, allocation
+> budgets, never "faster" or "zero-allocation").
+
 ## Executive Summary
 
 GoCurl is a **zero-allocation, military-grade performance** HTTP/HTTP2 client library for Go that revolutionizes how developers interact with REST APIs. By supporting HTTP-specific curl command syntax from third-party API documentation, GoCurl eliminates the translation overhead between API examples and Go implementation. The name "GoCurl" reflects its curl-compatible syntax for HTTP operations, though it focuses exclusively on HTTP/HTTPS features rather than implementing curl's full feature set (FTP, SMTP, etc.). Designed to replace `net/http` and other HTTP clients entirely, GoCurl delivers superior performance while maintaining developer-friendly syntax that allows copy-pasting HTTP curl commands directly into production Go code.

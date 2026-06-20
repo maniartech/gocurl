@@ -1,5 +1,12 @@
 # Objective Gap Analysis
 
+> ⚠️ **HISTORICAL / SUPERSEDED.** This is a pre-implementation gap analysis. Its
+> "zero-allocation" and "military-grade" language was aspirational and is **not** a claim
+> about the shipped library — indeed this very doc flagged the over-claiming as a risk to
+> fix. The authoritative, honest references are [specs/](specs/README.md),
+> [VISION.md](VISION.md), and [docs/benchmarking.md](docs/benchmarking.md) (parity with
+> `net/http`, allocation budgets, never "faster" or "zero-allocation").
+
 ## Design Philosophy: Sweet, Simple, Robust (SSR)
 
 This project follows three core principles to avoid over-engineering while delivering military-grade performance:

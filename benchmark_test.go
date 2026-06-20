@@ -1,13 +1,18 @@
 package gocurl_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/maniartech/gocurl"
 )
 
-// BenchmarkRequestConstruction measures the overhead of parsing curl commands
+// These benchmarks measure the ONE-TIME, authoring-time parse/expand cost — the
+// price paid once by Prepare, NOT a per-request hot path. The per-request cost is
+// measured by the BenchmarkRoundTrip_* arms in bench_roundtrip_test.go. Parsing is
+// deliberately not tuned toward 0 allocs/op (see Spec 10): it runs once.
+
+// BenchmarkRequestConstruction measures the one-time cost of parsing a curl
+// command into a *RequestOptions.
 func BenchmarkRequestConstruction(b *testing.B) {
 	args := []string{
 		"curl", "-X", "POST",
@@ -27,7 +32,7 @@ func BenchmarkRequestConstruction(b *testing.B) {
 	}
 }
 
-// BenchmarkVariableExpansion measures variable substitution performance
+// BenchmarkVariableExpansion measures the one-time cost of ${VAR} substitution.
 func BenchmarkVariableExpansion(b *testing.B) {
 	vars := gocurl.Variables{
 		"token": "my-secret-token",
@@ -47,31 +52,10 @@ func BenchmarkVariableExpansion(b *testing.B) {
 	}
 }
 
-// BenchmarkRequestAPI measures the high-level API performance
-func BenchmarkRequestAPI(b *testing.B) {
-	// Note: This will make real HTTP requests - commented out for now
-	// Uncomment when you want to benchmark with a local test server
-
-	b.Skip("Skipping HTTP request benchmark - requires test server")
-
-	vars := gocurl.Variables{
-		"url": "http://localhost:8080/test",
-	}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		resp, err := gocurl.CurlWithVars(context.Background(), vars, "curl ${url}")
-		if err != nil {
-			b.Fatal(err)
-		}
-		resp.Body.Close()
-	}
-}
-
-// BenchmarkConcurrentRequests measures concurrent request handling
+// BenchmarkConcurrentRequests measures concurrent ONE-TIME parsing (no I/O); the
+// concurrent round-trip hot path is BenchmarkRoundTrip_Concurrent_* .
 func BenchmarkConcurrentRequests(b *testing.B) {
+	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			_, err := gocurl.ArgsToOptions([]string{
@@ -79,7 +63,8 @@ func BenchmarkConcurrentRequests(b *testing.B) {
 				"https://example.com",
 			})
 			if err != nil {
-				b.Fatal(err)
+				b.Error(err)
+				return
 			}
 		}
 	})
