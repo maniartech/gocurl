@@ -7,6 +7,17 @@ a tagged release.
 
 ## [Unreleased]
 
+### Security — dependency bumps (Dependabot)
+- **`golang.org/x/net` 0.30.0 → 0.38.0** across all modules (root, both observability adapters,
+  book2), clearing GHSA-qxp5-gwg8-xv66 (HTTP proxy bypass via IPv6 Zone IDs) and
+  GHSA-vvgc-356p-c3xw (XSS in `x/net/html`, not reachable from gocurl but flagged). This raises the
+  **minimum Go version to 1.23** (x/net ≥0.38 requires it); the CI matrix is now `1.23.x`/`1.24.x`.
+  No source changes — gocurl uses `x/net/{http2,publicsuffix,proxy}`.
+- **`go.opentelemetry.io/otel*` 1.31.0 → 1.43.0** in the OTel adapter submodule
+  (`observability/otel`), clearing GHSA-9h8m-3fm2-qjrq and GHSA-hfvc-g4fc-pqhx (high-severity PATH
+  hijacking in `otel/sdk`). This is an opt-in adapter module, so its higher floor (Go 1.25, per
+  otel) only affects users who import it, not the core library.
+
 ### Changed — pre-v1 public-surface trim (BREAKING, no released users)
 
 The exported root surface was trimmed to the intended v1 contract while gocurl is still

@@ -50,7 +50,7 @@ As a command-line tool:
 go install github.com/maniartech/gocurl/cmd/gocurl@latest
 ```
 
-Requires Go 1.22+.
+Requires Go 1.23+.
 
 ## Usage
 
@@ -102,7 +102,7 @@ _, err = gocurl.CurlJSON(ctx, &repo, "https://api.github.com/repos/golang/go")
 
 // Stream a download to a file.
 n, resp, err := gocurl.CurlDownload(ctx, "go.tar.gz",
-    "https://go.dev/dl/go1.22.0.linux-amd64.tar.gz")
+    "https://go.dev/dl/go1.23.0.linux-amd64.tar.gz")
 ```
 
 `CurlBytes` is also available for raw `[]byte` bodies.
