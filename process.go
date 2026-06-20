@@ -89,12 +89,47 @@ func newLimitedBody(rc io.ReadCloser, limit int64) io.ReadCloser {
 }
 
 func (l *limitedBody) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	remaining := l.limit - l.read
+	if remaining <= 0 {
+		// We have already delivered exactly `limit` bytes. Probe a single byte to
+		// distinguish a body that is exactly at the limit (clean EOF -> success)
+		// from one that runs over it, without buffering more than that one byte.
+		var probe [1]byte
+		n, err := l.rc.Read(probe[:])
+		if n > 0 {
+			return 0, l.tooLargeErr()
+		}
+		return 0, err // EOF (exact-limit body) or a transient zero-byte read.
+	}
+	// Cap the slice handed to the underlying reader so it can pull at most one
+	// byte past the cap into memory — that single byte is only ever used to
+	// detect overflow on this Read; it is never returned to the caller.
+	if int64(len(p)) > remaining+1 {
+		p = p[:remaining+1]
+	}
 	n, err := l.rc.Read(p)
 	l.read += int64(n)
 	if l.read > l.limit {
-		return n, fmt.Errorf("response body size exceeds limit of %d bytes", l.limit)
+		// Truncate the returned count back to the cap so the caller never sees a
+		// byte past the limit, then surface a typed, classifiable error.
+		n -= int(l.read - l.limit)
+		l.read = l.limit
+		return n, l.tooLargeErr()
 	}
 	return n, err
+}
+
+// tooLargeErr reports an over-limit response body as a classifiable
+// KindBodyRead error (matchable via errors.Is(err, ErrBodyRead) / KindOf).
+func (l *limitedBody) tooLargeErr() error {
+	return &GocurlError{
+		Op:   "body read",
+		Kind: KindBodyRead,
+		Err:  fmt.Errorf("response body size exceeds limit of %d bytes", l.limit),
+	}
 }
 
 func (l *limitedBody) Close() error { return l.rc.Close() }
