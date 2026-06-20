@@ -1,0 +1,213 @@
+const CompressionBrotli
+const CompressionDeflate
+const CompressionGzip
+const DefaultMaxReplayBytes
+const KindBodyRead
+const KindCanceled
+const KindConnect
+const KindParse
+const KindRetryExhausted
+const KindServerStatus
+const KindTLS
+const KindTimeout
+const KindUnknown
+const KindValidation
+const LevelDebug
+const LevelError
+const LevelInfo
+const LevelWarn
+const MaxPooledResponseSize
+const StreamingThreshold
+func (*Client) Close() error
+func (*Client) Curl(ctx context.Context, command string) (*http.Response, error)
+func (*Client) CurlBytes(ctx context.Context, command string) ([]byte, *http.Response, error)
+func (*Client) CurlDownload(ctx context.Context, filePath, command string) (int64, *http.Response, error)
+func (*Client) CurlJSON(ctx context.Context, v interface{}, command string) (*http.Response, error)
+func (*Client) CurlString(ctx context.Context, command string) (string, *http.Response, error)
+func (*Client) Do(ctx context.Context, req *Request) (*http.Response, error)
+func (*Client) Prepare(command string) (*Request, error)
+func (*Client) PrepareNoEnv(command string) (*Request, error)
+func (*Client) PrepareWithVars(vars Variables, command string) (*Request, error)
+func (*Client) Shutdown(ctx context.Context) error
+func (*GocurlError) Error() string
+func (*GocurlError) Is(target error) bool
+func (*GocurlError) Retryable() bool
+func (*GocurlError) Temporary() bool
+func (*GocurlError) Timeout() bool
+func (*GocurlError) Unwrap() error
+func (*PersistentCookieJar) Cookies(u *url.URL) []*http.Cookie
+func (*PersistentCookieJar) Load() error
+func (*PersistentCookieJar) Save() error
+func (*PersistentCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie)
+func (*Request) AddHeader(key, value string) *Request
+func (*Request) Clone() *Request
+func (*Request) Method() string
+func (*Request) Options() *options.RequestOptions
+func (*Request) URL() string
+func (*Request) WithBody(b []byte) *Request
+func (*Request) WithBodyFile(path string) *Request
+func (*Request) WithBodySource(src options.BodySource) *Request
+func (*Request) WithHeader(key, value string) *Request
+func (*Request) WithQuery(key, value string) *Request
+func (*Request) WithRetryPolicy(p RetryPolicy) *Request
+func (*Request) WithVars(vars Variables) *Request
+func (*ResponseReader) Bytes() ([]byte, error)
+func (*ResponseReader) Read(p []byte) (int, error)
+func (*ResponseReader) Reset()
+func (*ResponseReader) String() (string, error)
+func (*RetryBudget) Consume() bool
+func (*RetryBudget) Refund()
+func (*TokenBucket) Wait(ctx context.Context) error
+func (Kind) String() string
+func (Level) String() string
+func (SSRFPolicy) CheckSSRF(ctx context.Context, host string) error
+func Body(b []byte) RequestOption
+func BodyReadError(url string, err error) error
+func BodyReader(r io.Reader) RequestOption
+func BytesBody(b []byte) options.BodySource
+func CanceledError(url string, err error) error
+func CircuitBreaker(cfg BreakerConfig) Middleware
+func ConnectError(url string, err error) error
+func ConstantBackoff(d time.Duration) Backoff
+func Curl(ctx context.Context, command ...string) (*http.Response, error)
+func CurlArgs(ctx context.Context, args ...string) (*http.Response, error)
+func CurlArgsWithVars(ctx context.Context, vars Variables, args ...string) (*http.Response, error)
+func CurlBytes(ctx context.Context, command ...string) ([]byte, *http.Response, error)
+func CurlBytesArgs(ctx context.Context, args ...string) ([]byte, *http.Response, error)
+func CurlBytesCommand(ctx context.Context, command string) ([]byte, *http.Response, error)
+func CurlCommand(ctx context.Context, command string) (*http.Response, error)
+func CurlCommandWithVars(ctx context.Context, vars Variables, command string) (*http.Response, error)
+func CurlDownload(ctx context.Context, filepath string, command ...string) (int64, *http.Response, error)
+func CurlDownloadArgs(ctx context.Context, filepath string, args ...string) (int64, *http.Response, error)
+func CurlDownloadCommand(ctx context.Context, filepath string, command string) (int64, *http.Response, error)
+func CurlJSON(ctx context.Context, v interface{}, command ...string) (*http.Response, error)
+func CurlJSONArgs(ctx context.Context, v interface{}, args ...string) (*http.Response, error)
+func CurlJSONCommand(ctx context.Context, v interface{}, command string) (*http.Response, error)
+func CurlString(ctx context.Context, command ...string) (string, *http.Response, error)
+func CurlStringArgs(ctx context.Context, args ...string) (string, *http.Response, error)
+func CurlStringCommand(ctx context.Context, command string) (string, *http.Response, error)
+func CurlWithVars(ctx context.Context, vars Variables, command ...string) (*http.Response, error)
+func DefaultRetryPolicy(maxAttempts int) RetryPolicy
+func DefaultSSRFPolicy() SSRFPolicy
+func Duration(k string, v time.Duration) Field
+func Err(err error) Field
+func ExpandVariables(text string, vars Variables) (string, error)
+func ExponentialJitter(base, max time.Duration) Backoff
+func FileBody(path string) options.BodySource
+func FromMiddlewareFunc(f middlewares.MiddlewareFunc) Middleware
+func HandlerFromRoundTripper(rt http.RoundTripper) Handler
+func Header(key, value string) RequestOption
+func Int(k string, v int) Field
+func IsRetryable(err error) bool
+func IsSensitiveHeader(headerName string) bool
+func IsTemporary(err error) bool
+func IsTimeout(err error) bool
+func KindOf(err error) Kind
+func LoadCookiesFromFile(filePath string) ([]*http.Cookie, error)
+func MultipartBody(fields map[string]string, files ...MultipartFile) options.BodySource
+func New(opts ...Option) (*Client, error)
+func NewPersistentCookieJar(filePath string) (*PersistentCookieJar, error)
+func NewRequest(method, rawURL string, opts ...RequestOption) (*Request, error)
+func NewResponseReader(resp *http.Response) *ResponseReader
+func NewRetryBudget(ratio, minPerSec float64) *RetryBudget
+func NewTokenBucket(rps float64, burst int) *TokenBucket
+func ParseError(command string, err error) error
+func Query(key, value string) RequestOption
+func RateLimiter(l Limiter) Middleware
+func ReaderBody(r io.Reader) options.BodySource
+func RedactCommand(cmd string) string
+func RedactHeaders(headers map[string][]string) map[string][]string
+func RedactURL(raw string) string
+func RequestError(url string, err error) error
+func ResponseError(url string, err error) error
+func RetryError(url string, attempts int, err error) error
+func RoundTripperFromHandler(h Handler) http.RoundTripper
+func SSRFGuard(policy SSRFPolicy) Middleware
+func SaveCookiesToFile(filePath string, cookies []*http.Cookie) error
+func ServerStatusError(url string, status int) error
+func Stream(src options.BodySource) RequestOption
+func String(k, v string) Field
+func StringBody(s string) options.BodySource
+func TLSError(url string, err error) error
+func TimeoutError(url string, err error) error
+func ValidationError(field string, err error) error
+func WithAllowInsecureAuth(allow bool) Option
+func WithCircuitBreaker(cfg BreakerConfig) Option
+func WithConnectTimeout(d time.Duration) Option
+func WithCookieFile(path string) Option
+func WithDefaultHeader(key, value string) Option
+func WithExpectContinueTimeout(d time.Duration) Option
+func WithFailOnStatus(fail bool) Option
+func WithFollowRedirects(follow bool) Option
+func WithHTTP2(enabled bool) Option
+func WithHTTP2Only(allowCleartext bool) Option
+func WithHooks(h Hooks) Option
+func WithIdleConnTimeout(d time.Duration) Option
+func WithInsecure(insecure bool) Option
+func WithLogger(l Logger) Option
+func WithMaxConnsPerHost(n int) Option
+func WithMaxIdleConns(n int) Option
+func WithMaxIdleConnsPerHost(n int) Option
+func WithMaxRedirects(n int) Option
+func WithMaxReplayBytes(n int64) Option
+func WithMetrics(m Metrics) Option
+func WithMiddleware(mw ...Middleware) Option
+func WithProxy(proxyURL string) Option
+func WithRateLimit(rps float64, burst int) Option
+func WithRedirectPolicy(p RedirectPolicy) Option
+func WithRequestIDFunc(fn func() string) Option
+func WithResponseHeaderTimeout(d time.Duration) Option
+func WithRetry(p RetryPolicy) Option
+func WithRetryAttempts(n int) Option
+func WithRetryBudget(ratio, minPerSec float64) Option
+func WithSSRFGuard(policy SSRFPolicy) Option
+func WithTLSConfig(cfg *tls.Config) Option
+func WithTLSHandshakeTimeout(d time.Duration) Option
+func WithTimeout(d time.Duration) Option
+func WithTracer(t Tracer) Option
+func WithTransport(rt http.RoundTripper) Option
+func WithUserAgent(ua string) Option
+type Attempt
+type Backoff
+type BreakerConfig
+type Client
+type Field
+type GocurlError
+type Handler
+type Hooks
+type Kind
+type Level
+type Limiter
+type Logger
+type Metrics
+type Middleware
+type MultipartFile
+type Option
+type PersistentCookieJar
+type RedirectPolicy
+type Request
+type RequestInfo
+type RequestOption
+type ResponseReader
+type ResultInfo
+type RetryBudget
+type RetryPolicy
+type SSRFPolicy
+type Span
+type TokenBucket
+type Tracer
+type Variables
+var ErrBodyRead
+var ErrCanceled
+var ErrCircuitOpen
+var ErrConnect
+var ErrParse
+var ErrRetryExhausted
+var ErrSSRFBlocked
+var ErrServerStatus
+var ErrTLS
+var ErrTimeout
+var ErrTooManyRedirects
+var ErrValidation
+var VerboseWriter
+var Version

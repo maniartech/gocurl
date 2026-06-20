@@ -70,6 +70,21 @@ Fuzz targets must never panic; minimized crashers are committed under `testdata/
 as permanent regression seeds. CI enforces a coverage floor (75% overall, measured
 with `-coverpkg=./...`) and a 30s fuzz smoke per target.
 
+## Public API surface
+
+The root package's exported surface is locked by a golden file, `api.txt`, guarded by
+`TestAPISurface`. Any added, removed, or re-signatured export fails the test until you
+regenerate the golden **and** note the change in `CHANGELOG.md`:
+
+```bash
+GOCURL_UPDATE_API=1 go test -run TestAPISurface .
+```
+
+Keep the surface small and intentional — execution machinery stays unexported. The public
+contract is `Client`/`New`/`Option`, `Prepare`/`Do`/`Request`, the `Curl*` helpers, the
+classified `GocurlError` + `Kind`, the resilience/observability types, and the redaction
+helpers.
+
 ## Code style
 
 - `gofmt` is mandatory — CI fails on any unformatted file. Run `gofmt -w .`.
