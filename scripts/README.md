@@ -4,7 +4,20 @@ Unified testing system for all GoCurl book examples in Part 1 (Foundations) and 
 
 ## Quick Start
 
-### Test All Examples (Recommended)
+### Verify Examples Compile Against the Library (fast, CI-ready)
+```bash
+./scripts/verify-examples.sh          # build-check every example (default)
+./scripts/verify-examples.sh --vet    # also run `go vet`
+```
+`verify-examples.sh` builds the whole `book2/` module in one shot against the local,
+in-tree library (it pins it via `replace => ../`). This is the canonical guard that a
+public-API change does not silently break the documented examples — exactly the
+regression that orphaned the `options` builder when `Execute` was removed. It is
+non-interactive and exits non-zero on any failure, so it can be dropped into CI later.
+Use the launcher below when you want per-example reporting, filters, or to actually
+*run* examples (network calls).
+
+### Test All Examples (per-example launcher)
 ```bash
 ./scripts/test-book-examples.sh
 ```
