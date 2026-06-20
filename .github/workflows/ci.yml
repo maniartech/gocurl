@@ -39,7 +39,10 @@ jobs:
 
       - name: Coverage (floor 75%)
         run: |
-          go test -short -coverpkg=./... -coverprofile=coverage.out ./...
+          # -count=1 is REQUIRED: without it, cached packages reuse stale coverage
+          # profiles and the -coverpkg merge reports an artificially low, variable
+          # total (~76.9% vs the true 80.8%), which can spuriously breach the floor.
+          go test -short -count=1 -coverpkg=./... -coverprofile=coverage.out ./...
           total=$(go tool cover -func=coverage.out | tail -1 | grep -oE '[0-9]+\.[0-9]+' | tail -1)
           echo "Total coverage: ${total}%"
           floor=75.0
