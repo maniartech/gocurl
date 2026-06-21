@@ -96,3 +96,18 @@ jobs:
         with:
           name: competitive-benchmarks
           path: benchcmp/bench-new.txt
+
+  soak:
+    # Scheduled only — the soak loop (both arms) and backpressure test are too slow
+    # for the PR path. GOCURL_SOAK gives each arm a wall-clock budget.
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Soak (2 min/arm) + backpressure
+        env:
+          GOCURL_SOAK: 2m
+        run: go test -run 'TestClient_Soak' -timeout 20m -v .
