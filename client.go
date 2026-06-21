@@ -139,6 +139,17 @@ func redirectFromContext(req *http.Request, via []*http.Request) error {
 // Request is never mutated, so two Clients can reuse one prepared Request without
 // their defaults bleeding into each other or into the template.
 func (c *Client) effectiveOptions(req *Request) *options.RequestOptions {
+	// Fast path: when the Client carries no request-level defaults to merge, the
+	// prepared opts are used verbatim and READ-ONLY on the Do path (createRequest,
+	// validation, and the retry engine never mutate them), so we hand back the shared
+	// pointer directly and skip the per-Do struct copy entirely.
+	cfg := c.cfg
+	if !((req.opts.UserAgent == "" && cfg.userAgent != "") ||
+		(!req.opts.FollowRedirects && cfg.followRedirects) ||
+		cfg.failOnStatus || cfg.allowInsecureAuth || len(cfg.defaultHeaders) > 0) {
+		return req.opts
+	}
+
 	shallow := *req.opts
 	o := &shallow
 	if o.UserAgent == "" && c.cfg.userAgent != "" {
