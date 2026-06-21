@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 )
 
 // Validation constants (configurable for testing)
@@ -163,8 +162,10 @@ func validateQueryParams(params map[string][]string) error {
 func validateSecureAuth(url string, hasBasicAuth bool, hasBearerToken bool, allowInsecure bool) error {
 	// Case-insensitive: net/url lowercases the scheme, so "HTTP://" / "Http://"
 	// travel over plaintext just like "http://". A case-sensitive prefix check
-	// would fail open and send credentials in the clear.
-	if !strings.HasPrefix(strings.ToLower(url), "http://") {
+	// would fail open and send credentials in the clear. We fold only the 7-byte
+	// scheme prefix in place rather than strings.ToLower(url), which would allocate a
+	// full lowercased copy of the URL on every request just to inspect those 7 bytes.
+	if !hasPlaintextHTTPPrefix(url) {
 		return nil // HTTPS (or scheme-relative/other) is not plaintext HTTP
 	}
 
@@ -179,6 +180,28 @@ func validateSecureAuth(url string, hasBasicAuth bool, hasBearerToken bool, allo
 		return fmt.Errorf("Bearer token over HTTP is insecure; use HTTPS, set GOCURL_ALLOW_INSECURE_AUTH=1, or WithAllowInsecureAuth(true)")
 	}
 	return nil
+}
+
+// hasPlaintextHTTPPrefix reports whether url begins with the "http://" scheme,
+// case-insensitively, WITHOUT allocating. strings.ToLower(url) would allocate a full
+// lowercased copy of the URL on every request just to test a 7-byte prefix; URL schemes
+// are ASCII (RFC 3986), so an in-place ASCII case-fold of those 7 bytes is sufficient
+// and equivalent.
+func hasPlaintextHTTPPrefix(url string) bool {
+	const p = "http://"
+	if len(url) < len(p) {
+		return false
+	}
+	for i := 0; i < len(p); i++ {
+		c := url[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if c != p[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // allowInsecureAuth reports whether the GOCURL_ALLOW_INSECURE_AUTH environment
