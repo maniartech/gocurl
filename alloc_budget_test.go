@@ -81,7 +81,10 @@ func TestAllocBudget_Do(t *testing.T) {
 	avg := testing.AllocsPerRun(200, do)
 	t.Logf("Do (round-trip over httptest) allocs/op = %.0f", avg)
 
-	const budget = 100
+	// Ratcheted from 100 to baseline (77, measured after the clone-the-small
+	// optimization) + small headroom. The old 24-alloc slack would have let a
+	// regression hide; raising this needs a one-line justification in the commit.
+	const budget = 88
 	if avg > budget {
 		t.Fatalf("Do allocs/op = %.0f, budget %d (update intentionally if justified)", avg, budget)
 	}

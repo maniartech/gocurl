@@ -119,6 +119,62 @@ benchstat bench.txt   # mean ± variance per arm; compare the two arms' deltas
 
 Record the machine, Go version, and OS alongside any numbers you publish.
 
+## Fairness: identical transport tuning on every arm
+
+A cross-client comparison is only honest if every arm uses the **same** connection-pool
+configuration — otherwise you are benchmarking pool sizes, not client overhead. The
+`net/http` arm uses `benchFairTransport()` (bench_roundtrip_test.go), whose tuning is
+**locked to gocurl's real default Client transport** by
+`TestBenchFairness_DefaultTransportTuning`: `MaxIdleConns=100`, `MaxIdleConnsPerHost=10`,
+`MaxConnsPerHost=0`, `DisableCompression=true`, `ForceAttemptHTTP2=true`. If gocurl's
+defaults ever drift, that guard fails and forces the bench helper (and any published
+numbers) to be updated in lockstep. (An earlier version of this suite ran the `net/http`
+arm at `MaxIdleConnsPerHost=100` against gocurl's `10` — a rigged comparison; the guard
+exists so that can't recur.)
+
+## Competitive comparison (gocurl vs net/http vs resty vs req)
+
+The competitive arms live in a **separate module**, [`benchcmp/`](../benchcmp), so the
+heavy vendor graph (resty, req, quic-go, utls, …) never enters the library's own
+dependency graph — enforced by `TestNoVendorDepsInRootModule`. Every arm runs over one
+shared server with the identical fair transport.
+
+```bash
+cd benchcmp
+go test -run='^$' -bench='BenchmarkCmp' -benchmem -count=10 .
+benchstat ...   # compare arms; a single run is never authoritative
+```
+
+Illustrative single run (Go 1.23, linux/amd64, `-benchtime=3000x`, small JSON body —
+**reproduce with `-count=10` before quoting**):
+
+| Arm | ns/op | B/op | allocs/op |
+|---|---|---|---|
+| net/http (parity bar) | 88,465 | 5,506 | 65 |
+| **gocurl prepared** | 101,283 | 12,884 | 83 |
+| resty | 94,592 | 8,231 | 79 |
+| req | 88,775 | 7,758 | 82 |
+
+**Reading this honestly, including where gocurl loses:**
+
+- **ns/op:** all four are within noise of each other on an in-process server (the wire is
+  free, so this mostly measures per-request CPU). gocurl is competitive, not fastest.
+- **B/op / allocs/op — gocurl is currently the heaviest.** gocurl allocates more per `Do`
+  than net/http (expected — it builds the request from the parsed recipe, composes the
+  middleware chain, and wraps the body for graceful-shutdown accounting) **and** more than
+  resty/req here. This is the honest cost of the resilience/observability machinery being
+  *present on the path* even when inactive. We report it rather than hide it; reducing the
+  per-`Do` byte footprint is tracked as future work. The `clone-the-small` optimization
+  (M12-T2) removed the per-`Do` deep clone of the immutable recipe — see
+  `TestCloneSmall_NoDeepClonePerDo` — but does not close the whole gap.
+- **Caveat (not perfectly apples-to-apples):** resty and req **buffer** the full response
+  body by default; gocurl **streams** it. For a tiny body this favors the bufferers
+  slightly; for large responses gocurl's streaming is the safer default. The harness drains
+  every arm, but the body-handling models differ by design.
+
+The takeaway matches our claim policy: **parity on latency, with honest, disclosed
+allocation overhead** — never a superiority claim.
+
 ## The soak/leak tests are elsewhere
 
 Goroutine-leak, connection-reuse, and the bounded soak loop live with the quality suite
