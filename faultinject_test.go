@@ -340,6 +340,45 @@ func TestFault_CircuitBreakerTrips(t *testing.T) {
 	}
 }
 
+// TestFault_ShutdownWaitsForOpenBody proves graceful Shutdown does not complete while
+// a response body is still open — otherwise a drain-on-deploy would truncate live
+// streams (SSE/downloads) under exactly the load it is meant to protect.
+func TestFault_ShutdownWaitsForOpenBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("hello"))
+	}))
+	defer srv.Close()
+
+	client, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	resp, err := client.Curl(context.Background(), "curl "+srv.URL)
+	if err != nil {
+		t.Fatalf("Curl: %v", err)
+	}
+
+	shutdownDone := make(chan struct{})
+	go func() { client.Shutdown(context.Background()); close(shutdownDone) }()
+
+	// The body is still open, so Shutdown must block (the request is in-flight).
+	select {
+	case <-shutdownDone:
+		t.Fatal("Shutdown completed while a response body was still open (truncation risk)")
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+
+	// Now that the body is closed, Shutdown must complete promptly.
+	select {
+	case <-shutdownDone:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Shutdown did not complete after the body was closed")
+	}
+}
+
 // TestFault_NoGoroutineLeakUnderStorm runs a storm of mixed failures and successes
 // through a reused Client and asserts the goroutine count returns to baseline —
 // the mission-critical "no leak under failure" invariant.
