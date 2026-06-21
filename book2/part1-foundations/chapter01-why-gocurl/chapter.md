@@ -202,7 +202,7 @@ Your workflow involves testing APIs with curl first, then converting working com
 **Example:** Building a monitoring tool that queries multiple REST endpoints.
 
 **4. High-Volume API Clients**
-Your application makes thousands of API calls per second. GoCurl's zero-allocation architecture provides better performance than standard `net/http` usage patterns.
+Your application makes thousands of API calls per second. GoCurl's "parse once, execute many" model (`Prepare` a request once, `Do` it many times over a pooled `Client`) keeps per-request overhead thin and constant — **parity** with a well-tuned `net/http` client, never a "faster than net/http" claim (GoCurl is *built on* `net/http`). The performance is measured honestly against the competition in [docs/benchmarking.md](../../../docs/benchmarking.md), losses included.
 
 **Example:** A metrics aggregation service polling hundreds of microservices.
 
@@ -649,45 +649,40 @@ These examples demonstrate GoCurl's versatility across modern API integrations:
 
 Performance matters when building production systems. Let's compare GoCurl against standard `net/http` approaches.
 
-### Benchmark Setup
+### The honest claim: parity, not superiority
 
-We'll test three scenarios:
-1. **Standard net/http**: Manual request construction
-2. **GoCurl Curl-syntax**: Using `CurlString()`
-3. **GoCurl Builder**: Using `RequestOptionsBuilder`
+GoCurl is a thin layer **built on** `net/http`. It therefore **cannot** be faster than the
+`net/http` client it wraps, and we never claim it is. What we claim — and measure — is:
 
-Test endpoint: `https://httpbin.org/get` (500 requests)
+- **Parity**: a prepared request executed over a pooled `Client` adds only thin, constant
+  overhead above a bare `net/http` round-trip.
+- **Ergonomics + reliability**: you get the curl-paste workflow and a proven production
+  pipeline for that small, honest overhead.
 
-### Results
+### How it's measured
 
-```
-Benchmark_StandardHTTP-8    500    2,450 ns/op    1,248 B/op    18 allocs/op
-Benchmark_GoCurlSyntax-8    500    2,380 ns/op      856 B/op    12 allocs/op
-Benchmark_GoCurlBuilder-8   500    2,290 ns/op      640 B/op     9 allocs/op
-```
+The suite runs every arm — `net/http` (the parity bar), GoCurl prepared, GoCurl
+per-call-parse, and popular clients (`resty`, `req`) — over **one shared in-process
+`httptest` server** with **identical** transport tuning (enforced by a guard test), and
+reports p50/p99/p999 latency plus allocations. No real-network endpoints (they'd be
+unreproducible), no cherry-picked numbers.
 
-**Analysis:**
+The results — **including where GoCurl loses** — live in
+[docs/benchmarking.md](../../../docs/benchmarking.md). At the time of writing, GoCurl is at
+latency parity with `net/http` and is the *heaviest* arm on bytes-per-op (the honest cost of
+the resilience/observability machinery being present on the path); we publish that rather
+than hide it. The `clone-the-small` optimization removed the per-`Do` deep clone of the
+immutable recipe — see `TestCloneSmall_NoDeepClonePerDo` — and the `Do` allocation budget is
+guarded by `TestAllocBudget_Do`.
 
-- **GoCurl Curl-syntax**: ~3% faster, 31% fewer allocations
-- **GoCurl Builder**: ~7% faster, 49% fewer allocations
-- **Both**: Significantly less memory per operation
+### Where the real developer win is
 
-### Why Is GoCurl Faster?
-
-1. **Zero-allocation tokenization**: Curl command parsing reuses buffers
-2. **Optimized header handling**: Headers are built efficiently without intermediate copies
-3. **Request pooling**: Internal connection pooling optimized for high-volume use
-4. **Lazy initialization**: Resources allocated only when needed
-
-### Real-World Impact
-
-In a microservice making 10,000 API calls per second:
-
-- **Memory savings**: ~6 MB/sec less garbage (640B vs 1248B per request)
-- **GC pressure**: Reduced garbage collection pauses
-- **Throughput**: Higher requests/second on same hardware
-
-**For high-volume applications, these savings compound significantly.**
+The win is **not** raw speed — it's the **execution pipeline**. Hand-rolled `net/http`
+forces you to re-derive, per service, an overall-timeout-across-retries, idempotency-aware
+retries, error classification, secret redaction, and memory bounds — and to keep all of it
+correct as the code changes. Because GoCurl has the **curl recipe**, it knows your intent and
+assembles that pipeline for you, proven correct by a fault-injection harness. That is the
+comparative reason to choose GoCurl, and it does not depend on a single nanosecond.
 
 ---
 

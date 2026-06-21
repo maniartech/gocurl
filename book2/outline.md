@@ -30,7 +30,7 @@
 ### What You'll Learn
 - **Copy curl commands** from API docs → working Go code
 - **Two approaches**: CLI-syntax AND programmatic builder pattern
-- Build **high-performance** API clients (zero-allocation architecture)
+- Build API clients at **parity** with a well-tuned `net/http` (gocurl is built on it)
 - Implement **production patterns**: security, retries, timeouts, middleware
 - Design **reusable SDK** wrappers
 - **100% API coverage**: Every gocurl function explained
@@ -153,10 +153,10 @@ httpResp, _, err := gocurl.Process(ctx, opts)
    - Use same command in Go
    - Zero translation errors
 
-3. **Zero-Allocation Architecture:**
-   - Faster than standard `net/http`
-   - Optimized for high-volume use
-   - Memory efficient
+3. **Parity, honestly measured:**
+   - Built on `net/http`; targets parity, never "faster than net/http"
+   - "Parse once, execute many" keeps per-request overhead thin and constant
+   - Measured against the competition with losses included (docs/benchmarking.md)
 
 4. **Production-Ready:**
    - Built-in retries with exponential backoff
@@ -406,9 +406,10 @@ fmt.Println(body)
 
 ### Performance Comparison (4 pages)
 
-**Zero-Allocation Architecture:**
+**Parity with net/http, measured honestly:**
 
-Gocurl minimizes memory allocations for high-volume scenarios.
+Gocurl targets parity with a well-tuned `net/http` client (it is built on it) and reports
+results — including where it loses — over a shared server with identical transport tuning.
 
 **Benchmark Example:**
 
