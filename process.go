@@ -65,8 +65,10 @@ func doRequest(ctx context.Context, opts *options.RequestOptions) (*http.Respons
 	}
 
 	// The one-shot path has no Client, so only the legacy options.RetryConfig
-	// (method-agnostic, also set by the --retry flag) can drive retries here.
-	resp, err := executeWithRetries(httpClient, req, opts, legacyPolicyFromRetryConfig(opts.RetryConfig), newRand())
+	// (method-agnostic, also set by the --retry flag) can drive retries here. The
+	// jitter *rand.Rand is created lazily inside executeWithRetries only when a retry
+	// runs (a per-Do newRand() would allocate ~4.9 KiB of RNG state for nothing).
+	resp, err := executeWithRetries(httpClient, req, opts, legacyPolicyFromRetryConfig(opts.RetryConfig), nil)
 	if err != nil {
 		return nil, wrapTransportError(opts.URL, err)
 	}

@@ -671,13 +671,16 @@ per-call-parse, and popular clients (`resty`, `req`) — over **one shared in-pr
 reports p50/p99/p999 latency plus allocations. No real-network endpoints (they'd be
 unreproducible), no cherry-picked numbers.
 
-The results — **including where GoCurl loses** — live in
+The results — **wins and losses alike** — live in
 [docs/benchmarking.md](../../../docs/benchmarking.md). At the time of writing, GoCurl is at
-latency parity with `net/http` and is the *heaviest* arm on bytes-per-op (the honest cost of
-the resilience/observability machinery being present on the path); we publish that rather
-than hide it. The `clone-the-small` optimization removed the per-`Do` deep clone of the
-immutable recipe — see `TestCloneSmall_NoDeepClonePerDo` — and the `Do` allocation budget is
-guarded by `TestAllocBudget_Do`.
+latency parity with `net/http` and carries a *smaller* per-request byte footprint than the
+thinner wrappers resty and req — behind only raw `net/http`. That was not always true: an
+earlier run had GoCurl as the heaviest arm, and we published that loss; profiling then found
+a per-`Do` RNG allocation (~4.9 KiB) that ran even without retries, and making it lazy closed
+the gap. The win is regression-guarded by `TestByteBudget_Do`, and `clone-the-small`
+(`TestCloneSmall_NoDeepClonePerDo`) removed the per-`Do` deep clone of the recipe. This is the
+motto in action: we found the regression by *measuring*, fixed it, and let the test keep us
+honest — not by tuning a marketing number.
 
 ### Where the real developer win is
 

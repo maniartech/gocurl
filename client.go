@@ -292,10 +292,13 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 
 	// Resolve the effective retry policy (per-request override > Client default >
 	// legacy RetryConfig), then build the base handler: the retry engine over the
-	// Client's owned http.Client, with a per-request *rand.Rand for jitter.
+	// Client's owned http.Client. The per-request *rand.Rand for jitter is created
+	// LAZILY inside executeWithRetries only when a retry actually runs — passing it
+	// here would allocate ~4.9 KiB of RNG state (a [607]int64 rngSource) on every Do,
+	// even the overwhelmingly common no-retry path.
 	policy := c.resolveRetryPolicy(req, opts)
 	base := Handler(func(hr *http.Request) (*http.Response, error) {
-		return executeWithRetries(c.httpClient, hr, opts, policy, newRand())
+		return executeWithRetries(c.httpClient, hr, opts, policy, nil)
 	})
 	// Compose, outermost-first: instrumentation -> circuit breaker -> rate limiter
 	// -> user middleware -> retry loop. Instrumentation is outermost so its span
