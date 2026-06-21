@@ -482,6 +482,26 @@ func TestFault_ClientRedirectCapClassifiable(t *testing.T) {
 	}
 }
 
+// TestFault_NoSecretLeakOnFailurePaths proves the failure paths (incl. the new error
+// wraps for retry-exhaustion) keep redacting secrets: a URL credential must never appear
+// in the error a caller sees. Cross-cutting guarantee for every new fmt.Errorf wrap.
+func TestFault_NoSecretLeakOnFailurePaths(t *testing.T) {
+	t.Setenv("GOCURL_ALLOW_INSECURE_AUTH", "1")
+	const secret = "s3cr3t-token-xyz"
+
+	rt := newFaultyRT(stepErr(connResetErr())) // always fails -> retry exhausted
+	client := faultClient(t, rt, WithRetry(RetryPolicy{MaxAttempts: 2, Backoff: ConstantBackoff(0)}))
+
+	resp, err := client.Curl(context.Background(), "curl http://user:"+secret+"@fault.test/")
+	drain(resp)
+	if err == nil {
+		t.Fatal("expected a retry-exhausted error")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Errorf("URL credential leaked on the failure path: %v", err)
+	}
+}
+
 // TestFault_EasyCurlStillWorks is the "easy as curl" invariant: after all the
 // production hardening, the zero-config one-liner against a healthy server still
 // just works.
