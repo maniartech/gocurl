@@ -198,7 +198,12 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	}
 	c.inflight.Add(1)
 	c.mu.Unlock()
-	defer c.inflight.Done()
+	// Release inflight when the request is truly finished — on any error return below,
+	// or (on success) when the caller closes the response body. A plain `defer Done()`
+	// fires on Do RETURN while the body is still streaming, so a graceful Shutdown could
+	// tear the connection down mid-stream. sync.Once keeps it exactly-once.
+	var inflightOnce sync.Once
+	finish := func() { inflightOnce.Do(c.inflight.Done) }
 
 	if ctx == nil {
 		ctx = context.Background()
@@ -206,6 +211,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 
 	opts := c.effectiveOptions(req)
 	if err := validateOptions(opts); err != nil {
+		finish()
 		return nil, err
 	}
 
@@ -223,6 +229,14 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	if overall > 0 {
 		ctx, cancel = context.WithTimeout(ctx, overall)
 	}
+	// release tears down a half-started request: cancel the per-request context and
+	// release inflight. Used on every error path after this point.
+	release := func() {
+		if cancel != nil {
+			cancel()
+		}
+		finish()
+	}
 
 	ctx = withRedirectSettings(ctx, redirectSettings{
 		follow: opts.FollowRedirects,
@@ -232,18 +246,14 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 
 	httpReq, err := createRequest(ctx, opts)
 	if err != nil {
-		if cancel != nil {
-			cancel()
-		}
+		release()
 		return nil, err
 	}
 
 	// Legacy request-mutating middleware on the prepared request still runs.
 	httpReq, err = applyMiddleware(httpReq, opts.Middleware)
 	if err != nil {
-		if cancel != nil {
-			cancel()
-		}
+		release()
 		return nil, err
 	}
 
@@ -266,9 +276,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	allMW = append(allMW, c.mw...)
 	resp, err := chain(base, allMW...)(httpReq)
 	if err != nil {
-		if cancel != nil {
-			cancel()
-		}
+		release()
 		return nil, wrapTransportError(opts.URL, err)
 	}
 
@@ -277,9 +285,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	if opts.Compress {
 		if derr := decompressResponse(resp); derr != nil {
 			resp.Body.Close()
-			if cancel != nil {
-				cancel()
-			}
+			release()
 			return nil, fmt.Errorf("failed to decompress response: %w", derr)
 		}
 	}
@@ -288,9 +294,10 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	if opts.ResponseBodyLimit > 0 {
 		body = newLimitedBody(body, opts.ResponseBodyLimit)
 	}
-	// Ensure a per-request context (--max-time) is cancelled once the body is
-	// fully consumed/closed, without truncating the stream early.
-	resp.Body = &cancelOnCloseBody{ReadCloser: body, cancel: cancel}
+	// A live body is now returned to the caller: release the per-request context AND
+	// the inflight count when the caller closes it — NOT on Do return — so Shutdown
+	// waits for in-flight streams instead of truncating them.
+	resp.Body = &cancelOnCloseBody{ReadCloser: body, cancel: cancel, done: finish}
 
 	// Fail-on-status (opt-in): a >=400 response becomes a typed error, but the
 	// live response is still returned so the caller can read the error body.
@@ -300,17 +307,23 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	return resp, nil
 }
 
-// cancelOnCloseBody calls cancel when the body is closed, releasing a per-request
-// timeout context without cutting the stream short.
+// cancelOnCloseBody releases per-request resources when the body is closed —
+// without cutting the stream short. On Close it cancels the per-request timeout
+// context and (done) decrements the Client's in-flight count, so a request stays
+// in-flight until its body is closed and a graceful Shutdown never truncates it.
 type cancelOnCloseBody struct {
 	io.ReadCloser
 	cancel context.CancelFunc
+	done   func()
 }
 
 func (b *cancelOnCloseBody) Close() error {
 	err := b.ReadCloser.Close()
 	if b.cancel != nil {
 		b.cancel()
+	}
+	if b.done != nil {
+		b.done()
 	}
 	return err
 }
