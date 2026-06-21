@@ -4,6 +4,10 @@ on:
   push:
     branches: [master, main]
   pull_request:
+  schedule:
+    # Competitive benchmarks (resty/req) run weekly, off the PR path, since they
+    # pull a heavy vendor graph and the numbers are diagnostic, not a merge gate.
+    - cron: '0 6 * * 1'
 
 jobs:
   build-test:
@@ -69,3 +73,26 @@ jobs:
           go-version: '1.23.x'
       - name: Benchmark smoke (no -race, run once)
         run: go test -run='^$' -bench=. -benchmem -benchtime=1x ./...
+
+  competitive-benchmarks:
+    # Scheduled only (cron) — never on PRs. Runs the separate benchcmp module's
+    # gocurl-vs-net/http-vs-resty-vs-req arms over the shared fair transport and
+    # publishes the numbers as a workflow artifact. allocs/B regressions on
+    # gocurl's OWN path are gated in the normal test job (TestAllocBudget_Do);
+    # this job is the cross-client diagnostic that backs docs/benchmarking.md.
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Run competitive arms (count=10)
+        working-directory: benchcmp
+        run: |
+          go test -run='^$' -bench='BenchmarkCmp' -benchmem -count=10 . | tee bench-new.txt
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: competitive-benchmarks
+          path: benchcmp/bench-new.txt

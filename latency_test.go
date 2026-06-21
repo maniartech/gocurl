@@ -13,9 +13,12 @@ import (
 )
 
 // TestLatencyDistribution reports closed-loop p50/p90/p99/p999 latency over a
-// fixed number of sequential Do calls against an httptest server. testing.B
-// reports only mean ns/op, so this fills the percentile gap. It is informational
-// (pass/fail only on request error) and skipped in -short.
+// fixed number of sequential requests against one httptest server, for BOTH the
+// net/http baseline and gocurl prepared — so the tail-latency comparison is
+// apples-to-apples (both arms use the identical fair transport tuning via
+// benchFairTransport). testing.B reports only mean ns/op, so this fills the
+// percentile gap. It is informational (pass/fail only on request error; wall-clock
+// on a shared runner is noisy) and skipped in -short.
 //
 //	go test -run TestLatencyDistribution -v .
 func TestLatencyDistribution(t *testing.T) {
@@ -28,7 +31,20 @@ func TestLatencyDistribution(t *testing.T) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
+	ctx := context.Background()
 
+	// Arm 1: net/http baseline (the parity bar), fair transport.
+	nh := &http.Client{Transport: benchFairTransport()}
+	nhRun := func() {
+		resp, err := nh.Get(srv.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
+
+	// Arm 2: gocurl prepared, executed over the pooled Client.
 	c, err := gocurl.New()
 	if err != nil {
 		t.Fatal(err)
@@ -38,34 +54,38 @@ func TestLatencyDistribution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := context.Background()
-
-	do := func() time.Duration {
-		start := time.Now()
+	gcRun := func() {
 		resp, err := c.Do(ctx, req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
-		return time.Since(start)
 	}
-	do() // warm up the cached transport
 
-	const N = 2000
-	samples := make([]time.Duration, 0, N)
-	for i := 0; i < N; i++ {
-		samples = append(samples, do())
-	}
-	sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
-
-	pct := func(q float64) time.Duration {
-		idx := int(float64(len(samples)) * q)
-		if idx >= len(samples) {
-			idx = len(samples) - 1
+	const N = 5000
+	for _, arm := range []struct {
+		name string
+		run  func()
+	}{{"net/http", nhRun}, {"gocurl_prepared", gcRun}} {
+		for i := 0; i < 200; i++ { // warm up the pool
+			arm.run()
 		}
-		return samples[idx]
+		samples := make([]time.Duration, N)
+		for i := 0; i < N; i++ {
+			start := time.Now()
+			arm.run()
+			samples[i] = time.Since(start)
+		}
+		sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
+		pct := func(q float64) time.Duration {
+			idx := int(float64(len(samples)) * q)
+			if idx >= len(samples) {
+				idx = len(samples) - 1
+			}
+			return samples[idx]
+		}
+		t.Logf("%-16s closed-loop latency over %d reqs: p50=%v p90=%v p99=%v p999=%v (min=%v max=%v)",
+			arm.name, N, pct(0.50), pct(0.90), pct(0.99), pct(0.999), samples[0], samples[len(samples)-1])
 	}
-	t.Logf("closed-loop Do latency over %d requests: p50=%v p90=%v p99=%v p999=%v (min=%v max=%v)",
-		N, pct(0.50), pct(0.90), pct(0.99), pct(0.999), samples[0], samples[len(samples)-1])
 }
