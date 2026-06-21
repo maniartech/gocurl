@@ -148,35 +148,39 @@ go test -run='^$' -bench='BenchmarkCmp' -benchmem -count=10 .
 benchstat ...   # compare arms; a single run is never authoritative
 ```
 
-Illustrative single run (Go 1.23, linux/amd64, `-benchtime=3000x`, small JSON body —
-**reproduce with `-count=10` before quoting**):
+Representative medians (`-count=6 -benchtime=5000x`, Windows/amd64, Go 1.23, small JSON
+body — **reproduce on your own hardware before quoting**):
 
 | Arm | ns/op | B/op | allocs/op |
 |---|---|---|---|
-| net/http (parity bar) | 88,465 | 5,506 | 65 |
-| **gocurl prepared** | 101,283 | 12,884 | 83 |
-| resty | 94,592 | 8,231 | 79 |
-| req | 88,775 | 7,758 | 82 |
+| net/http (parity bar) | ~88,500 | 5,484 | 65 |
+| **gocurl prepared** | **~91,000** | **7,393** | 81 |
+| resty | ~91,500 | 8,300 | 79 |
+| req | ~93,000 | 7,765 | 82 |
 
-**Reading this honestly, including where gocurl loses:**
+**Reading this honestly:**
 
-- **ns/op:** all four are within noise of each other on an in-process server (the wire is
-  free, so this mostly measures per-request CPU). gocurl is competitive, not fastest.
-- **B/op / allocs/op — gocurl is currently the heaviest.** gocurl allocates more per `Do`
-  than net/http (expected — it builds the request from the parsed recipe, composes the
-  middleware chain, and wraps the body for graceful-shutdown accounting) **and** more than
-  resty/req here. This is the honest cost of the resilience/observability machinery being
-  *present on the path* even when inactive. We report it rather than hide it; reducing the
-  per-`Do` byte footprint is tracked as future work. The `clone-the-small` optimization
-  (M12-T2) removed the per-`Do` deep clone of the immutable recipe — see
-  `TestCloneSmall_NoDeepClonePerDo` — but does not close the whole gap.
+- **ns/op:** all four are within noise on an in-process server (the wire is free, so this
+  mostly measures per-request CPU). gocurl is at parity with `net/http` and marginally ahead
+  of resty/req here — *parity is the claim; we do not claim to beat `net/http`*.
+- **B/op — gocurl is the lightest of the three full-featured clients** (7,393, below req's
+  7,765 and resty's 8,300), behind only raw `net/http`. This was *not* always true: an
+  earlier version of this suite measured gocurl at ~12,900 B/op (the heaviest arm), and we
+  published that loss. Profiling found the cause — a per-`Do` `newRand()` allocated a
+  ~4.9 KiB `[607]int64` RNG state on **every** request even when no retry ran. Making the
+  jitter RNG lazy (created only when a retry actually needs it) removed it; the win is
+  guarded by `TestByteBudget_Do` so it cannot regress. Combined with `clone-the-small`
+  (`TestCloneSmall_NoDeepClonePerDo`), gocurl now carries its full resilience pipeline for a
+  smaller per-`Do` footprint than the thinner wrappers.
+- **allocs/op:** gocurl (81) sits between resty (79) and req (82) — effectively tied.
 - **Caveat (not perfectly apples-to-apples):** resty and req **buffer** the full response
-  body by default; gocurl **streams** it. For a tiny body this favors the bufferers
-  slightly; for large responses gocurl's streaming is the safer default. The harness drains
-  every arm, but the body-handling models differ by design.
+  body by default; gocurl **streams** it. For a tiny body this slightly favors the bufferers;
+  for large responses gocurl's streaming is the safer default. The harness drains every arm,
+  but the body-handling models differ by design.
 
-The takeaway matches our claim policy: **parity on latency, with honest, disclosed
-allocation overhead** — never a superiority claim.
+The takeaway matches our claim policy: **parity with `net/http` on latency, and a lighter
+per-request footprint than resty/req** — measured, reproducible, and regression-guarded,
+never a marketing claim.
 
 ## The soak/leak tests are elsewhere
 
