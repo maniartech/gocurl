@@ -25,6 +25,11 @@ var (
 	transportCache = map[string]*http.Transport{}
 )
 
+// maxResponseHeaderBytes caps the response header block a server may send (net/http's
+// default is 10 MiB). Tightened to bound memory against an untrusted server that floods
+// the client with headers; legitimate APIs send far less.
+const maxResponseHeaderBytes = 1 << 20 // 1 MiB
+
 // getRoundTripper returns the round tripper for opts, reusing a cached transport
 // when the configuration is cacheable (no proxy, no opaque custom *tls.Config,
 // not HTTP/2-only).
@@ -90,17 +95,18 @@ func (c *config) buildTransport() (http.RoundTripper, error) {
 
 	dialer := &net.Dialer{Timeout: c.connectTimeout, KeepAlive: 30 * time.Second}
 	t := &http.Transport{
-		TLSClientConfig:       tlsConfig,
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           dialer.DialContext,
-		ForceAttemptHTTP2:     c.http2,
-		MaxIdleConns:          c.maxIdleConns,
-		MaxIdleConnsPerHost:   c.maxIdleConnsPerHost,
-		MaxConnsPerHost:       c.maxConnsPerHost,
-		IdleConnTimeout:       c.idleConnTimeout,
-		TLSHandshakeTimeout:   c.tlsHandshakeTimeout,
-		ResponseHeaderTimeout: c.responseHeaderTimeout,
-		ExpectContinueTimeout: c.expectContinueTimeout,
+		TLSClientConfig:        tlsConfig,
+		Proxy:                  http.ProxyFromEnvironment,
+		DialContext:            dialer.DialContext,
+		ForceAttemptHTTP2:      c.http2,
+		MaxResponseHeaderBytes: maxResponseHeaderBytes,
+		MaxIdleConns:           c.maxIdleConns,
+		MaxIdleConnsPerHost:    c.maxIdleConnsPerHost,
+		MaxConnsPerHost:        c.maxConnsPerHost,
+		IdleConnTimeout:        c.idleConnTimeout,
+		TLSHandshakeTimeout:    c.tlsHandshakeTimeout,
+		ResponseHeaderTimeout:  c.responseHeaderTimeout,
+		ExpectContinueTimeout:  c.expectContinueTimeout,
 		// Decompress manually (curl semantics: only when --compressed) so the
 		// Client's decompression path owns it.
 		DisableCompression: true,
@@ -120,14 +126,15 @@ func (c *config) buildTransport() (http.RoundTripper, error) {
 // when requested.
 func newTransport(opts *options.RequestOptions, tlsConfig *tls.Config) (*http.Transport, error) {
 	t := &http.Transport{
-		TLSClientConfig:       tlsConfig,
-		Proxy:                 http.ProxyFromEnvironment,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   10,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig:        tlsConfig,
+		Proxy:                  http.ProxyFromEnvironment,
+		ForceAttemptHTTP2:      true,
+		MaxResponseHeaderBytes: maxResponseHeaderBytes,
+		MaxIdleConns:           100,
+		MaxIdleConnsPerHost:    10,
+		IdleConnTimeout:        90 * time.Second,
+		TLSHandshakeTimeout:    10 * time.Second,
+		ExpectContinueTimeout:  1 * time.Second,
 	}
 
 	configureCompressionForTransport(t, opts.Compress)

@@ -216,6 +216,28 @@ func CurlArgsWithVars(ctx context.Context, vars Variables, args ...string) (*htt
 // CONVENIENCE FUNCTIONS - Auto-read body
 // ============================================================================
 
+// defaultBufferedResponseLimit bounds how many bytes the convenience helpers that
+// buffer the WHOLE response in memory (Curl{String,Bytes,JSON}) will read. It defends
+// against a decompression bomb — a tiny --compressed payload inflating to gigabytes —
+// turning a buffered read into an OOM. STREAMING consumers (Curl, CurlDownload) are
+// deliberately NOT bounded: they control their own memory. To buffer more than this,
+// stream the body yourself. A var so tests can shrink it.
+var defaultBufferedResponseLimit int64 = 64 << 20 // 64 MiB
+
+// readBounded reads all of r but fails with a classifiable KindBodyRead error once
+// max bytes are exceeded, so a buffering helper can never be forced to allocate an
+// unbounded amount of memory from an untrusted (possibly bomb) response.
+func readBounded(r io.Reader, max int64) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > max {
+		return nil, BodyReadError("", fmt.Errorf("response body exceeds the %d-byte buffered-read limit; stream it instead", max))
+	}
+	return b, nil
+}
+
 // CurlString executes request and returns body as string + response
 func CurlString(ctx context.Context, command ...string) (string, *http.Response, error) {
 	resp, err := Curl(ctx, command...)
@@ -224,9 +246,9 @@ func CurlString(ctx context.Context, command ...string) (string, *http.Response,
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBounded(resp.Body, defaultBufferedResponseLimit)
 	if err != nil {
-		return "", resp, fmt.Errorf("failed to read response body: %w", err)
+		return "", resp, err
 	}
 
 	return string(body), resp, nil
@@ -240,9 +262,9 @@ func CurlStringCommand(ctx context.Context, command string) (string, *http.Respo
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBounded(resp.Body, defaultBufferedResponseLimit)
 	if err != nil {
-		return "", resp, fmt.Errorf("failed to read response body: %w", err)
+		return "", resp, err
 	}
 
 	return string(body), resp, nil
@@ -256,9 +278,9 @@ func CurlStringArgs(ctx context.Context, args ...string) (string, *http.Response
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBounded(resp.Body, defaultBufferedResponseLimit)
 	if err != nil {
-		return "", resp, fmt.Errorf("failed to read response body: %w", err)
+		return "", resp, err
 	}
 
 	return string(body), resp, nil
@@ -272,9 +294,9 @@ func CurlBytes(ctx context.Context, command ...string) ([]byte, *http.Response, 
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBounded(resp.Body, defaultBufferedResponseLimit)
 	if err != nil {
-		return nil, resp, fmt.Errorf("failed to read response body: %w", err)
+		return nil, resp, err
 	}
 
 	return body, resp, nil
@@ -288,9 +310,9 @@ func CurlBytesCommand(ctx context.Context, command string) ([]byte, *http.Respon
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBounded(resp.Body, defaultBufferedResponseLimit)
 	if err != nil {
-		return nil, resp, fmt.Errorf("failed to read response body: %w", err)
+		return nil, resp, err
 	}
 
 	return body, resp, nil
@@ -304,9 +326,9 @@ func CurlBytesArgs(ctx context.Context, args ...string) ([]byte, *http.Response,
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBounded(resp.Body, defaultBufferedResponseLimit)
 	if err != nil {
-		return nil, resp, fmt.Errorf("failed to read response body: %w", err)
+		return nil, resp, err
 	}
 
 	return body, resp, nil
@@ -320,7 +342,7 @@ func CurlJSON(ctx context.Context, v interface{}, command ...string) (*http.Resp
 	}
 	defer resp.Body.Close()
 
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, defaultBufferedResponseLimit+1)).Decode(v); err != nil {
 		return resp, fmt.Errorf("failed to decode JSON: %w", err)
 	}
 
@@ -335,7 +357,7 @@ func CurlJSONCommand(ctx context.Context, v interface{}, command string) (*http.
 	}
 	defer resp.Body.Close()
 
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, defaultBufferedResponseLimit+1)).Decode(v); err != nil {
 		return resp, fmt.Errorf("failed to decode JSON: %w", err)
 	}
 
@@ -350,7 +372,7 @@ func CurlJSONArgs(ctx context.Context, v interface{}, args ...string) (*http.Res
 	}
 	defer resp.Body.Close()
 
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, defaultBufferedResponseLimit+1)).Decode(v); err != nil {
 		return resp, fmt.Errorf("failed to decode JSON: %w", err)
 	}
 
