@@ -7,6 +7,8 @@ import (
 	"net"
 	"regexp"
 	"strings"
+
+	"golang.org/x/net/http2"
 )
 
 // Kind classifies a GocurlError. It is the machine-readable discriminator that
@@ -157,6 +159,20 @@ func classifyTransportError(err error) Kind {
 	}
 	if isTLSError(err) {
 		return KindTLS
+	}
+
+	// HTTP/2 connection-level failures. h2 is the default TLS path, and a GOAWAY (for
+	// a stream above LastStreamID) or a REFUSED_STREAM reset means the server did not
+	// process the request — so they are connection-level retryable, exactly like a
+	// dropped connection. Neither implements net.Error nor wraps *net.OpError, so they
+	// must be matched explicitly or they fall through to KindUnknown (unretryable).
+	var goAway http2.GoAwayError
+	if errors.As(err, &goAway) {
+		return KindConnect
+	}
+	var streamErr http2.StreamError
+	if errors.As(err, &streamErr) {
+		return KindConnect
 	}
 
 	var dnsErr *net.DNSError
