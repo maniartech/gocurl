@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
 // Fault-injection harness (Spec 14, Phase A / M12-T1).
@@ -204,6 +206,37 @@ func TestFault_OverallRetryBudget(t *testing.T) {
 	// 20 attempts * 80ms backoff would be ~1.6s; the overall budget must cut it off.
 	if elapsed > budget*3 {
 		t.Fatalf("WithTimeout(%v) did not bound the retry loop: elapsed=%v (retry amplifier)", budget, elapsed)
+	}
+}
+
+// TestFault_H2ErrorsRetried proves HTTP/2 connection-level failures (GOAWAY and a
+// refused RST_STREAM) are classified as retryable and an idempotent GET recovers.
+// h2 is the default TLS path, and these errors mean the server did not process the
+// request — so they MUST be retried, like a connection drop.
+func TestFault_H2ErrorsRetried(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"GOAWAY", http2.GoAwayError{LastStreamID: 1, ErrCode: http2.ErrCodeNo}},
+		{"RST_STREAM refused", http2.StreamError{StreamID: 1, Code: http2.ErrCodeRefusedStream}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := classifyTransportError(c.err); got != KindConnect {
+				t.Errorf("classifyTransportError(%T) = %v, want KindConnect", c.err, got)
+			}
+			rt := newFaultyRT(stepErr(c.err), stepStatus(200))
+			client := faultClient(t, rt, WithRetry(RetryPolicy{MaxAttempts: 3, Backoff: ConstantBackoff(0)}))
+			resp, err := client.Curl(context.Background(), "curl http://fault.test/")
+			drain(resp)
+			if err != nil {
+				t.Fatalf("idempotent GET should recover from h2 %s, got: %v", c.name, err)
+			}
+			if rt.calls() != 2 {
+				t.Errorf("calls = %d, want 2 (h2 error then 200)", rt.calls())
+			}
+		})
 	}
 }
 
