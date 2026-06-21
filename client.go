@@ -385,9 +385,9 @@ func (c *Client) CurlString(ctx context.Context, command string) (string, *http.
 		return "", resp, err
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
+	b, err := readBounded(resp.Body, defaultBufferedResponseLimit)
 	if err != nil {
-		return "", resp, fmt.Errorf("failed to read response body: %w", err)
+		return "", resp, err
 	}
 	return string(b), resp, nil
 }
@@ -399,9 +399,9 @@ func (c *Client) CurlBytes(ctx context.Context, command string) ([]byte, *http.R
 		return nil, resp, err
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
+	b, err := readBounded(resp.Body, defaultBufferedResponseLimit)
 	if err != nil {
-		return nil, resp, fmt.Errorf("failed to read response body: %w", err)
+		return nil, resp, err
 	}
 	return b, resp, nil
 }
@@ -413,7 +413,7 @@ func (c *Client) CurlJSON(ctx context.Context, v interface{}, command string) (*
 		return resp, err
 	}
 	defer resp.Body.Close()
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, defaultBufferedResponseLimit+1)).Decode(v); err != nil {
 		return resp, fmt.Errorf("failed to decode JSON: %w", err)
 	}
 	return resp, nil

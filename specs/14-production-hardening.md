@@ -116,15 +116,21 @@ here as a security/spec decision — never silent.
 
 #### A.4 Response-side memory bounds (untrusted server)
 
-- **Decompression bomb (unbounded today).** `buildTransport` sets `DisableCompression=true` (gocurl
-  inflates manually), bypassing net/http's own guard; the decompressed cap applies **only** when
-  `opts.ResponseBodyLimit > 0` (opt-in). With `--compressed` and no explicit limit (the common case),
-  a small gzip inflating to GBs streams uncapped. **Fix:** a conservative **default** decompressed-bytes
-  cap with an explicit opt-out sentinel for SSE/downloads.
-- **Oversized response headers.** `MaxResponseHeaderBytes` is unset (10 MB default); tighten to ~1 MB
-  on every gocurl-built transport.
-- Ship these as one coherent **"untrusted-server memory bounds"** story (ops doc + §A rows), framed
-  honestly: *tighten* existing defaults, except decompression which is genuinely unbounded today.
+- **Decompression bomb (unbounded today) — *landed*.** `DisableCompression=true` (gocurl inflates
+  manually) bypasses net/http's own guard, and the decompressed cap applied **only** when
+  `opts.ResponseBodyLimit > 0` (opt-in) — so `CurlString`/`CurlBytes`/`CurlJSON` on a `--compressed`
+  response with no limit would buffer GBs into memory (OOM). **Design refinement (implementation
+  found a spec gap):** a *transport-level* default cap was rejected because it would break **all**
+  streaming (a raw `Curl` + `io.Copy` proxy, not just `CurlDownload`) and need opt-out plumbing
+  everywhere. Instead, bound exactly what gocurl buffers on the caller's behalf — the convenience
+  helpers — via a shared `readBounded` / a `LimitReader`-wrapped decoder with a `defaultBufferedResponseLimit`
+  (64 MiB, a `var` for tests). STREAMING (`Curl`, `CurlDownload`) is deliberately **unbounded**: the
+  caller controls its own memory, so legitimate large downloads keep working. To buffer more, stream.
+  *Tests: `TestFault_BufferingHelpersBoundedAgainstBomb` (helpers cap; streaming does not).*
+- **Oversized response headers — *landed*.** `MaxResponseHeaderBytes` was unset (10 MB default);
+  tightened to 1 MiB on every gocurl-built transport (`newTransport` + `buildTransport`).
+- One coherent **"untrusted-server memory bounds"** story (ops doc + the above), framed honestly:
+  *tighten* existing defaults; the buffered-helper bound closes the one genuinely unbounded path.
 
 ### Phase B — Execution performance: clone-the-small + competitive proof
 

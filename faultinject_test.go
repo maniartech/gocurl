@@ -414,6 +414,49 @@ func TestFault_NoGoroutineLeakUnderStorm(t *testing.T) {
 	}
 }
 
+// TestFault_BufferingHelpersBoundedAgainstBomb proves the convenience helpers that
+// buffer the whole body (CurlString/CurlBytes/CurlJSON) refuse to allocate past a
+// default cap — defending against a decompression bomb — while STREAMING (Curl,
+// CurlDownload) stays unbounded so legitimate large downloads still work.
+func TestFault_BufferingHelpersBoundedAgainstBomb(t *testing.T) {
+	old := defaultBufferedResponseLimit
+	defaultBufferedResponseLimit = 1024 // 1 KiB cap for the test
+	defer func() { defaultBufferedResponseLimit = old }()
+
+	body := strings.Repeat("A", 8192)                   // 8 KiB > cap (models inflated bomb output)
+	jsonBody := "[" + strings.Repeat("1,", 2048) + "1]" // valid JSON, > cap
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/json" {
+			w.Write([]byte(jsonBody))
+			return
+		}
+		w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	if _, _, err := CurlBytes(context.Background(), "curl "+srv.URL); err == nil {
+		t.Error("CurlBytes must cap an over-large buffered response")
+	}
+	if _, _, err := CurlString(context.Background(), "curl "+srv.URL); err == nil {
+		t.Error("CurlString must cap an over-large buffered response")
+	}
+	var v any
+	if _, err := CurlJSON(context.Background(), &v, "curl "+srv.URL+"/json"); err == nil {
+		t.Error("CurlJSON must bound the decoder (truncated past the cap)")
+	}
+
+	// Streaming is deliberately NOT capped — downloads/SSE keep working.
+	resp, err := Curl(context.Background(), "curl "+srv.URL)
+	if err != nil {
+		t.Fatalf("Curl: %v", err)
+	}
+	n, _ := io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if int(n) != len(body) {
+		t.Errorf("streaming must not be capped: got %d, want %d", n, len(body))
+	}
+}
+
 // TestFault_EasyCurlStillWorks is the "easy as curl" invariant: after all the
 // production hardening, the zero-config one-liner against a healthy server still
 // just works.
