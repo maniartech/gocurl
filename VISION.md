@@ -46,6 +46,25 @@ Built on `net/http` with **parse once, execute many** (`Prepare` a request once,
 times over a pooled `Client`), the per-request overhead above a hand-written request is small and
 constant — so the curl ergonomics never cost you reliability or predictability under load.
 
+## Why GoCurl is the better choice
+
+The edge is not "a nicer curl parser" — it's the **execution pipeline**. With raw
+`net/http` you start from a blank `http.Request` every time and re-derive, per service, all
+the things a mission-critical integration needs: an overall timeout that survives retries,
+idempotency-aware retry logic, error classification, secret redaction, memory bounds against
+a hostile server. Most teams get some of it wrong, and it rots as the code changes.
+
+GoCurl receives the **curl recipe**, so it knows your intent and assembles the correct
+pipeline around it automatically. That is the developer edge: you describe *what* to call (the
+curl command you already tested in your shell), and GoCurl owns *how* to execute it safely
+under production conditions.
+
+Crucially, we earn the word "production-grade" with evidence, not adjectives: a two-tier
+fault-injection harness, competitive benchmarks reported with their losses, an extended soak,
+and an automated honesty doc-lint that fails the build if any claim lacks a named,
+un-skipped test (`TestDocHonestyLint`). See the
+[v1.0-readiness checklist](docs/v1-readiness.md) and [operations guide](docs/operations.md).
+
 ## What GoCurl is
 
 - A **curl-ergonomic HTTP client built on `net/http`**, with a CLI that shares the exact
