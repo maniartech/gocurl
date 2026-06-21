@@ -255,20 +255,32 @@ func (ro *RequestOptions) SetBasicAuth(username, password string) {
 
 // AddHeader adds a header to the request.
 func (ro *RequestOptions) AddHeader(key, value string) {
+	if ro.Headers == nil {
+		ro.Headers = make(http.Header)
+	}
 	ro.Headers.Add(key, value)
 }
 
 // SetHeader sets a header in the request, replacing any existing values.
 func (ro *RequestOptions) SetHeader(key, value string) {
+	if ro.Headers == nil {
+		ro.Headers = make(http.Header)
+	}
 	ro.Headers.Set(key, value)
 }
 
 // AddQueryParam adds a query parameter to the request URL.
 func (ro *RequestOptions) AddQueryParam(key, value string) {
+	if ro.QueryParams == nil {
+		ro.QueryParams = make(url.Values)
+	}
 	ro.QueryParams.Add(key, value)
 }
 
 // SetQueryParam sets a query parameter in the request URL, replacing any existing values.
 func (ro *RequestOptions) SetQueryParam(key, value string) {
+	if ro.QueryParams == nil {
+		ro.QueryParams = make(url.Values)
+	}
 	ro.QueryParams.Set(key, value)
 }
