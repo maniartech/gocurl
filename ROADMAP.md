@@ -348,33 +348,46 @@ the **"easy as curl" on-ramp is preserved** (the `Curl*` one-liner stays trivial
 opt-in/internal). HTTP/3 stays out. No superiority claims — parity + proven reliability, competitor
 results reported fairly (wins and losses).
 
-- [~] **M12-T1 — Fault-injection harness (Phase A).** Build the failure-injection layer Spec 09
-  (G1) called for. Hermetic, seeded, `-race`-clean tests for the full failure matrix (conn
-  refused/reset, slow-loris, partial body/EOF, TLS failure, h2 `GOAWAY`/`RST_STREAM`, 5xx/429
-  storms, idle-conn drop) asserting retry classification, breaker trip/recover, rate limiter,
-  per-attempt deadlines, and **zero goroutine/conn/fd leak**. Fast subset in CI `-short`; full
-  matrix in a non-short job. *DoD: Spec 14 §A.*
-  *Landed (`faultinject_test.go`): programmable `faultyRT` backbone (injected via `WithTransport`
-  — no surface change); scenarios for connect-reset/dial-refused/timeout/TLS classification +
-  retry honoring, transient recovery, per-attempt-deadline bounding a stalled peer, 429/503 retry
-  recovery, circuit-breaker trip + short-circuit, no-goroutine-leak-under-storm, and the
-  "easy as curl" invariant. **Remaining:** partial-body/premature-EOF (`KindBodyRead`),
-  idle-conn-drop reuse, and the deep h2 `GOAWAY`/`RST_STREAM` case; CI non-short job wiring.*
-- [ ] **M12-T2 — Execution performance: compiled plan + competitive proof (Phase B).** Parser-perf
-  benchmarking deferred (amortized one-time cost). **The edge:** compile the parsed recipe into a
-  reusable execution plan at `Prepare` so each `Do` does only irreducible work (fresh ctx, body
-  rewind, dynamic headers via copy-on-write over a shared static header) — closing the ~2×-memory /
-  ~13-alloc re-derivation gap vs `net/http`. No surface change, concurrency-safe (`-race` + concurrent
-  bench), behavior-identical (§A matrix + suite green), validated (net/http does not mutate the shared
-  header). Then competitor arms (`net/http` + ≥1 client, e.g. resty/req) in the bench module's own
-  `go.mod`; p50/p99/p999 + throughput-under-load; `benchstat` + provenance; honest results table
-  (incl. where gocurl loses); alloc-budget hard gate + latency baseline/advisory gate. *DoD: Spec 14 §B.*
-- [ ] **M12-T3 — Extended soak + resource stability (Phase C).** Long-form, gated, scheduled soak
-  asserting no goroutine/heap/fd growth trend with pprof artifacts; pool-churn/backpressure test.
-  *DoD: Spec 14 §C.*
-- [ ] **M12-T4 — Operability + v1 contract (Phase D).** `docs/operations.md` (tuning, capacity,
-  failure playbook, "easy→prod checklist"), threat model, and the v1.0-readiness checklist.
-  *DoD: Spec 14 §D.*
+**Revised after a 13-agent adversarial review (2026-06-21):** the review found real correctness bugs
+in shipped code and a mis-targeted perf thesis; both are now in scope. See Spec 14 (revised).
+
+- [~] **M12-T1 — Fault harness + correctness fixes (Phase A).** *Landed (`faultinject_test.go`,
+  Tier 1):* `faultyRT` (via `WithTransport`, no surface change) — classification, retry honoring,
+  per-attempt deadline, 429/503 recovery, breaker trip + short-circuit, no-leak-under-storm,
+  "easy as curl" invariant. **Remaining:** (a) **Tier 2 real-transport harness** (over httptest /
+  `net.Listener`) for slow-loris/`ResponseHeaderTimeout`, premature-EOF/`KindBodyRead`, **real h2
+  `GOAWAY`/`RST_STREAM`**, idle-conn-drop, **DNS-fail**, **pool-exhaustion**, **proxy-CONNECT-fail**,
+  **panicking-middleware**, ctx-cancel-mid-stream, 100-continue, oversized-header, shutdown-mid-stream;
+  tag each row by tier. (b) **Correctness fixes (behavior-only, no API change):** overall retry budget
+  (per-attempt `Client.Timeout` + `MaxElapsed=0` = retry amplifier today); h2 `GOAWAY`/`RST_STREAM`
+  retry classification (`KindUnknown` → not retried today); shutdown stream-accounting (`inflight.Done`
+  fires on `Do` return, truncates live bodies); `Client.Do` redirect-cap `%w ErrTooManyRedirects`.
+  (c) **Response memory bounds:** default decompressed-bytes cap (unbounded with `--compressed` today)
+  + tighten `MaxResponseHeaderBytes`. (d) Cross-cutting: `goroutinesAtMost` (not fixed-settle), `ConnState`
+  conn/fd-leak, secret-redaction on every new error wrap. *DoD: Spec 14 §A.*
+- [ ] **M12-T2 — Execution perf: clone-the-small + competitive proof (Phase B).** Parser-perf deferred.
+  **COW design REJECTED** (unsafe: jar/request-id/redirect/retry write `req.Header`/`Body`). Real cost =
+  the unconditional `req.opts.Clone()` at `client.go:128`, not `Header.Clone`. **Fix:** compile an
+  immutable small header template at `Prepare` from the Request's OWN opts; per-`Do` do
+  `NewRequestWithContext` + `template.Clone()` onto an OWNED map, then apply dynamic headers/cookies/
+  request-id/Client-defaults — no Client-merged plan memoized on the shared Request; re-target at skipping
+  `opts.Clone()`. Validation = the full breaking-case matrix (jar+concurrent, request-id+concurrent,
+  POST-buffered-retry, two-Clients-one-Request, cross-host-redirect-with-auth, non-rewindable-twice),
+  each asserting wire correctness + owned header/body, `-race`. Competitive: **benchvendor** (Spec 10's
+  ratified tag) or a `benchcmp/go.mod` w/ replace — NOT a bench/scripts module; **identical transport
+  tuning across all arms** + guard test (net/http arm runs 10× the idle pool today); p50/p99/p999 +
+  throughput; **ratchet the Do alloc budget** (100 vs 76 baseline hides the win); `benchstat` regression
+  gate (allocs/B hard, ns advisory) + committed baseline; `go mod tidy` diff-guard; honest table incl.
+  losses. *DoD: Spec 14 §B.*
+- [ ] **M12-T3 — Soak + resource stability (Phase C).** EXTEND `TestClient_Soak` (keep `GOCURL_PROFILE`,
+  `GOCURL_SOAK=<duration>` selector, no build tags); **two arms — uninstrumented AND instrumented**
+  (recording Tracer/Metrics/Logger/Hooks = the production config); no goroutine/heap/fd growth trend +
+  pprof; publish the alloc/op delta; pool-churn/backpressure at `MaxConnsPerHost`. *DoD: Spec 14 §C.*
+- [ ] **M12-T4 — Operability + v1 contract (Phase D).** `docs/operations.md` (tuning, capacity, failure
+  playbook incl. unlimited-`MaxConnsPerHost`/EMFILE default, untrusted-server memory bounds, "easy→prod
+  checklist"); threat model; **honesty doc-lint** (dependency-free, fails on a claim keyword without a
+  test/benchmark citation; gates the "production-grade" README wording on M12-T1 `[x]`); v1.0-readiness
+  checklist. *DoD: Spec 14 §D.*
 
 ---
 
