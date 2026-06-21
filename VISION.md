@@ -3,6 +3,10 @@
 > Paste any curl command from any API doc straight into Go. Test it in the shell,
 > run the exact same command in your code. No translation, no guesswork.
 
+> **Our motto: persuasion by example, not by marketing.** Every performance and reliability
+> claim cites a test or benchmark you can run yourself — enforced by an automated doc-lint
+> (`TestDocHonestyLint`). We would rather show you a proof than sell you an adjective.
+
 ## The problem we solve
 
 Every REST API on earth documents itself with **curl**. Almost none ship a Go SDK for
@@ -92,14 +96,18 @@ un-skipped test (`TestDocHonestyLint`). See the
 
 ## Design principles
 
-1. **The doc's curl command works verbatim.** If a command from Stripe/GitHub/OpenAI
+1. **Persuasion by example, not by marketing.** This is the first principle because it
+   governs the others. Every performance/reliability claim cites a named, un-skipped
+   test or benchmark; an automated doc-lint fails the build if a claim ships without its
+   proof. We show, we don't sell.
+2. **The doc's curl command works verbatim.** If a command from Stripe/GitHub/OpenAI
    docs doesn't run unmodified, that's a bug. Correctness of the parser is the product.
-2. **Behave like a library.** No printing to stdout, no hidden global state, stream by
+3. **Behave like a library.** No printing to stdout, no hidden global state, stream by
    default, return the response and let the caller decide.
-3. **Honest by default.** Claims are measured; security behavior (redaction, validation,
+4. **Honest by default.** Claims are measured; security behavior (redaction, validation,
    env handling) is real on the path users actually call, not just in the builder.
-4. **Small, stable surface.** A focused v1 API a newcomer can learn in five minutes.
-5. **Secure handling of secrets.** Tokens and credentials are redacted in verbose output
+5. **Small, stable surface.** A focused v1 API a newcomer can learn in five minutes.
+6. **Secure handling of secrets.** Tokens and credentials are redacted in verbose output
    and never leaked through side effects.
 
 ## Success looks like

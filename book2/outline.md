@@ -1,7 +1,11 @@
 # HTTP Mastery with Go: From cURL to Production
 ## Complete Book Outline - The Definitive Guide to the GoCurl Library
 
-**Building High-Performance REST Clients with GoCurl**
+**Building Production-Ready REST Clients with GoCurl**
+
+> **Guiding motto: persuasion by example, not by marketing.** Every performance and
+> reliability claim in this book cites a test or benchmark the reader can run. No adjective
+> ships without its proof.
 
 ---
 

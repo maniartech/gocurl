@@ -3,6 +3,9 @@
 This document defines how gocurl is benchmarked, what we measure, and — critically —
 **what we will and will not claim**. It implements [Spec 10](../specs/10-benchmarking.md).
 
+> **Motto: persuasion by example, not by marketing.** Every number here is reproducible and
+> every claim cites an un-skipped benchmark. Where gocurl loses, we publish the loss.
+
 ## Claim policy: parity + ergonomics, never superiority
 
 gocurl is a thin, curl-ergonomic layer over `net/http`. It **cannot** be faster than
