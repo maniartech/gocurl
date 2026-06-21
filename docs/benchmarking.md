@@ -148,39 +148,41 @@ go test -run='^$' -bench='BenchmarkCmp' -benchmem -count=10 .
 benchstat ...   # compare arms; a single run is never authoritative
 ```
 
-Representative medians (`-count=6 -benchtime=5000x`, Windows/amd64, Go 1.23, small JSON
-body — **reproduce on your own hardware before quoting**):
+Averaged over `-count=6 -benchtime=5000x` (Windows/amd64, Go 1.23, small JSON body —
+**reproduce on your own hardware before quoting**):
 
 | Arm | ns/op | B/op | allocs/op |
 |---|---|---|---|
-| net/http (parity bar) | ~88,500 | 5,484 | 65 |
-| **gocurl prepared** | **~91,000** | **7,393** | 81 |
-| resty | ~91,500 | 8,300 | 79 |
-| req | ~93,000 | 7,765 | 82 |
+| net/http (parity bar) | ~89,800 | 5,482 | 65 |
+| **gocurl prepared** | ~101,000 | **7,294** | **78** |
+| resty | ~98,000 | 8,298 | 79 |
+| req | ~95,000 | 7,762 | 82 |
 
 **Reading this honestly:**
 
-- **ns/op:** all four are within noise on an in-process server (the wire is free, so this
-  mostly measures per-request CPU). gocurl is at parity with `net/http` and marginally ahead
-  of resty/req here — *parity is the claim; we do not claim to beat `net/http`*.
-- **B/op — gocurl is the lightest of the three full-featured clients** (7,393, below req's
-  7,765 and resty's 8,300), behind only raw `net/http`. This was *not* always true: an
-  earlier version of this suite measured gocurl at ~12,900 B/op (the heaviest arm), and we
-  published that loss. Profiling found the cause — a per-`Do` `newRand()` allocated a
-  ~4.9 KiB `[607]int64` RNG state on **every** request even when no retry ran. Making the
-  jitter RNG lazy (created only when a retry actually needs it) removed it; the win is
-  guarded by `TestByteBudget_Do` so it cannot regress. Combined with `clone-the-small`
-  (`TestCloneSmall_NoDeepClonePerDo`), gocurl now carries its full resilience pipeline for a
-  smaller per-`Do` footprint than the thinner wrappers.
-- **allocs/op:** gocurl (81) sits between resty (79) and req (82) — effectively tied.
+- **B/op and allocs/op — gocurl is the lightest of the three full-featured clients:** fewer
+  allocations (78) than resty (79) and req (82), and the smallest byte footprint (7,294, below
+  req's 7,762 and resty's 8,298) — behind only raw `net/http`. This was *not* always true: an
+  earlier version of this suite measured gocurl at ~12,900 B/op, the **heaviest** arm, and we
+  published that loss. Profiling found the cause — a per-`Do` `newRand()` allocated a ~4.9 KiB
+  `[607]int64` RNG state on **every** request even when no retry ran. Making the jitter RNG
+  lazy, skipping the redirect-context value when redirects aren't followed, and skipping the
+  middleware-chain closure when no middleware is composed removed it. Combined with
+  `clone-the-small`, gocurl now carries its full resilience pipeline for a *smaller* per-`Do`
+  footprint than the thinner wrappers. These are the **reproducible, regression-gated** metrics
+  (`TestByteBudget_Do`, `TestAllocBudget_Do`, `TestCloneSmall_NoDeepClonePerDo`).
+- **ns/op — at parity, no winner claimed.** Wall-clock on an in-process server with no real
+  wire is dominated by per-request CPU and is noisy on a loaded machine: across runs gocurl
+  has measured both the fastest *and* the slowest of the four (this average shows it highest).
+  We therefore make **no latency-ranking claim** between the clients — they are at parity — and
+  treat `ns/op` as advisory, which is why the regression gates are on allocs/bytes, not time.
 - **Caveat (not perfectly apples-to-apples):** resty and req **buffer** the full response
   body by default; gocurl **streams** it. For a tiny body this slightly favors the bufferers;
   for large responses gocurl's streaming is the safer default. The harness drains every arm,
   but the body-handling models differ by design.
 
-The takeaway matches our claim policy: **parity with `net/http` on latency, and a lighter
-per-request footprint than resty/req** — measured, reproducible, and regression-guarded,
-never a marketing claim.
+The takeaway matches our claim policy: **latency parity, and a lighter, regression-gated
+per-request footprint than resty/req** — measured and reproducible, never a marketing claim.
 
 ## The soak/leak tests are elsewhere
 

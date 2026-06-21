@@ -271,11 +271,18 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 		finish()
 	}
 
-	ctx = withRedirectSettings(ctx, redirectSettings{
-		follow: opts.FollowRedirects,
-		max:    opts.MaxRedirects,
-		allow:  c.cfg.redirectAllow,
-	})
+	// Carry per-request redirect policy through the context only when it actually
+	// matters: following redirects, or a per-redirect allow hook is set. When neither
+	// applies (the default — redirects not followed), an absent value reads as the
+	// zero redirectSettings, which is exactly "do not follow" — so we skip the
+	// context.WithValue allocation on the common no-redirect path.
+	if opts.FollowRedirects || c.cfg.redirectAllow != nil {
+		ctx = withRedirectSettings(ctx, redirectSettings{
+			follow: opts.FollowRedirects,
+			max:    opts.MaxRedirects,
+			allow:  c.cfg.redirectAllow,
+		})
+	}
 
 	httpReq, err := createRequest(ctx, opts)
 	if err != nil {
@@ -296,21 +303,31 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	// LAZILY inside executeWithRetries only when a retry actually runs — passing it
 	// here would allocate ~4.9 KiB of RNG state (a [607]int64 rngSource) on every Do,
 	// even the overwhelmingly common no-retry path.
-	policy := c.resolveRetryPolicy(req, opts)
-	base := Handler(func(hr *http.Request) (*http.Response, error) {
-		return executeWithRetries(c.httpClient, hr, opts, policy, nil)
-	})
 	// Compose, outermost-first: instrumentation -> circuit breaker -> rate limiter
 	// -> user middleware -> retry loop. Instrumentation is outermost so its span
 	// and latency bracket the breaker fast-fail and limiter wait too; it is only
 	// present when a sink/hook is configured (zero overhead otherwise).
+	policy := c.resolveRetryPolicy(req, opts)
 	var allMW []Middleware
 	if c.obs.active {
 		allMW = append(allMW, c.obs.instrument)
 	}
 	allMW = append(allMW, c.cfg.systemMiddleware()...)
 	allMW = append(allMW, c.mw...)
-	resp, err := chain(base, allMW...)(httpReq)
+
+	var resp *http.Response
+	if len(allMW) == 0 {
+		// Fast path: no middleware composed (no obs, breaker, limiter, or user mw) —
+		// invoke the retry engine directly and skip allocating the base Handler closure
+		// and the chain. The per-request jitter RNG is still created lazily inside
+		// executeWithRetries only when a retry actually runs (see resilience.go).
+		resp, err = executeWithRetries(c.httpClient, httpReq, opts, policy, nil)
+	} else {
+		base := Handler(func(hr *http.Request) (*http.Response, error) {
+			return executeWithRetries(c.httpClient, hr, opts, policy, nil)
+		})
+		resp, err = chain(base, allMW...)(httpReq)
+	}
 	if err != nil {
 		release()
 		return nil, wrapTransportError(opts.URL, err)
