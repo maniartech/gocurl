@@ -96,6 +96,24 @@ is split by harness tier; every row is tagged with the tier that can actually re
    callers get a `KindUnknown` inconsistent with the CLI's exit-47. **Fix:** `%w`-wrap. **Test:**
    `Client.Do` over-cap classifies as `ErrTooManyRedirects`.
 
+#### A.5 Curl wire-parity (differential) — *partly landed*
+
+"Behavior must match curl" is a correctness property, not an aspiration, so it is proven by
+**differential testing against a real `curl` binary**: fire the same command at `curl` and at
+gocurl against one server and byte-compare the wire request (method, query, body, headers). The
+M9 corpus only checks parse→`options`; this checks the actual bytes. *Landed
+(`curl_parity_test.go`): hermetic parity locks + `TestCurlParity_DifferentialVsRealCurl` (self-skips
+where curl is absent/sandboxed). It already proved — and fixed — one systematic divergence: gocurl
+omitted the `Accept: */*` curl always sends.* **Remaining:** broaden the case matrix
+(`--data-urlencode` `+` vs `%20`, `--compressed` `Accept-Encoding` set, multipart `-F`, redirects,
+`-I`), and run the differential job in CI where a curl binary is available.
+
+**The one deliberate divergence (security > parity):** gocurl fail-closes basic/bearer auth over
+plaintext HTTP (curl leaks credentials in the clear). This is intentional, documented
+(`TestCurlParity_BasicAuthFailClosed`), and opt-out via `WithAllowInsecureAuth` /
+`GOCURL_ALLOW_INSECURE_AUTH`. Any future divergence must be either fixed or explicitly justified
+here as a security/spec decision — never silent.
+
 #### A.4 Response-side memory bounds (untrusted server)
 
 - **Decompression bomb (unbounded today).** `buildTransport` sets `DisableCompression=true` (gocurl
