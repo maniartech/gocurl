@@ -457,6 +457,31 @@ func TestFault_BufferingHelpersBoundedAgainstBomb(t *testing.T) {
 	}
 }
 
+// TestFault_ClientRedirectCapClassifiable proves Client.Do's redirect-cap error is
+// classifiable as ErrTooManyRedirects — matching the one-shot/CLI path (exit 47), so
+// library callers and the CLI agree on the failure kind.
+func TestFault_ClientRedirectCapClassifiable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/next", http.StatusFound) // always redirect -> loop
+	}))
+	defer srv.Close()
+
+	client, err := New(WithFollowRedirects(true), WithMaxRedirects(3))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer client.Close()
+
+	resp, err := client.Curl(context.Background(), "curl "+srv.URL)
+	drain(resp)
+	if err == nil {
+		t.Fatal("expected a redirect-cap error")
+	}
+	if !errors.Is(err, ErrTooManyRedirects) {
+		t.Errorf("Client redirect-cap must classify as ErrTooManyRedirects (CLI parity); got: %v", err)
+	}
+}
+
 // TestFault_EasyCurlStillWorks is the "easy as curl" invariant: after all the
 // production hardening, the zero-config one-liner against a healthy server still
 // just works.
