@@ -123,11 +123,24 @@ func redirectFromContext(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
-// effectiveOptions merges the Client's request-level defaults onto a copy of the
-// prepared request's options. Connection-level settings (TLS/proxy) come from
-// the Client's transport and are not taken from the request here.
+// effectiveOptions merges the Client's request-level defaults onto the prepared
+// request's options for a single Do. Connection-level settings (TLS/proxy) come
+// from the Client's transport and are not taken from the request here.
+//
+// "Clone-the-small" (Spec 14 §B): the prepared recipe is IMMUTABLE on the Do path
+// — createRequest, validation, and the retry engine only READ opts.Form,
+// QueryParams, Cookies, BasicAuth and RetryConfig (they build a fresh *http.Request
+// and mutate that, never opts). So a full opts.Clone() — which deep-copies those
+// maps/slices every Do — is wasted work. Instead take a shallow struct copy (scalar
+// fields become owned by this call) and own ONLY the one map that actually receives
+// a per-Do mutation: Headers, and only when there are Client defaults to merge. With
+// no default headers the header template is shared read-only (concurrent reads are
+// race-free), so the common path allocates just the returned struct. The shared
+// Request is never mutated, so two Clients can reuse one prepared Request without
+// their defaults bleeding into each other or into the template.
 func (c *Client) effectiveOptions(req *Request) *options.RequestOptions {
-	o := req.opts.Clone()
+	shallow := *req.opts
+	o := &shallow
 	if o.UserAgent == "" && c.cfg.userAgent != "" {
 		o.UserAgent = c.cfg.userAgent
 	}
@@ -141,13 +154,19 @@ func (c *Client) effectiveOptions(req *Request) *options.RequestOptions {
 	if c.cfg.allowInsecureAuth {
 		o.AllowInsecureAuth = true
 	}
-	for key, values := range c.cfg.defaultHeaders {
-		if o.Headers == nil {
-			o.Headers = http.Header{}
-		}
-		if o.Headers.Get(key) == "" {
-			for _, v := range values {
-				o.Headers.Add(key, v)
+	// Merge Client default headers onto an OWNED copy of the header template so the
+	// shared Request is never touched. Only clone when there is something to merge;
+	// otherwise the read-only template is reused as-is.
+	if len(c.cfg.defaultHeaders) > 0 {
+		o.Headers = o.Headers.Clone() // http.Header.Clone is nil-safe (returns nil)
+		for key, values := range c.cfg.defaultHeaders {
+			if o.Headers == nil {
+				o.Headers = http.Header{}
+			}
+			if o.Headers.Get(key) == "" {
+				for _, v := range values {
+					o.Headers.Add(key, v)
+				}
 			}
 		}
 	}
