@@ -34,6 +34,7 @@ drafts predate reconciliation — trust this table; fixing them is ROADMAP Miles
 | 11 | [API Stability & Migration](11-api-stability-and-migration.md) | SemVer, v1 surface, migration |
 | 12 | [Middleware & Handler Model](12-middleware.md) | **the middleware contract** |
 | 13 | [CLI (`cmd/gocurl`)](13-cli.md) | CLI behavior & exit codes |
+| 14 | [Production Hardening](14-production-hardening.md) | fault injection, competitive benchmarks, soak, ops contract (M12) |
 
 ### Single-owner rule
 
