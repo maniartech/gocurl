@@ -338,6 +338,36 @@ promise.
 
 ---
 
+## Milestone 12 — Production hardening & mission-critical readiness
+
+Spec 14. deps: M1–M11. **Scope decision (user, 2026-06-21):** earn the "production-grade,
+mission-critical" claim by *proving* it — best-in-class, rigorously tested against the benchmark
+**and the competition**. Hard constraints: **no public-interface change** (the
+`api.txt`/`api_options.txt` guards stay green; M12 is validation + internal/test + docs only), and
+the **"easy as curl" on-ramp is preserved** (the `Curl*` one-liner stays trivial; robustness is
+opt-in/internal). HTTP/3 stays out. No superiority claims — parity + proven reliability, competitor
+results reported fairly (wins and losses).
+
+- [ ] **M12-T1 — Fault-injection harness (Phase A).** Build the failure-injection layer Spec 09
+  (G1) called for. Hermetic, seeded, `-race`-clean tests for the full failure matrix (conn
+  refused/reset, slow-loris, partial body/EOF, TLS failure, h2 `GOAWAY`/`RST_STREAM`, 5xx/429
+  storms, idle-conn drop) asserting retry classification, breaker trip/recover, rate limiter,
+  per-attempt deadlines, and **zero goroutine/conn/fd leak**. Fast subset in CI `-short`; full
+  matrix in a non-short job. *DoD: Spec 14 §A.*
+- [ ] **M12-T2 — Benchmark rigor + competition (Phase B).** Competitor arms (`net/http` + ≥1
+  popular Go client, e.g. resty/req) in the bench module's own `go.mod`; p50/p99/p999 +
+  throughput-under-load harness; `benchstat` methodology + provenance; honest results table in
+  `docs/benchmarking.md` (incl. where gocurl loses); alloc-budget hard gate + latency
+  baseline/advisory gate. *DoD: Spec 14 §B.*
+- [ ] **M12-T3 — Extended soak + resource stability (Phase C).** Long-form, gated, scheduled soak
+  asserting no goroutine/heap/fd growth trend with pprof artifacts; pool-churn/backpressure test.
+  *DoD: Spec 14 §C.*
+- [ ] **M12-T4 — Operability + v1 contract (Phase D).** `docs/operations.md` (tuning, capacity,
+  failure playbook, "easy→prod checklist"), threat model, and the v1.0-readiness checklist.
+  *DoD: Spec 14 §D.*
+
+---
+
 ## Working agreement
 
 1. Land work milestone by milestone; keep the suite green at every commit.
