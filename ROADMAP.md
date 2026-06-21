@@ -358,13 +358,13 @@ in shipped code and a mis-targeted perf thesis; both are now in scope. See Spec 
   `net.Listener`) for slow-loris/`ResponseHeaderTimeout`, premature-EOF/`KindBodyRead`, **real h2
   `GOAWAY`/`RST_STREAM`**, idle-conn-drop, **DNS-fail**, **pool-exhaustion**, **proxy-CONNECT-fail**,
   **panicking-middleware**, ctx-cancel-mid-stream, 100-continue, oversized-header, shutdown-mid-stream;
-  tag each row by tier. (b) **Correctness fixes (behavior-only, no API change):** overall retry budget
-  (per-attempt `Client.Timeout` + `MaxElapsed=0` = retry amplifier today); h2 `GOAWAY`/`RST_STREAM`
-  retry classification (`KindUnknown` → not retried today); shutdown stream-accounting (`inflight.Done`
-  fires on `Do` return, truncates live bodies); `Client.Do` redirect-cap `%w ErrTooManyRedirects`.
-  (c) **Response memory bounds:** default decompressed-bytes cap (unbounded with `--compressed` today)
-  + tighten `MaxResponseHeaderBytes`. (d) Cross-cutting: `goroutinesAtMost` (not fixed-settle), `ConnState`
-  conn/fd-leak, secret-redaction on every new error wrap. *DoD: Spec 14 §A.*
+  tag each row by tier. (b) **Correctness fixes (behavior-only, no API change) — 3/4 LANDED:** overall
+  retry budget (`9dc879b`); h2 `GOAWAY`/`RST_STREAM` retry classification (`af23b4b`); shutdown
+  stream-accounting (`e9ce981`); `Client.Do` redirect-cap `%w ErrTooManyRedirects` (TODO — small).
+  (c) **Response memory bounds — LANDED (`937ef55`):** bounded buffered convenience reads (64 MiB
+  default; streaming stays unbounded) + `MaxResponseHeaderBytes` 1 MiB. (d) Cross-cutting (TODO):
+  `goroutinesAtMost` (not fixed-settle), `ConnState` conn/fd-leak, secret-redaction on every new error
+  wrap. *DoD: Spec 14 §A.*
 - [ ] **M12-T2 — Execution perf: clone-the-small + competitive proof (Phase B).** Parser-perf deferred.
   **COW design REJECTED** (unsafe: jar/request-id/redirect/retry write `req.Header`/`Body`). Real cost =
   the unconditional `req.opts.Clone()` at `client.go:128`, not `Header.Clone`. **Fix:** compile an
