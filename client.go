@@ -209,11 +209,19 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	// Honor a per-request --max-time via the context (the shared http.Client's
-	// Timeout is the Client-wide ceiling).
+	// Establish the OVERALL deadline that bounds the entire operation INCLUDING
+	// retries and their backoff sleeps — curl's --max-time semantics. A per-request
+	// --max-time (opts.Timeout) wins; otherwise the Client-wide WithTimeout
+	// (cfg.timeout) applies. Without this, WithTimeout only reaches http.Client.Timeout
+	// (a per-attempt bound), so a retryable storm runs MaxAttempts*backoff past the
+	// deadline — a retry amplifier. http.Client.Timeout remains the per-attempt net.
+	overall := opts.Timeout
+	if overall <= 0 {
+		overall = c.cfg.timeout
+	}
 	var cancel context.CancelFunc
-	if opts.Timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
+	if overall > 0 {
+		ctx, cancel = context.WithTimeout(ctx, overall)
 	}
 
 	ctx = withRedirectSettings(ctx, redirectSettings{

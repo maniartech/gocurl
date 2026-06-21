@@ -25,6 +25,23 @@ func doRequest(ctx context.Context, opts *options.RequestOptions) (*http.Respons
 	if err := validateOptions(opts); err != nil {
 		return nil, err
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// Bound the ENTIRE one-shot operation (including --retry attempts and their
+	// backoff) by --max-time, matching curl: establish an overall deadline from
+	// opts.Timeout when the caller's context does not already carry one. Without it
+	// opts.Timeout would only reach http.Client.Timeout (a per-attempt bound) and a
+	// --retry storm would run past --max-time. determineClientTimeout then sees the
+	// deadline and leaves http.Client.Timeout off, so the ctx is the single source.
+	if opts.Timeout > 0 {
+		if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
+			defer cancel()
+		}
+	}
 
 	var httpClient options.HTTPClient
 	if opts.CustomClient != nil {

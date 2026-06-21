@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -172,6 +173,59 @@ func TestFault_RetrySucceedsAfterTransient(t *testing.T) {
 	}
 	if rt.calls() != 3 {
 		t.Errorf("calls = %d, want 3 (two failures + success)", rt.calls())
+	}
+}
+
+// TestFault_OverallRetryBudget proves the Client's WithTimeout bounds the ENTIRE
+// operation including retries (curl's --max-time semantics) — not each attempt.
+// Without the overall budget, a retryable storm runs MaxAttempts * backoff well past
+// the deadline (a retry amplifier); with it, the loop is cut off near the budget.
+func TestFault_OverallRetryBudget(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable) // always retryable (503)
+	}))
+	defer srv.Close()
+
+	const budget = 250 * time.Millisecond
+	client, err := New(WithTimeout(budget), WithRetry(RetryPolicy{
+		MaxAttempts: 20, Backoff: ConstantBackoff(80 * time.Millisecond),
+	}))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer client.Close()
+
+	start := time.Now()
+	resp, _ := client.Curl(context.Background(), "curl "+srv.URL)
+	if resp != nil {
+		resp.Body.Close()
+	}
+	elapsed := time.Since(start)
+	// 20 attempts * 80ms backoff would be ~1.6s; the overall budget must cut it off.
+	if elapsed > budget*3 {
+		t.Fatalf("WithTimeout(%v) did not bound the retry loop: elapsed=%v (retry amplifier)", budget, elapsed)
+	}
+}
+
+// TestFault_OneShotMaxTimeBoundsRetries proves --max-time bounds the WHOLE one-shot
+// operation including --retry attempts (curl semantics), not each attempt.
+func TestFault_OneShotMaxTimeBoundsRetries(t *testing.T) {
+	var attempts int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempts, 1)
+		w.WriteHeader(http.StatusServiceUnavailable) // retryable
+	}))
+	defer srv.Close()
+
+	start := time.Now()
+	resp, _ := CurlArgs(context.Background(), "--max-time", "1", "--retry", "15", srv.URL)
+	if resp != nil {
+		resp.Body.Close()
+	}
+	elapsed := time.Since(start)
+	if elapsed > 3*time.Second {
+		t.Fatalf("--max-time did not bound the one-shot retry loop: elapsed=%v (attempts=%d)",
+			elapsed, atomic.LoadInt32(&attempts))
 	}
 }
 
