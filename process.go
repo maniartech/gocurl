@@ -444,6 +444,13 @@ func applyHeaders(req *http.Request, opts *options.RequestOptions, contentType s
 		}
 	}
 
+	// Accept: curl always sends "Accept: */*" unless the caller overrides it
+	// with -H. Match that — added AFTER custom headers so a user's
+	// -H "Accept: application/json" wins, exactly like curl.
+	if req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "*/*")
+	}
+
 	// Set content type if determined from body
 	if contentType != "" && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", contentType)
