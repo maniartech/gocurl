@@ -16,6 +16,11 @@ when integrating a new API — mentally compiling a curl snippet from the docs i
 circuit breaking, observability, SSRF protection, secret redaction, and typed errors that
 real integrations need in production.
 
+> **Persuasion by example, not by marketing.** Every performance and reliability claim in
+> this repo cites a test or benchmark you can run yourself — enforced by an automated
+> doc-lint (`TestDocHonestyLint`), not left to good intentions. That is the motto, and it
+> runs through the README, VISION, docs, and book alike.
+
 > See [VISION.md](VISION.md) for what we're building and why.
 
 ## Project status

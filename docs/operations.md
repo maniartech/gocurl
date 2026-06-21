@@ -8,6 +8,9 @@ Every reliability claim here is backed by a named, un-skipped test in the suite 
 inline so you can run the proof yourself (`go test -run <Name> .`). This is enforced by
 the honesty doc-lint (`TestDocHonestyLint`).
 
+> **Motto: persuasion by example, not by marketing.** If a sentence below makes a promise,
+> it names the test that keeps it. Run them.
+
 ## Timeout taxonomy
 
 gocurl has **layered** timeouts; understand which one bounds what:

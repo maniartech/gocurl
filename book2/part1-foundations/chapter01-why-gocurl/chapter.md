@@ -651,6 +651,10 @@ Performance matters when building production systems. Let's compare GoCurl again
 
 ### The honest claim: parity, not superiority
 
+> **GoCurl's motto: persuasion by example, not by marketing.** Throughout this book, every
+> performance or reliability claim points at a test or benchmark you can run yourself. If we
+> can't show it, we don't say it.
+
 GoCurl is a thin layer **built on** `net/http`. It therefore **cannot** be faster than the
 `net/http` client it wraps, and we never claim it is. What we claim — and measure — is:
 

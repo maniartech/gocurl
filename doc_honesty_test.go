@@ -80,6 +80,20 @@ func TestDocHonestyLint(t *testing.T) {
 		}
 	}
 
+	// The motto must stay visible: README and VISION must state it verbatim. Enforcing
+	// it here is itself persuasion-by-example — the principle cannot quietly disappear.
+	const motto = "persuasion by example"
+	for _, doc := range []string{"README.md", "VISION.md"} {
+		data, err := os.ReadFile(doc)
+		if err != nil {
+			t.Errorf("read %s: %v", doc, err)
+			continue
+		}
+		if !strings.Contains(strings.ToLower(string(data)), motto) {
+			t.Errorf("%s must state the motto %q — it is the repo's first principle and must stay visible", doc, motto)
+		}
+	}
+
 	// The README's "production-grade" wording is gated on M12-T1 (reliability) being
 	// landed in the ROADMAP — the claim must not precede its milestone.
 	if readme, err := os.ReadFile("README.md"); err == nil {

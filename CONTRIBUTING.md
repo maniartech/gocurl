@@ -9,6 +9,11 @@ GoCurl is a curl-ergonomic HTTP client built on `net/http`. Before contributing,
 please read [VISION.md](VISION.md) — features and claims that don't serve the core
 promise (paste a curl command from API docs into Go) are out of scope.
 
+**Our motto: persuasion by example, not by marketing.** If your change adds or strengthens
+a performance or reliability claim in any doc, it must cite a named, un-skipped test or
+benchmark — the honesty doc-lint (`TestDocHonestyLint`) enforces this and will fail the
+build otherwise. Show the proof; don't sell the adjective.
+
 The single most valuable area of work right now is **parser correctness**: making
 real-world curl commands from popular API docs run verbatim, with regression tests.
 
