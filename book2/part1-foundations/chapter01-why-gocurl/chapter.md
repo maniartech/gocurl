@@ -665,11 +665,20 @@ GoCurl is a thin layer **built on** `net/http`. It therefore **cannot** be faste
 
 ### How it's measured
 
-The suite runs every arm — `net/http` (the parity bar), GoCurl prepared, GoCurl
-per-call-parse, and popular clients (`resty`, `req`) — over **one shared in-process
-`httptest` server** with **identical** transport tuning (enforced by a guard test), and
-reports p50/p99/p999 latency plus allocations. No real-network endpoints (they'd be
-unreproducible), no cherry-picked numbers.
+The suite runs every arm — `net/http` (the parity bar), GoCurl prepared, and popular
+clients (`resty`, `req`) — with **identical** transport tuning (enforced by a guard test).
+No real-network endpoints (they'd be unreproducible), no cherry-picked numbers.
+
+One subtlety worth teaching: an early version ran everything over a real loopback TCP
+connection, and the latency numbers rank-flipped run to run. A CPU profile showed why —
+**~60% of the measured time was the OS network syscall plus goroutine scheduling**, work
+that's identical across all arms and swings with machine load. The few microseconds of
+*library* overhead drowned in it. So the suite adds a second view, `BenchmarkOverhead_*`,
+that swaps in a stub transport (no network): it isolates each library's per-request work and
+gives a *stable* ranking. There, GoCurl adds the **lowest** overhead of the three
+full-featured clients — fewer ns, bytes, and allocations than both resty and req — behind
+only raw `net/http`, which carries no resilience machinery. The round-trip view is kept for
+end-to-end realism, with its latency treated as advisory.
 
 The results — **wins and losses alike** — live in
 [docs/benchmarking.md](../../../docs/benchmarking.md). At the time of writing, GoCurl is at

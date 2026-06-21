@@ -90,7 +90,10 @@ jobs:
       - name: Run competitive arms (count=10)
         working-directory: benchcmp
         run: |
-          go test -run='^$' -bench='BenchmarkCmp' -benchmem -count=10 . | tee bench-new.txt
+          # BenchmarkOverhead_* (stub transport) is the reliable client-overhead
+          # comparison; BenchmarkCmp_* (real loopback) is end-to-end realism, ns/op
+          # advisory (network-dominated). See docs/benchmarking.md.
+          go test -run='^$' -bench='Benchmark(Overhead|Cmp)' -benchmem -count=10 . | tee bench-new.txt
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:

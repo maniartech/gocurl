@@ -139,50 +139,68 @@ exists so that can't recur.)
 
 The competitive arms live in a **separate module**, [`benchcmp/`](../benchcmp), so the
 heavy vendor graph (resty, req, quic-go, utls, …) never enters the library's own
-dependency graph — enforced by `TestNoVendorDepsInRootModule`. Every arm runs over one
-shared server with the identical fair transport.
+dependency graph — enforced by `TestNoVendorDepsInRootModule`. Every arm uses the identical
+fair transport.
 
-```bash
-cd benchcmp
-go test -run='^$' -bench='BenchmarkCmp' -benchmem -count=10 .
-benchstat ...   # compare arms; a single run is never authoritative
+There are **two** views, and knowing why we need both is the whole point:
+
+### Why the round-trip benchmark is noisy (root cause)
+
+The first version of this comparison ran every arm over a real loopback TCP connection and
+reported `ns/op` that **rank-flipped run to run** — gocurl measured both the fastest and the
+slowest of the four on different runs. A CPU profile of that path explains it:
+
+```
+44.67%  runtime.cgocall          <- the Windows network syscall (loopback TCP)
+~18%    runtime.findRunnable / stealWork / semawakeup / netpoll  <- goroutine scheduling
 ```
 
-Averaged over `-count=6 -benchtime=5000x` (Windows/amd64, Go 1.23, small JSON body —
-**reproduce on your own hardware before quoting**):
+**~60–65% of the measured wall-clock is the OS networking the request through loopback and
+scheduling the in-process server goroutine — work that is identical across all four arms and
+swings with machine load.** The thing we actually want to compare — the per-request CPU each
+library adds above the transport — is only a couple of microseconds, so it drowns in ~90 µs
+of shared network noise. The round-trip benchmark is therefore kept for **end-to-end realism
+only**, and its `ns/op` is treated as advisory.
+
+### Client overhead — the reliable comparison (`BenchmarkOverhead_*`)
+
+To measure the library overhead itself, the `BenchmarkOverhead_*` arms replace the transport
+with a stub `RoundTripper` that returns a canned response with **no network and no second
+goroutine**. What remains is exactly each library's per-request work, with the noise removed —
+so the ranking is stable and reproducible. Averaged over `-count=5 -benchtime=200000x`
+(Windows/amd64, Go 1.23 — **reproduce on your hardware before quoting**):
 
 | Arm | ns/op | B/op | allocs/op |
 |---|---|---|---|
-| net/http (parity bar) | ~89,800 | 5,482 | 65 |
-| **gocurl prepared** | ~101,000 | **7,294** | **78** |
-| resty | ~98,000 | 8,298 | 79 |
-| req | ~95,000 | 7,762 | 82 |
+| net/http (raw transport, no resilience) | ~800 | 1,352 | 13 |
+| **gocurl prepared** | **~2,700** | **3,132** | **25** |
+| req | ~4,650 | 3,957 | 39 |
+| resty | ~4,800 | 3,678 | 28 |
 
-**Reading this honestly:**
+**gocurl adds the least per-request overhead of the three full-featured clients — on all
+three metrics** (ns/op, B/op, allocs/op) — while running its resilience pipeline. The
+separation between arms (2.7 vs 4.7 vs 4.8 µs) is far larger than the run-to-run spread
+(~5–13%), so unlike the round-trip ns/op, **this ranking holds.** Only raw `net/http`, which
+carries no retry/redaction/observability machinery, is lighter — exactly as expected for a
+layer built on top of it.
 
-- **B/op and allocs/op — gocurl is the lightest of the three full-featured clients:** fewer
-  allocations (78) than resty (79) and req (82), and the smallest byte footprint (7,294, below
-  req's 7,762 and resty's 8,298) — behind only raw `net/http`. This was *not* always true: an
-  earlier version of this suite measured gocurl at ~12,900 B/op, the **heaviest** arm, and we
-  published that loss. Profiling found the cause — a per-`Do` `newRand()` allocated a ~4.9 KiB
-  `[607]int64` RNG state on **every** request even when no retry ran. Making the jitter RNG
-  lazy, skipping the redirect-context value when redirects aren't followed, and skipping the
-  middleware-chain closure when no middleware is composed removed it. Combined with
-  `clone-the-small`, gocurl now carries its full resilience pipeline for a *smaller* per-`Do`
-  footprint than the thinner wrappers. These are the **reproducible, regression-gated** metrics
-  (`TestByteBudget_Do`, `TestAllocBudget_Do`, `TestCloneSmall_NoDeepClonePerDo`).
-- **ns/op — at parity, no winner claimed.** Wall-clock on an in-process server with no real
-  wire is dominated by per-request CPU and is noisy on a loaded machine: across runs gocurl
-  has measured both the fastest *and* the slowest of the four (this average shows it highest).
-  We therefore make **no latency-ranking claim** between the clients — they are at parity — and
-  treat `ns/op` as advisory, which is why the regression gates are on allocs/bytes, not time.
-- **Caveat (not perfectly apples-to-apples):** resty and req **buffer** the full response
-  body by default; gocurl **streams** it. For a tiny body this slightly favors the bufferers;
-  for large responses gocurl's streaming is the safer default. The harness drains every arm,
-  but the body-handling models differ by design.
+This was *not* always true. An earlier round-trip run had gocurl as the **heaviest** arm on
+B/op (~12,900), and we published that loss. Profiling found the cause — a per-`Do`
+`newRand()` allocating a ~4.9 KiB `[607]int64` RNG state on **every** request even when no
+retry ran (it cost ~12% of CPU too). Making the jitter RNG lazy, skipping the redirect-context
+value when redirects aren't followed, and skipping the middleware-chain closure when no
+middleware is composed removed it; `clone-the-small` removed the per-`Do` recipe clone. The
+wins are regression-gated (`TestByteBudget_Do`, `TestAllocBudget_Do`,
+`TestCloneSmall_NoDeepClonePerDo`).
 
-The takeaway matches our claim policy: **latency parity, and a lighter, regression-gated
-per-request footprint than resty/req** — measured and reproducible, never a marketing claim.
+**Caveat (not perfectly apples-to-apples):** resty and req **buffer** the full response body
+by default; gocurl **streams** it. For a tiny body this slightly favors the bufferers; for
+large responses gocurl's streaming is the safer default. Every arm drains its body.
+
+The takeaway matches our claim policy: **the lowest client-side overhead of the full-featured
+clients, measured where it can be measured reliably** — and explicit *latency parity, no
+end-to-end winner claimed* on the network-dominated round-trip. Measured, reproducible,
+regression-gated; never a marketing claim.
 
 ## The soak/leak tests are elsewhere
 
