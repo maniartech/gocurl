@@ -113,7 +113,9 @@ func redirectFromContext(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
 	if rs.max > 0 && len(via) >= rs.max {
-		return fmt.Errorf("stopped after %d redirects", rs.max)
+		// Wrap the sentinel so errors.Is(err, ErrTooManyRedirects) resolves and the
+		// Client path classifies identically to the one-shot/CLI path (exit 47).
+		return fmt.Errorf("stopped after %d redirects: %w", rs.max, ErrTooManyRedirects)
 	}
 	if rs.allow != nil {
 		return rs.allow(req, via)
