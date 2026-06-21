@@ -61,7 +61,34 @@ Cross-cutting assertions on **every** scenario: no goroutine leak (snapshot befo
 connection/fd leak, secrets stay redacted on the error path, and the run is `-race` clean. A
 representative, fast subset is gated in CI (`-short`); the full matrix runs in a non-`-short` job.
 
-### Phase B — Benchmark rigor + competition
+### Phase B — Execution performance: the compiled plan + competitive proof
+
+**Scope (user, 2026-06-21):** parser *performance* benchmarking is **deferred** — parsing is a
+one-time cost amortized by "parse once, execute many", so it is not the production hot path. The
+focus is the **execution** path: it must be top-class in performance, security, and robustness.
+
+**The edge — compile the recipe into a reusable execution plan.** A `net/http` developer hand-builds
+the request once and reuses it; gocurl currently *re-derives* it on every `Do` (deep-clone
+`RequestOptions`, then `applyHeaders`/`applyAuth`/`applyCookies`/`applyCompression`/`applyRequestID`,
+then `Header.Clone`). The alloc profile attributes the ~2× memory / ~13 extra allocs/op vs
+`net/http` to exactly that re-derivation. Because we hold the **full parsed recipe** at `Prepare`
+time, we can compile the plan once and make each `Do` do only the irreducible work:
+
+- **Compiled once (at `Prepare`/first use, memoized, immutable):** method, URL, the static header
+  set, auth header, body source, compression/TLS intent.
+- **Per-`Do` (irreducible):** fresh `ctx`; per-attempt body rewind (`GetBody`); dynamic headers
+  (e.g. request-ID) applied via **copy-on-write** so the static header map is shared read-only
+  across executions (eliminating the `Header.Clone`-per-`Do` cost); cookie-jar read.
+
+Hard requirements: **no public surface change** (the plan is internal to `Request`/`Client`);
+**concurrency-safe** (concurrent `Do` on one prepared `Request` must never share mutable state —
+verified by `-race` + a concurrent benchmark); **behavior-identical** (the fault matrix in §A and
+the full suite stay green); and **validated** (a test proves `net/http`'s `RoundTrip` does not
+mutate the shared request header, the assumption COW relies on). Each step is benchmarked
+before/after with `benchstat`; the goal is to close the gap toward `net/http` parity, never a
+"faster than net/http" claim.
+
+**Competitive proof.**
 
 - **Competitor arms** live in the **benchmark module's own `go.mod`** (the existing bench/scripts
   module pattern), so the *library's* require graph stays clean. Arms: `net/http` (the parity
@@ -116,9 +143,16 @@ representative, fast subset is gated in CI (`-short`); the full matrix runs in a
 - [ ] **A** — Fault-injection harness exists; every row of the failure matrix has a `-race`-clean,
       hermetic test asserting the documented classification/breaker/limiter/deadline behavior and
       zero goroutine/conn/fd leak. A fast subset runs in CI `-short`; the full matrix in a non-short job.
-- [ ] **B** — Competitor benchmark arms (`net/http` + ≥1 popular client) in the bench module;
-      p50/p99/p999 + throughput-under-load harness; `benchstat` methodology + provenance documented;
-      honest results table in `docs/benchmarking.md`; alloc-budget hard gate + latency baseline/advisory gate.
+- [ ] **B (compiled plan)** — the recipe is compiled into a reusable execution plan at `Prepare`;
+      each `Do` does only the irreducible work (fresh ctx, body rewind, dynamic headers via
+      copy-on-write over a shared static header). `-race` + a concurrent benchmark prove no shared
+      mutable state; a test proves `net/http` does not mutate the shared request header; before/after
+      `benchstat` shows the per-`Do` alloc/byte gap vs `net/http` shrink. No surface change; §A matrix
+      + full suite stay green.
+- [ ] **B (competitive proof)** — competitor benchmark arms (`net/http` + ≥1 popular client) in the
+      bench module; p50/p99/p999 + throughput-under-load harness; `benchstat` methodology + provenance
+      documented; honest results table in `docs/benchmarking.md` (incl. where gocurl loses);
+      alloc-budget hard gate + latency baseline/advisory gate. Parser-perf benchmarking deferred.
 - [ ] **C** — Long-form soak (gated, scheduled) asserts no goroutine/heap/fd growth trend with pprof
       artifacts; pool-churn/backpressure test green.
 - [ ] **D** — `docs/operations.md` (tuning + capacity + failure playbook + "easy→prod checklist"),

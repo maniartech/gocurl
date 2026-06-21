@@ -360,11 +360,15 @@ results reported fairly (wins and losses).
   recovery, circuit-breaker trip + short-circuit, no-goroutine-leak-under-storm, and the
   "easy as curl" invariant. **Remaining:** partial-body/premature-EOF (`KindBodyRead`),
   idle-conn-drop reuse, and the deep h2 `GOAWAY`/`RST_STREAM` case; CI non-short job wiring.*
-- [ ] **M12-T2 — Benchmark rigor + competition (Phase B).** Competitor arms (`net/http` + ≥1
-  popular Go client, e.g. resty/req) in the bench module's own `go.mod`; p50/p99/p999 +
-  throughput-under-load harness; `benchstat` methodology + provenance; honest results table in
-  `docs/benchmarking.md` (incl. where gocurl loses); alloc-budget hard gate + latency
-  baseline/advisory gate. *DoD: Spec 14 §B.*
+- [ ] **M12-T2 — Execution performance: compiled plan + competitive proof (Phase B).** Parser-perf
+  benchmarking deferred (amortized one-time cost). **The edge:** compile the parsed recipe into a
+  reusable execution plan at `Prepare` so each `Do` does only irreducible work (fresh ctx, body
+  rewind, dynamic headers via copy-on-write over a shared static header) — closing the ~2×-memory /
+  ~13-alloc re-derivation gap vs `net/http`. No surface change, concurrency-safe (`-race` + concurrent
+  bench), behavior-identical (§A matrix + suite green), validated (net/http does not mutate the shared
+  header). Then competitor arms (`net/http` + ≥1 client, e.g. resty/req) in the bench module's own
+  `go.mod`; p50/p99/p999 + throughput-under-load; `benchstat` + provenance; honest results table
+  (incl. where gocurl loses); alloc-budget hard gate + latency baseline/advisory gate. *DoD: Spec 14 §B.*
 - [ ] **M12-T3 — Extended soak + resource stability (Phase C).** Long-form, gated, scheduled soak
   asserting no goroutine/heap/fd growth trend with pprof artifacts; pool-churn/backpressure test.
   *DoD: Spec 14 §C.*
