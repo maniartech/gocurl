@@ -112,6 +112,101 @@ func TestFaultT2_DNSFailure(t *testing.T) {
 	}
 }
 
+// TestFaultT2_ContextCancelMidStream proves that cancelling the request context
+// while the response body is still streaming surfaces a read error promptly (no
+// hang, no silent truncation-as-success) and leaves no goroutine behind once the
+// body is closed — the per-request context teardown must unwind the in-flight read.
+// (Spec 14 §A.1 context-cancel-mid-stream + §A.2 no-goroutine-leak.)
+func TestFaultT2_ContextCancelMidStream(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "10000000") // promise a large body
+		w.WriteHeader(http.StatusOK)
+		flusher, _ := w.(http.Flusher)
+		chunk := make([]byte, 1024)
+		for i := 0; i < 10000; i++ {
+			if _, err := w.Write(chunk); err != nil {
+				return
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}))
+	defer srv.Close()
+
+	c, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer c.Close()
+
+	base := goroutinesAtMost(0, 200*time.Millisecond)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	resp, err := c.Curl(ctx, "curl "+srv.URL)
+	if err != nil {
+		cancel()
+		t.Fatalf("headers should arrive before cancel: %v", err)
+	}
+
+	// Read a little, then cancel mid-stream.
+	if _, err := io.ReadFull(resp.Body, make([]byte, 4096)); err != nil {
+		cancel()
+		resp.Body.Close()
+		t.Fatalf("initial read before cancel failed: %v", err)
+	}
+	cancel()
+
+	_, rerr := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if rerr == nil {
+		t.Fatal("cancelling mid-stream must surface a read error, not a silent truncation")
+	}
+
+	if final := goroutinesAtMost(base+5, 3*time.Second); final > base+5 {
+		t.Errorf("goroutine leak after mid-stream cancel: base=%d final=%d", base, final)
+	}
+}
+
+// TestFaultT2_PanicMiddlewareDoesNotWedgeShutdown proves that when user middleware
+// panics, the Client still releases its in-flight accounting — so a later graceful
+// Shutdown drains promptly instead of blocking forever on a leaked counter. Do does
+// inflight.Add(1) and only releases on its explicit error/success paths; a panic
+// unwinding past those would strand the count. (Spec 14 §A.3.3.)
+func TestFaultT2_PanicMiddlewareDoesNotWedgeShutdown(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := New(WithMiddleware(func(next Handler) Handler {
+		return func(r *http.Request) (*http.Response, error) {
+			panic("middleware boom")
+		}
+	}))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	// Fire a request whose middleware panics; recover so the test process survives.
+	func() {
+		defer func() { _ = recover() }()
+		req, perr := c.Prepare("curl " + srv.URL)
+		if perr != nil {
+			t.Fatalf("Prepare: %v", perr)
+		}
+		_, _ = c.Do(context.Background(), req)
+	}()
+
+	// A leaked in-flight count would make Shutdown block until the context fires.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := c.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown wedged after a middleware panic (leaked in-flight count): %v", err)
+	}
+}
+
 // TestFaultT2_PrematureBodyEOF proves a server that promises a Content-Length but
 // closes the connection early surfaces a body-read error — the stream is NOT silently
 // truncated (a real on-the-wire failure faultyRT cannot model).

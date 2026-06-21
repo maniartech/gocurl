@@ -225,6 +225,18 @@ func (c *Client) Do(ctx context.Context, req *Request) (*http.Response, error) {
 	// tear the connection down mid-stream. sync.Once keeps it exactly-once.
 	var inflightOnce sync.Once
 	finish := func() { inflightOnce.Do(c.inflight.Done) }
+	// A panic in user middleware (or anywhere below) must NOT strand the in-flight
+	// count — otherwise a later graceful Shutdown blocks forever waiting on a request
+	// that already unwound. Release on panic, then re-panic so the caller still sees
+	// it (gocurl does not swallow user bugs). On the normal paths finish() has either
+	// already run (error) or been handed to the body's Close (success); sync.Once
+	// makes this release a no-op in those cases.
+	defer func() {
+		if r := recover(); r != nil {
+			finish()
+			panic(r)
+		}
+	}()
 
 	if ctx == nil {
 		ctx = context.Background()
