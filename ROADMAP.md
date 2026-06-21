@@ -348,12 +348,18 @@ the **"easy as curl" on-ramp is preserved** (the `Curl*` one-liner stays trivial
 opt-in/internal). HTTP/3 stays out. No superiority claims — parity + proven reliability, competitor
 results reported fairly (wins and losses).
 
-- [ ] **M12-T1 — Fault-injection harness (Phase A).** Build the failure-injection layer Spec 09
+- [~] **M12-T1 — Fault-injection harness (Phase A).** Build the failure-injection layer Spec 09
   (G1) called for. Hermetic, seeded, `-race`-clean tests for the full failure matrix (conn
   refused/reset, slow-loris, partial body/EOF, TLS failure, h2 `GOAWAY`/`RST_STREAM`, 5xx/429
   storms, idle-conn drop) asserting retry classification, breaker trip/recover, rate limiter,
   per-attempt deadlines, and **zero goroutine/conn/fd leak**. Fast subset in CI `-short`; full
   matrix in a non-short job. *DoD: Spec 14 §A.*
+  *Landed (`faultinject_test.go`): programmable `faultyRT` backbone (injected via `WithTransport`
+  — no surface change); scenarios for connect-reset/dial-refused/timeout/TLS classification +
+  retry honoring, transient recovery, per-attempt-deadline bounding a stalled peer, 429/503 retry
+  recovery, circuit-breaker trip + short-circuit, no-goroutine-leak-under-storm, and the
+  "easy as curl" invariant. **Remaining:** partial-body/premature-EOF (`KindBodyRead`),
+  idle-conn-drop reuse, and the deep h2 `GOAWAY`/`RST_STREAM` case; CI non-short job wiring.*
 - [ ] **M12-T2 — Benchmark rigor + competition (Phase B).** Competitor arms (`net/http` + ≥1
   popular Go client, e.g. resty/req) in the bench module's own `go.mod`; p50/p99/p999 +
   throughput-under-load harness; `benchstat` methodology + provenance; honest results table in
