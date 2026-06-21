@@ -26,6 +26,48 @@ security stack below. The remaining pre-1.0 caveat is the *contract*, not the qu
 public API may still change and curl-flag coverage is still expanding, so pin a version and
 check the [CHANGELOG](CHANGELOG.md) when upgrading. Feedback and contributions are very welcome.
 
+### Proven, not promised
+
+"Production-grade" and "mission-critical" are claims we back with tests you can run, not
+adjectives. A two-tier fault-injection harness deliberately breaks the network and asserts
+gocurl does the right thing:
+
+- **Bounded retries** — `WithTimeout` bounds the *whole* operation including backoff, not
+  just one attempt (`TestFault_OverallRetryBudget`).
+- **Idempotency-aware retries**, including HTTP/2 `GOAWAY`/`RST_STREAM` (`TestFault_H2ErrorsRetried`).
+- **Graceful shutdown** never truncates a live stream and is never wedged by a panicking
+  middleware (`TestFault_ShutdownWaitsForOpenBody`, `TestFaultT2_PanicMiddlewareDoesNotWedgeShutdown`).
+- **Memory bounds** against a decompression bomb from an untrusted server
+  (`TestFault_BufferingHelpersBoundedAgainstBomb`).
+- **Secrets never leak** on any failure path (`TestFault_NoSecretLeakOnFailurePaths`).
+- **No leaks under sustained load** (`TestClient_Soak`); **backpressure without deadlock**
+  (`TestClient_Soak_Backpressure`).
+- **Wire-parity with real curl**, proven by differential testing (`TestCurlParity_DifferentialVsRealCurl`).
+
+Performance is reported honestly: gocurl targets **parity** with a well-tuned `net/http`
+client (proven by `BenchmarkRoundTrip_Gocurl_Prepared` and `TestLatencyDistribution`) and we
+publish where it loses. See [docs/operations.md](docs/operations.md),
+[docs/benchmarking.md](docs/benchmarking.md), and the
+[v1.0-readiness checklist](docs/v1-readiness.md). Every claim above is checked by an automated
+honesty doc-lint (`TestDocHonestyLint`): no claim ships without a named, un-skipped test.
+
+### Why gocurl over hand-rolled `net/http`
+
+A `net/http` purist *can* write everything gocurl does — but almost nobody writes it
+correctly, per service, and keeps it correct. Because gocurl receives the **curl recipe**, it
+knows your intent and wires the right execution pipeline around it:
+
+| Concern | Hand-rolled `net/http` | gocurl |
+|---|---|---|
+| Overall timeout across retries | `Client.Timeout` is **per-attempt**; easy to ship a retry amplifier | `WithTimeout` bounds the whole loop, backoff clamped to remaining budget |
+| Retry safety | Retry-everything (replays a non-idempotent POST) or retry-nothing | Idempotency-aware; only safe methods + retryable outcomes |
+| Error decisions | `err != nil`, then guess | Classified `Kind` (`errors.As` into h2/DNS/TLS errors) |
+| Secret hygiene | One careless `fmt.Errorf("%v", url)` leaks a token | Redaction on every error/log/span path, build-gated |
+| Untrusted-server memory | `DisableCompression` quietly removes net/http's guard | Bounded buffered reads + 1 MiB header cap |
+
+You paste a curl command from the API docs and get this pipeline for free — the
+[operations guide](docs/operations.md) shows how to tune it.
+
 ## Why GoCurl
 
 Every REST API documents itself with curl. Almost none ship a Go SDK for their long-tail

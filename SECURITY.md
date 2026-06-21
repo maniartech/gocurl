@@ -66,3 +66,52 @@ understanding:
   are unaffected.
 
 Reports that improve any of the above are welcome.
+
+## Threat model
+
+This makes the trust boundaries explicit so you can reason about gocurl in a
+mission-critical deployment. Each control below is backed by an un-skipped test (cited),
+enforced by the honesty doc-lint.
+
+### Assets
+
+- **Credentials** — bearer tokens, basic-auth userinfo, cookies, API keys, proxy creds.
+- **Process integrity & availability** — memory, file descriptors, goroutines.
+- **The request target** — the service must not be coerced into reaching an unintended host.
+
+### Trust boundaries & attacker models
+
+1. **Untrusted *server*** (you call an endpoint you do not control). The server may stall,
+   reset, send a premature EOF, a decompression bomb, or a flood of response headers.
+   - *Defended:* response-header cap (1 MiB), buffered-read cap (64 MiB) against bombs
+     (`TestFault_BufferingHelpersBoundedAgainstBomb`), overall timeout bounds a stall
+     (`TestFaultT2_ResponseHeaderTimeout`), premature EOF surfaces as `KindBodyRead`
+     (`TestFaultT2_PrematureBodyEOF`), and credentials never leak in the resulting error
+     (`TestFault_NoSecretLeakOnFailurePaths`).
+
+2. **Untrusted *command string / URL*** (a curl string or URL influenced by user input).
+   - *Defended:* the opt-in SSRF guard blocks internal/metadata targets on the request
+     **and every redirect hop**; plaintext auth fails closed; `*WithVars` avoids the
+     process environment; parse-time file reads are bounded. *Residual:* DNS rebinding
+     between SSRF check and dial is not fully closed (dial-IP pinning is future work);
+     the guard is **opt-in**, so you must enable it for untrusted input.
+
+3. **Untrusted *network path*** (MITM between client and server).
+   - *Defended:* TLS 1.2 floor, optional certificate pinning checked in addition to chain
+     verification. *Residual:* `-k`/`--insecure` disables verification by explicit caller
+     choice.
+
+4. **Buggy *caller code* under load** (panicking middleware, undrained bodies, abandoned
+   requests).
+   - *Defended:* a panicking middleware still releases the in-flight count so `Shutdown`
+     drains (`TestFaultT2_PanicMiddlewareDoesNotWedgeShutdown`); a graceful `Shutdown`
+     waits for in-flight streams instead of truncating them
+     (`TestFault_ShutdownWaitsForOpenBody`); no goroutine/connection leak under a fault
+     storm or sustained soak (`TestFault_NoGoroutineLeakUnderStorm`, `TestClient_Soak`).
+
+### Explicitly out of scope
+
+- gocurl is an HTTP/HTTPS client; non-HTTP curl protocols (FTP, SMTP, …) are not implemented.
+- It does not sandbox the *content* of responses you choose to execute or deserialize.
+- It is not a WAF or an egress firewall; the SSRF guard is a defense-in-depth control, not a
+  replacement for network-level egress policy.
