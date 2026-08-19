@@ -44,101 +44,22 @@ fmt.Println(out.Choices[0].Message.Content)
 
 One raw string, multi-line and backslash-continued exactly as the docs print it, decoded
 straight into your own struct. That is the whole integration — no SDK, no hand-translation
-into `http.NewRequest`. (Verified end-to-end by `TestReadmeExample_OpenAIStyleRawString`;
-for keys you'd rather not read from the process environment, see
-[Variable substitution](#variable-substitution).)
+into `http.NewRequest`. (Verified end-to-end by `TestReadmeExample_OpenAIStyleRawString`.)
 
-GoCurl is a **production-grade**, curl-ergonomic HTTP client for Go, built on `net/http`,
-with a CLI that shares the exact same syntax. It removes the tax every Go developer pays
-when integrating a new API — mentally compiling a curl snippet from the docs into
-`http.NewRequest`, headers, body encoding, and auth — and backs it with the retries,
-circuit breaking, observability, SSRF protection, secret redaction, and typed errors that
-real integrations need in production (`TestFault_OverallRetryBudget`,
-`TestFault_NoSecretLeakOnFailurePaths`, `TestExecutionPathFeatureMatrix`).
+GoCurl is a curl-ergonomic HTTP client for Go, built on `net/http`, with a CLI that shares
+the exact same syntax. It removes the tax every Go developer pays when integrating a new
+API — mentally compiling a curl snippet from the docs into `http.NewRequest`, headers, body
+encoding, and auth — and wraps it in the retries, circuit breaking, observability, SSRF
+protection, secret redaction, and typed errors that real integrations need.
 
-> **Persuasion by example, not by marketing.** Every performance and reliability claim in
-> this repo cites a test or benchmark you can run yourself — enforced by an automated
-> doc-lint (`TestDocHonestyLint`), not left to good intentions. **Every Go example on this
-> page is executed by a test** (`TestReadmeExample_*`) and every API it names is checked
-> against the locked public surface (`TestReadmeExamples_SymbolsExist`) — so what you copy is
-> what we run. That is the motto, and it runs through the README, VISION, docs, and book alike.
+Released at **`v0.5.0`**; the `v0` is about the API contract, not the quality — see
+[Project status](#project-status). Requires **Go 1.25+**.
 
-> See [VISION.md](VISION.md) for what we're building and why.
-
-## Project status
-
-**Production-grade, released at `v0.5.0`.** The engine is hardened and tested — race-clean,
-fuzzed, with a coverage gate in CI, streaming bodies, connection pooling, and the
-resilience/observability/security stack below. The race and resource claims are exercised by
-`TestFault_NoGoroutineLeakUnderStorm` and `TestClient_Soak`.
-
-The `v0` is about the *contract*, not the quality. Under semver a v1 major promises the API
-will not change, and in Go that promise is costly to revise — `v1 → v2` forces every importer
-to rewrite their import path to `/v2`, while `v0.x → v1.0` costs them nothing. We would rather
-take API feedback from real integrations first. So: pin a version, check the
-[CHANGELOG](CHANGELOG.md) when upgrading, and expect the API to settle rather than churn.
-Feedback and contributions are very welcome — see [docs/v1-readiness.md](docs/v1-readiness.md)
-for exactly what stands between here and v1.0.
-
-### Proven, not promised
-
-"Production-grade" and "mission-critical" are claims we back with tests you can run, not
-adjectives. A two-tier fault-injection harness deliberately breaks the network and asserts
-gocurl does the right thing:
-
-- **Bounded retries** — `WithTimeout` bounds the *whole* operation including backoff, not
-  just one attempt (`TestFault_OverallRetryBudget`).
-- **Idempotency-aware retries**, including HTTP/2 `GOAWAY`/`RST_STREAM` (`TestFault_H2ErrorsRetried`).
-- **Graceful shutdown** never truncates a live stream and is never wedged by a panicking
-  middleware (`TestFault_ShutdownWaitsForOpenBody`, `TestFaultT2_PanicMiddlewareDoesNotWedgeShutdown`).
-- **Memory bounds** against a decompression bomb from an untrusted server
-  (`TestFault_BufferingHelpersBoundedAgainstBomb`).
-- **Secrets never leak** on any failure path (`TestFault_NoSecretLeakOnFailurePaths`).
-- **No leaks under sustained load** (`TestClient_Soak`); **backpressure without deadlock**
-  (`TestClient_Soak_Backpressure`).
-- **Wire-parity with real curl**, proven by differential testing (`TestCurlParity_DifferentialVsRealCurl`).
-
-Performance is reported honestly: gocurl targets **parity** with a well-tuned `net/http`
-client (proven by `BenchmarkRoundTrip_Gocurl_Prepared` and `TestLatencyDistribution`) and we
-publish where it loses. See [docs/operations.md](docs/operations.md),
-[docs/benchmarking.md](docs/benchmarking.md), and the
-[v1.0-readiness checklist](docs/v1-readiness.md). Every claim above is checked by an automated
-honesty doc-lint (`TestDocHonestyLint`): no claim ships without a named, un-skipped test.
-
-### Why gocurl over hand-rolled `net/http`
-
-A `net/http` purist *can* write everything gocurl does — but almost nobody writes it
-correctly, per service, and keeps it correct. Because gocurl receives the **curl recipe**, it
-knows your intent and wires the right execution pipeline around it:
-
-| Concern | Hand-rolled `net/http` | gocurl |
-|---|---|---|
-| Overall timeout across retries | `Client.Timeout` is **per-attempt**; easy to ship a retry amplifier | `WithTimeout` bounds the whole loop, backoff clamped to remaining budget |
-| Retry safety | Retry-everything (replays a non-idempotent POST) or retry-nothing | Idempotency-aware; only safe methods + retryable outcomes |
-| Error decisions | `err != nil`, then guess | Classified `Kind` (`errors.As` into h2/DNS/TLS errors) |
-| Secret hygiene | One careless `fmt.Errorf("%v", url)` leaks a token | Redaction on every error/log/span path, build-gated |
-| Untrusted-server memory | `DisableCompression` quietly removes net/http's guard | Bounded buffered reads + 1 MiB header cap |
-
-You paste a curl command from the API docs and get this pipeline for free — the
-[operations guide](docs/operations.md) shows how to tune it.
-
-## Why GoCurl
-
-Every REST API documents itself with curl. Almost none ship a Go SDK for their long-tail
-endpoints. GoCurl makes the curl command *be* the code, so you can:
-
-- **Integrate a third-party API** by copy-pasting its documented curl example — then run it
-  in production with retries, timeouts, tracing, and metrics around it.
-- **Operate service-to-service HTTP** through a pooled `Client` with circuit breaking, rate
-  limiting, and SSRF protection.
-- **Write scripts, CI checks, and API smoke tests** with one syntax for shell and code.
-- **Drive HTTP from config** by storing curl commands as data and executing them.
-
-Built on `net/http` and organized around **parse once, execute many** — `Prepare` a request
-once, then `Do` it repeatedly over a pooled `Client` — so the per-request overhead above
-hand-written `net/http` is small and constant. The goal is parity with a well-tuned
-`net/http` client plus the ergonomics and reliability above; we make no "faster than
-net/http" claims.
+> **Persuasion by example, not by marketing.** Every claim on this page, and every code
+> example on it, is backed by a test you can run yourself — enforced automatically by
+> `TestDocHonestyLint`, not left to good intentions. See
+> [Proven, not promised](#proven-not-promised) for the evidence, and
+> [VISION.md](VISION.md) for what we're building and why.
 
 ## Installation
 
@@ -153,8 +74,6 @@ As a command-line tool:
 ```bash
 go install github.com/maniartech/gocurl/cmd/gocurl@latest
 ```
-
-Requires Go 1.25+.
 
 ## Usage
 
@@ -239,51 +158,6 @@ if err != nil {
 resp, err = client.Do(ctx, req)
 ```
 
-### One pipeline under any SDK
-
-When a vendor SDK accepts an `*http.Client`, compose gocurl's exported handler
-middleware and adapt it into the SDK's transport. Compose outermost-first; keep
-`Retry` innermost so the breaker records the final logical outcome rather than
-each attempt:
-
-```go
-base := gocurl.HandlerFromRoundTripper(http.DefaultTransport)
-limiter := gocurl.NewTokenBucket(20, 40)
-
-h := gocurl.Observe(hooks, metrics, tracer, logger)(
-    gocurl.SSRFGuard(gocurl.DefaultSSRFPolicy())(
-        gocurl.CircuitBreaker(breakerConfig)(
-            gocurl.RateLimiter(limiter)(
-                gocurl.Retry(gocurl.DefaultRetryPolicy(3))(base)))))
-
-sdkHTTPClient := &http.Client{
-    Transport: gocurl.RoundTripperFromHandler(h),
-    Timeout:   30 * time.Second,
-}
-```
-
-`HandlerFromRoundTripper` preserves the original hostname while pinning SSRF-validated
-IPs at dial time. `RoundTripperFromHandler` deliberately applies only the middleware
-shown above: the surrounding `http.Client` owns redirects, cookies, and its timeout.
-`WithTimeout`, redirect options, defaults, and `WithTransport` configure a gocurl
-`Client`; they are not ambient settings for a standalone chain. Legacy request-mutating
-middleware can be included with `FromMiddlewareFunc`.
-
-Backoff policies can use `ConstantBackoff` or `ExponentialJitter`. Programmatic native
-requests can be created with `NewRequest` and executed through a reusable `Client`.
-
-| Feature | `Client.Do` | Injected handler chain | `Curl*` / `Execute` |
-|---|---:|---:|---:|
-| Retry | configured with `WithRetry` | explicit `Retry` | curl/legacy retry options |
-| Circuit breaker / rate limiter | configured options | explicit `CircuitBreaker` / `RateLimiter` | unavailable |
-| SSRF guard with dial-IP pinning | `WithSSRFGuard` | explicit `SSRFGuard` + adapter | unavailable |
-| Hooks / metrics / tracing / logging | `WithHooks` etc. | explicit `Observe` | unavailable |
-| Redirects, cookies, defaults | client-managed | surrounding SDK/`http.Client` | curl options |
-
-The one-shot helpers intentionally remain compatibility-oriented and protection-free.
-For user-influenced URLs, use `Client.Do` with `WithSSRFGuard`, or build an explicit
-injected chain as above.
-
 ### Typed request building
 
 Prefer typed, IDE-discoverable configuration over a curl string? Assemble a request with the
@@ -299,6 +173,9 @@ opts := options.NewRequestOptionsBuilder().
 
 resp, err := gocurl.Execute(ctx, opts)
 ```
+
+Programmatic native requests can also be created with `NewRequest` and executed through a
+reusable `Client`.
 
 ### Variable substitution
 
@@ -334,15 +211,43 @@ gocurl -o repo.json https://api.github.com/repos/golang/go
 
 Run `gocurl` with no arguments for usage help.
 
+## Why GoCurl
+
+A `net/http` purist *can* write everything GoCurl does — but almost nobody writes it
+correctly, per service, and keeps it correct as the code evolves. Because GoCurl receives
+the **curl recipe**, it knows your intent and wires the right execution pipeline around it:
+
+| Concern | Hand-rolled `net/http` | GoCurl |
+|---|---|---|
+| Overall timeout across retries | `Client.Timeout` is **per-attempt**; easy to ship a retry amplifier | `WithTimeout` bounds the whole loop, backoff clamped to remaining budget |
+| Retry safety | Retry-everything (replays a non-idempotent POST) or retry-nothing | Idempotency-aware; only safe methods + retryable outcomes |
+| Error decisions | `err != nil`, then guess | Classified `Kind` (`errors.As` into h2/DNS/TLS errors) |
+| Secret hygiene | One careless `fmt.Errorf("%v", url)` leaks a token | Redaction on every error/log/span path, build-gated |
+| Untrusted-server memory | `DisableCompression` quietly removes net/http's guard | Bounded buffered reads + 1 MiB header cap |
+
+That pipeline is why GoCurl fits:
+
+- **Integrating a third-party API** — copy the doc's curl example and run it in production,
+  with retries, timeouts, tracing, and metrics around it.
+- **Service-to-service HTTP** — a pooled `Client` with circuit breaking, rate limiting, and
+  SSRF protection.
+- **Scripts, CI checks, and API smoke tests** — one syntax for shell and code.
+- **Config-driven HTTP** — store curl commands as data and execute them.
+
+Built on `net/http` and organized around **parse once, execute many** — `Prepare` a request
+once, then `Do` it repeatedly over a pooled `Client` — so the per-request overhead above a
+hand-written request is small and constant. The goal is parity with a well-tuned `net/http`
+client plus the ergonomics and reliability above; we make no "faster than net/http" claims.
+
 ## Built for real integrations
 
-GoCurl is more than a parser — the reusable `Client` wires in the cross-cutting concerns
-real API integrations need. Everything below is opt-in via functional options on
-`gocurl.New(...)`:
+The reusable `Client` wires in the cross-cutting concerns real API integrations need.
+Everything below is opt-in via functional options on `gocurl.New(...)`:
 
 - **Resilience** — idempotency-aware retries with backoff (`WithRetry`, `WithRetryAttempts`,
   `WithRetryBudget`), a circuit breaker (`WithCircuitBreaker`), and a client-side rate
-  limiter (`WithRateLimit`).
+  limiter (`WithRateLimit`). Backoff policies include `ConstantBackoff` and
+  `ExponentialJitter`.
 - **Observability** — pluggable tracing, metrics, structured logging, and lifecycle hooks
   (`WithTracer`, `WithMetrics`, `WithLogger`, `WithHooks`), with ready-made OpenTelemetry
   and Prometheus adapters in [`observability/otel`](observability/otel) and
@@ -356,6 +261,92 @@ real API integrations need. Everything below is opt-in via functional options on
   retry could help.
 - **Streaming & limits** — responses stream by default (the library never buffers the full
   body or writes to stdout), with an optional response body-size cap to bound memory.
+- **Transport control** — `WithTransport` injects a custom `http.RoundTripper` (the seam for
+  tests and for future protocols).
+
+### Advanced: one pipeline under any SDK
+
+When a vendor SDK accepts an `*http.Client`, compose GoCurl's exported handler middleware
+and adapt it into the SDK's transport. Compose outermost-first; keep `Retry` innermost so
+the breaker records the final logical outcome rather than each attempt:
+
+```go
+base := gocurl.HandlerFromRoundTripper(http.DefaultTransport)
+limiter := gocurl.NewTokenBucket(20, 40)
+
+h := gocurl.Observe(hooks, metrics, tracer, logger)(
+    gocurl.SSRFGuard(gocurl.DefaultSSRFPolicy())(
+        gocurl.CircuitBreaker(breakerConfig)(
+            gocurl.RateLimiter(limiter)(
+                gocurl.Retry(gocurl.DefaultRetryPolicy(3))(base)))))
+
+sdkHTTPClient := &http.Client{
+    Transport: gocurl.RoundTripperFromHandler(h),
+    Timeout:   30 * time.Second,
+}
+```
+
+`HandlerFromRoundTripper` preserves the original hostname while pinning SSRF-validated
+IPs at dial time. `RoundTripperFromHandler` deliberately applies only the middleware
+shown above: the surrounding `http.Client` owns redirects, cookies, and its timeout.
+`WithTimeout`, redirect options, and defaults configure a GoCurl `Client`; they are not
+ambient settings for a standalone chain. Legacy request-mutating middleware can be
+included with `FromMiddlewareFunc`.
+
+| Feature | `Client.Do` | Injected handler chain | `Curl*` / `Execute` |
+|---|---|---|---|
+| Retry | configured with `WithRetry` | explicit `Retry` | curl/legacy retry options |
+| Circuit breaker / rate limiter | configured options | explicit `CircuitBreaker` / `RateLimiter` | unavailable |
+| SSRF guard with dial-IP pinning | `WithSSRFGuard` | explicit `SSRFGuard` + adapter | unavailable |
+| Hooks / metrics / tracing / logging | `WithHooks` etc. | explicit `Observe` | unavailable |
+| Redirects, cookies, defaults | client-managed | surrounding SDK/`http.Client` | curl options |
+
+The one-shot helpers intentionally remain compatibility-oriented and protection-free.
+For user-influenced URLs, use `Client.Do` with `WithSSRFGuard`, or build an explicit
+injected chain as above.
+
+## Proven, not promised
+
+"Production-grade" and "mission-critical" are claims we back with tests you can run, not
+adjectives. A two-tier fault-injection harness deliberately breaks the network and asserts
+GoCurl does the right thing:
+
+- **Bounded retries** — `WithTimeout` bounds the *whole* operation including backoff, not
+  just one attempt (`TestFault_OverallRetryBudget`).
+- **Idempotency-aware retries**, including HTTP/2 `GOAWAY`/`RST_STREAM` (`TestFault_H2ErrorsRetried`).
+- **Graceful shutdown** never truncates a live stream and is never wedged by a panicking
+  middleware (`TestFault_ShutdownWaitsForOpenBody`, `TestFaultT2_PanicMiddlewareDoesNotWedgeShutdown`).
+- **Memory bounds** against a decompression bomb from an untrusted server
+  (`TestFault_BufferingHelpersBoundedAgainstBomb`).
+- **Secrets never leak** on any failure path (`TestFault_NoSecretLeakOnFailurePaths`).
+- **No leaks under sustained load** (`TestClient_Soak`); **backpressure without deadlock**
+  (`TestClient_Soak_Backpressure`).
+- **Wire-parity with real curl**, proven by differential testing (`TestCurlParity_DifferentialVsRealCurl`).
+
+**The examples on this page are tested too.** Every Go snippet above is executed against a
+hermetic server (`TestReadmeExample_OpenAIStyleRawString` and its siblings), and every API
+they name is checked against the locked public surface (`TestReadmeExamples_SymbolsExist`) —
+so what you copy is what we run.
+
+Performance is reported honestly: GoCurl targets **parity** with a well-tuned `net/http`
+client (proven by `BenchmarkRoundTrip_Gocurl_Prepared` and `TestLatencyDistribution`) and we
+publish where it loses. See [docs/operations.md](docs/operations.md) for tuning and
+[docs/benchmarking.md](docs/benchmarking.md) for the methodology and numbers.
+
+## Project status
+
+**Production-grade, released at `v0.5.0`.** The engine is hardened and tested — race-clean,
+fuzzed, with a coverage gate in CI, streaming bodies, connection pooling, and the
+resilience/observability/security stack above. The race and resource claims are exercised by
+`TestFault_NoGoroutineLeakUnderStorm` and `TestClient_Soak`.
+
+The `v0` is about the *contract*, not the quality. Under semver a v1 major promises the API
+will not change, and in Go that promise is costly to revise — `v1 → v2` forces every importer
+to rewrite their import path to `/v2`, while `v0.x → v1.0` costs them nothing. We would rather
+take API feedback from real integrations first. So: pin a version, check the
+[CHANGELOG](CHANGELOG.md) when upgrading, and expect the API to settle rather than churn.
+Feedback and contributions are very welcome — see [docs/v1-readiness.md](docs/v1-readiness.md)
+for exactly what stands between here and v1.0.
 
 ## Supported curl features
 
