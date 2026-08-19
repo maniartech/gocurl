@@ -1,13 +1,52 @@
 # GoCurl
 
-**Paste any curl command from any API doc straight into Go.** Test it in the shell, run
-the exact same command in your code — no translation, no guesswork.
+**Missing a Go SDK?** Your favorite API provider shipped clients for Python, JavaScript,
+and Ruby — and for Go, just a `curl` example and good luck. Don't worry. GoCurl makes that
+curl command *be* your Go code:
 
 ```go
 resp, err := gocurl.Curl(ctx, `
   curl https://api.github.com/repos/golang/go
 `)
 ```
+
+Test it in your shell, paste it into your program — the exact same command, no translation,
+no guesswork.
+
+## No SDK? No problem — here's OpenAI
+
+Copy the curl command straight out of the provider's docs. Keep the `$OPENAI_API_KEY`
+exactly as written — GoCurl expands it from the environment at execution, just like your
+shell does, so the key never touches your source:
+
+```go
+var out struct {
+    Choices []struct {
+        Message struct {
+            Content string `json:"content"`
+        } `json:"message"`
+    } `json:"choices"`
+}
+
+resp, err := gocurl.CurlJSON(ctx, &out, `
+    curl https://api.openai.com/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $OPENAI_API_KEY" \
+      -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Say hello."}]}'
+`)
+if err != nil {
+    log.Fatal(err)
+}
+defer resp.Body.Close()
+
+fmt.Println(out.Choices[0].Message.Content)
+```
+
+One raw string, multi-line and backslash-continued exactly as the docs print it, decoded
+straight into your own struct. That is the whole integration — no SDK, no hand-translation
+into `http.NewRequest`. (Verified end-to-end by `TestReadmeExample_OpenAIStyleRawString`;
+for keys you'd rather not read from the process environment, see
+[Variable substitution](#variable-substitution).)
 
 GoCurl is a **production-grade**, curl-ergonomic HTTP client for Go, built on `net/http`,
 with a CLI that shares the exact same syntax. It removes the tax every Go developer pays
@@ -19,14 +58,16 @@ real integrations need in production (`TestFault_OverallRetryBudget`,
 
 > **Persuasion by example, not by marketing.** Every performance and reliability claim in
 > this repo cites a test or benchmark you can run yourself — enforced by an automated
-> doc-lint (`TestDocHonestyLint`), not left to good intentions. That is the motto, and it
-> runs through the README, VISION, docs, and book alike.
+> doc-lint (`TestDocHonestyLint`), not left to good intentions. **Every Go example on this
+> page is executed by a test** (`TestReadmeExample_*`) and every API it names is checked
+> against the locked public surface (`TestReadmeExamples_SymbolsExist`) — so what you copy is
+> what we run. That is the motto, and it runs through the README, VISION, docs, and book alike.
 
 > See [VISION.md](VISION.md) for what we're building and why.
 
 ## Project status
 
-**Production-grade, released at `v0.9.0`.** The engine is hardened and tested — race-clean,
+**Production-grade, released at `v0.5.0`.** The engine is hardened and tested — race-clean,
 fuzzed, with a coverage gate in CI, streaming bodies, connection pooling, and the
 resilience/observability/security stack below. The race and resource claims are exercised by
 `TestFault_NoGoroutineLeakUnderStorm` and `TestClient_Soak`.
@@ -165,7 +206,7 @@ _, err = gocurl.CurlJSON(ctx, &repo, "https://api.github.com/repos/golang/go")
 
 // Stream a download to a file.
 n, resp, err := gocurl.CurlDownload(ctx, "go.tar.gz",
-    "https://go.dev/dl/go1.23.0.linux-amd64.tar.gz")
+    "https://go.dev/dl/go1.25.0.linux-amd64.tar.gz")
 ```
 
 `CurlBytes` is also available for raw `[]byte` bodies.

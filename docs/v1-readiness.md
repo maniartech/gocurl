@@ -55,18 +55,18 @@ requires every `RH-*` task there to be complete.
 - [x] Honesty doc-lint gating performance/reliability claims on cited, un-skipped tests
       (`TestDocHonestyLint`).
 
-## Shipped: v0.9.0 — the public release
+## Shipped: v0.5.0 — the public release
 
 - [x] **July 2026 hardening tracker.** Every gate in
       [readiness-hardening-2026-07.md](readiness-hardening-2026-07.md) is complete, including
       the final clean-tree-independent audit command set.
-- [x] **Tagged and published as `v0.9.0`.** See the [CHANGELOG](../CHANGELOG.md).
+- [x] **Tagged and published as `v0.5.0`.** See the [CHANGELOG](../CHANGELOG.md).
 
-**Why v0.9.0 and not v1.0.0.** Every *quality* gate above is green — this is not a
+**Why v0.5.0 and not v1.0.0.** Every *quality* gate above is green — this is not a
 maturity hedge. It is a semver decision. A `v1` major is a promise that the exported API
 will not change, and in Go that promise is expensive to revise: `v1 → v2` forces every
 importer to rewrite their import path to `/v2`, whereas `v0.x → v1.0` costs them nothing.
-Shipping at v0.9.0 lets real integrations pressure-test the API shape while breaking
+Shipping at v0.5.0 lets real integrations pressure-test the API shape while breaking
 changes are still cheap for users. It is the conservative choice, not the timid one.
 
 ## Remaining before a v1.0 tag — maintainer's call
@@ -77,4 +77,4 @@ changes are still cheap for users. It is the conservative choice, not the timid 
 - [ ] **curl-flag coverage** continues to expand (see [VISION.md](../VISION.md)); the gaps are
       documented and non-blocking for the engine's production use.
 - [ ] **Tag `v1.0.0`.** When the API has survived real usage without a breaking change for a
-      meaningful stretch, promoting v0.9.x → v1.0.0 is a near-trivial, importer-invisible step.
+      meaningful stretch, promoting v0.x → v1.0.0 is a near-trivial, importer-invisible step.

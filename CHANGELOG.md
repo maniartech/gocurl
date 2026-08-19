@@ -14,9 +14,9 @@ later. Breaking changes within v0.x will be listed here and kept rare.
 
 ## [Unreleased]
 
-## [0.9.0] - 2026-08-19
+## [0.5.0] - 2026-08-19
 
-**First tagged release.** Everything below in this file up to this point ships in `v0.9.0`.
+**First tagged release.** Everything below in this file up to this point ships in `v0.5.0`.
 
 gocurl is a curl-ergonomic HTTP client for Go built on `net/http`: paste a curl command
 from any API doc and execute it, with a production execution pipeline around it. This
