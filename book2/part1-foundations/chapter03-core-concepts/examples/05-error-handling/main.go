@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	fmt.Println("⚠️  Error Handling Demonstration\n")
+	fmt.Print("⚠️  Error Handling Demonstration\n\n")
 
 	// Pattern 1: HTTP status code errors
 	pattern1_StatusCodeErrors()

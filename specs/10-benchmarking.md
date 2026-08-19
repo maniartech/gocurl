@@ -224,8 +224,8 @@ gated (skipped in the fast CI test job) and informational, not pass/fail.
   runners. Proposed: gate on **allocs only** in CI, treat ns/op as informational. Confirm.
 - **Where docs live.** Proposed `docs/benchmarking.md`. Confirm vs `book2/` chapter vs a
   top-level `BENCHMARKS.md`.
-- **Go version matrix for benchmarks.** CI tests on 1.23.x and 1.24.x (`ci.yml:13`). Proposed:
-  run the benchmark smoke job on a single pinned version (1.23.x) to keep numbers comparable;
+- **Go version matrix for benchmarks.** CI tests on 1.25.x and current stable (`ci.yml`). Proposed:
+  run the benchmark smoke job on a single pinned version (1.25.x) to keep numbers comparable;
   confirm we don't need cross-version benchmark provenance.
 - **Latency harness scope.** Proposed: closed-loop sequential p50/p99 only (no open-loop /
   Little's-law load generator). Confirm an in-repo load test is out of scope for v1.

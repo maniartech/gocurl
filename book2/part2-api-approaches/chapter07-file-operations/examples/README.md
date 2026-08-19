@@ -27,7 +27,7 @@ go run main.go
 
 ## Prerequisites
 
-- Go 1.18+
+- Go 1.25+
 - Internet connection
 - Write permissions for downloads
 

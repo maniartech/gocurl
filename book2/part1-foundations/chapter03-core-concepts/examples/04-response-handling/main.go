@@ -37,7 +37,7 @@ type GitHubUser struct {
 }
 
 func main() {
-	fmt.Println("📦 Response Handling Demonstration\n")
+	fmt.Print("📦 Response Handling Demonstration\n\n")
 
 	// Technique 1: Automatic string reading
 	technique1_AutomaticString()

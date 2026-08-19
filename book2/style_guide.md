@@ -52,7 +52,7 @@ This style guide ensures consistency, clarity, and quality across all chapters o
 ### 2.3 Tense
 
 - **Present tense** for describing how things work
-  - ✅ "The `Process()` function handles all HTTP execution..."
+  - ✅ "The `Execute()` function handles all HTTP execution..."
 - **Future tense** when previewing upcoming content
   - ✅ "In Chapter 8, we'll explore certificate pinning..."
 - **Past tense** only when referencing earlier content
@@ -159,7 +159,7 @@ import (
     "log"
     "time"
 
-    "github.com/stackql/gocurl"
+    "github.com/maniartech/gocurl"
 )
 
 func main() {
@@ -190,7 +190,7 @@ import (
     "fmt"
     "time"
 
-    "github.com/stackql/gocurl"
+    "github.com/maniartech/gocurl"
 )
 
 // GitHubClient provides access to GitHub API
@@ -357,7 +357,7 @@ func CurlCommandWithVars(ctx context.Context, vars map[string]string, command st
 func CurlArgsWithVars(ctx context.Context, vars map[string]string, args ...string) (*http.Response, error)
 
 // Core execution
-func Process(ctx context.Context, opts *RequestOptions) (*http.Response, error)
+func Execute(ctx context.Context, opts *options.RequestOptions) (*http.Response, error)
 ```
 
 **NEVER use incorrect signatures:**
@@ -374,7 +374,7 @@ func Process(ctx context.Context, opts *RequestOptions) (*http.Response, error)
 | Curl-syntax functions | Curl-style, curl-like |
 | Builder pattern | Builder style, fluent API only |
 | RequestOptions | Request options, Options struct |
-| Process() function | Execute function, Process method |
+| Execute() function | Execute function, one-shot execution |
 | Middleware | Middleware function, interceptor |
 | Variable expansion | Variable substitution, templating |
 | Context cancellation | Context timeout (when specifically about cancel) |
@@ -431,7 +431,7 @@ func Example() {
 
 ```bash
 # For shell commands
-go get github.com/stackql/gocurl
+go get github.com/maniartech/gocurl
 ```
 
 ```json
@@ -478,7 +478,7 @@ User Code
     │                       │
     └─→ Builder Pattern ────┘
             │
-            └─→ Process() ──→ http.Client ──→ HTTP Request
+            └─→ Execute() ──→ http.Client ──→ HTTP Request
 ```
 
 ---
@@ -588,15 +588,14 @@ In the next chapter, we'll [preview next topic], building on these concepts to [
    > "When building production API clients, you need reliable retry logic to handle transient failures..."
 
 2. **What it is** (definition)
-   > "GoCurl provides the `RetryConfig` struct to configure automatic retries with exponential backoff..."
+   > "GoCurl provides an idempotency-aware `RetryPolicy` for managed clients and exported middleware..."
 
 3. **How to use it** (example)
    ```go
-   opts := gocurl.NewRequestOptions(url)
-   opts.RetryConfig = &gocurl.RetryConfig{
-       MaxRetries: 3,
-       RetryDelay: time.Second,
-       RetryOnHTTP: []int{500, 502, 503, 504},
+   policy := gocurl.RetryPolicy{
+       MaxAttempts: 4,
+       Backoff:     gocurl.ExponentialJitter(100*time.Millisecond, 5*time.Second),
+       MaxElapsed:  15 * time.Second,
    }
    ```
 
@@ -633,17 +632,23 @@ if err != nil {
 }
 defer resp.Body.Close()
 
-// Step 4: Full production version with retries
-opts := gocurl.NewRequestOptionsBuilder().
-    SetURL("https://api.example.com/data").
-    AddHeader("Authorization", "Bearer token").
-    SetRetryConfig(&gocurl.RetryConfig{
-        MaxRetries: 3,
-        RetryDelay: time.Second,
-    }).
-    Build()
+// Step 4: Managed production version with bounded retries and SSRF protection
+client, err := gocurl.New(
+    gocurl.WithRetry(policy),
+    gocurl.WithSSRFGuard(gocurl.DefaultSSRFPolicy()),
+)
+if err != nil {
+    return fmt.Errorf("create client: %w", err)
+}
+defer client.Close()
 
-resp, err := gocurl.Process(ctx, opts)
+request, err := client.Prepare(
+    `curl -H "Authorization: Bearer token" https://api.example.com/data`,
+)
+if err != nil {
+    return fmt.Errorf("prepare request: %w", err)
+}
+resp, err := client.Do(ctx, request)
 // ... error handling
 ```
 

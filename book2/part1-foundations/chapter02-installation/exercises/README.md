@@ -12,7 +12,7 @@ These exercises help you practice installation, configuration, and setup skills 
 
 ## Prerequisites
 
-- Go 1.21+ installed
+- Go 1.25+ installed
 - GoCurl library installed
 - Text editor or IDE configured
 - Internet connection

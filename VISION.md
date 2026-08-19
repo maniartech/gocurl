@@ -56,7 +56,9 @@ The edge is not "a nicer curl parser" — it's the **execution pipeline**. With 
 `net/http` you start from a blank `http.Request` every time and re-derive, per service, all
 the things a mission-critical integration needs: an overall timeout that survives retries,
 idempotency-aware retry logic, error classification, secret redaction, memory bounds against
-a hostile server. Most teams get some of it wrong, and it rots as the code changes.
+a hostile server (`TestFault_OverallRetryBudget`, `TestFault_NoSecretLeakOnFailurePaths`,
+`TestFault_BufferingHelpersBoundedAgainstBomb`). Most teams get some of it wrong, and it
+rots as the code changes.
 
 GoCurl receives the **curl recipe**, so it knows your intent and assembles the correct
 pipeline around it automatically. That is the developer edge: you describe *what* to call (the

@@ -137,7 +137,7 @@ func createLargeTestFile(filepath string, sizeMB int) error {
 
 func main() {
 	fmt.Println("Example 7: Efficient Large File Handling")
-	fmt.Println("=========================================\n")
+	fmt.Print("=========================================\n\n")
 
 	ctx := context.Background()
 

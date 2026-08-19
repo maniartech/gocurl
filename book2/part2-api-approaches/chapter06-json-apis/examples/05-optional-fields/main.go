@@ -80,7 +80,7 @@ func displayProduct(product Product) {
 
 func main() {
 	fmt.Println("Example 5: Handling Optional Fields and Null Values")
-	fmt.Println("====================================================\n")
+	fmt.Print("====================================================\n\n")
 
 	ctx := context.Background()
 

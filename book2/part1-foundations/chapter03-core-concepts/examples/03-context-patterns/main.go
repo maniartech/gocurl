@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	fmt.Println("⏱️  Context Patterns Demonstration\n")
+	fmt.Print("⏱️  Context Patterns Demonstration\n\n")
 
 	// Pattern 1: Request timeout
 	pattern1_Timeout()

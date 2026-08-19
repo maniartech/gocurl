@@ -34,9 +34,12 @@ understanding:
   cloud-metadata (`169.254.169.254`, `fd00:ec2::254`, `metadata.google.internal`,
   trailing FQDN dot normalized) address, unless explicitly allow-listed
   (`AllowHosts`/`AllowIPs`). The guard is opt-in to preserve the paste-any-curl
-  promise; enable it for untrusted input. Residual risk: resolution happens at
-  check time, so DNS rebinding between the check and the dial is not fully closed
-  in this version (dial-IP pinning is a documented future addition).
+  promise; enable it for untrusted input. The approved IPs are carried to the
+  standard transport's `DialContext`, closing the DNS check/dial rebinding gap
+  while preserving the hostname for Host routing and TLS SNI. An opaque custom
+  transport that cannot enforce the pin fails closed. Standalone middleware
+  chains must terminate in `HandlerFromRoundTripper`; a raw custom `Handler` is
+  responsible for honoring the pin contract.
 - **Plaintext auth.** Sending BasicAuth or a bearer token over cleartext `http://`
   fails closed by default. Override deliberately with `WithAllowInsecureAuth(true)`
   or `GOCURL_ALLOW_INSECURE_AUTH=1`.
@@ -71,7 +74,8 @@ Reports that improve any of the above are welcome.
 
 This makes the trust boundaries explicit so you can reason about gocurl in a
 mission-critical deployment. Each control below is backed by an un-skipped test (cited),
-enforced by the honesty doc-lint.
+enforced by the honesty doc-lint (`TestFault_NoSecretLeakOnFailurePaths`,
+`TestSSRFGuard_HandlerAdapterDialsValidatedIP`).
 
 ### Assets
 
@@ -91,10 +95,12 @@ enforced by the honesty doc-lint.
 
 2. **Untrusted *command string / URL*** (a curl string or URL influenced by user input).
    - *Defended:* the opt-in SSRF guard blocks internal/metadata targets on the request
-     **and every redirect hop**; plaintext auth fails closed; `*WithVars` avoids the
-     process environment; parse-time file reads are bounded. *Residual:* DNS rebinding
-     between SSRF check and dial is not fully closed (dial-IP pinning is future work);
-     the guard is **opt-in**, so you must enable it for untrusted input.
+     **and every redirect hop**, and pins each standard-transport dial to a validated
+     IP (`TestSSRFGuard_HandlerAdapterDialsValidatedIP`,
+     `TestSSRFGuard_ClientDialsValidatedIP`); plaintext auth fails closed; `*WithVars`
+     avoids the process environment; parse-time file reads are bounded. *Residual:*
+     the guard is **opt-in**, and proxy/opaque custom transport configurations that
+     cannot enforce direct-IP pinning fail closed rather than silently weakening it.
 
 3. **Untrusted *network path*** (MITM between client and server).
    - *Defended:* TLS 1.2 floor, optional certificate pinning checked in addition to chain

@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	fmt.Println("📡 Streaming Large Responses Demonstration\n")
+	fmt.Print("📡 Streaming Large Responses Demonstration\n\n")
 
 	// Example 1: Download with progress
 	example1_DownloadWithProgress()
@@ -69,7 +69,7 @@ func example2_StreamLines() {
 	defer resp.Body.Close()
 
 	fmt.Printf("   📊 Status: %d\n", resp.StatusCode)
-	fmt.Println("   📡 Streaming lines...\n")
+	fmt.Print("   📡 Streaming lines...\n\n")
 
 	// Create buffered scanner for line-by-line reading
 	scanner := bufio.NewScanner(resp.Body)
@@ -105,7 +105,7 @@ func example3_BufferedReading() {
 	defer resp.Body.Close()
 
 	fmt.Printf("   📊 Status: %d\n", resp.StatusCode)
-	fmt.Println("   📡 Reading in chunks...\n")
+	fmt.Print("   📡 Reading in chunks...\n\n")
 
 	// Read in 1KB chunks
 	buffer := make([]byte, 1024)

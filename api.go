@@ -29,6 +29,11 @@ type Variables map[string]string
 // Environment variables ($VAR and ${VAR}) are automatically expanded from os.Environ.
 // For explicit control, use CurlCommand() or CurlArgs().
 //
+// Curl and its convenience variants use the legacy one-shot engine. They honor
+// curl retry/timeout/redirect options but do not inherit Client middleware,
+// observability, circuit breaking, rate limiting, or the opt-in SSRF guard. Use
+// Client.Do for the full managed pipeline when a URL is influenced by users.
+//
 // Examples:
 //
 //	// Variadic (auto-detected)
@@ -118,7 +123,9 @@ func executeOpts(ctx context.Context, opts *options.RequestOptions) (*http.Respo
 // caller owns reading and closing resp.Body. With opts.FailOnError set, a >=400
 // status is returned as a typed error alongside the still-inspectable response
 // (see failOnStatus). For a reusable, middleware-configured client, prefer
-// Client.Prepare/Do; Execute is the one-shot path and shares its engine.
+// Client.Prepare/Do; Execute is the one-shot path and shares its engine. It does
+// not inherit Client middleware, observability, circuit breaking, rate limiting,
+// or the opt-in SSRF guard.
 func Execute(ctx context.Context, opts *options.RequestOptions) (*http.Response, error) {
 	if opts == nil {
 		return nil, ValidationError("options", fmt.Errorf("request options cannot be nil"))

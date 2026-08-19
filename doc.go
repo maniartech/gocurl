@@ -38,5 +38,8 @@
 //
 // gocurl targets curl's HTTP/HTTPS behavior for the flags that appear in real
 // API documentation. It is a convenience layer on top of net/http, not a
-// replacement for it, and it does not implement curl's non-HTTP protocols.
+// replacement for it, and it does not implement curl's non-HTTP protocols. The
+// package-level Curl and Execute helpers use the compatibility one-shot engine;
+// use Client.Do when circuit breaking, rate limiting, SSRF protection, or
+// observability must be part of the request pipeline.
 package gocurl

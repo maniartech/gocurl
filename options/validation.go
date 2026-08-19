@@ -174,10 +174,10 @@ func validateSecureAuth(url string, hasBasicAuth bool, hasBearerToken bool, allo
 	}
 
 	if hasBasicAuth {
-		return fmt.Errorf("BasicAuth over HTTP is insecure (credentials sent in plaintext); use HTTPS, set GOCURL_ALLOW_INSECURE_AUTH=1, or WithAllowInsecureAuth(true)")
+		return fmt.Errorf("basic auth over HTTP is insecure (credentials sent in plaintext); use HTTPS, set GOCURL_ALLOW_INSECURE_AUTH=1, or WithAllowInsecureAuth(true)")
 	}
 	if hasBearerToken {
-		return fmt.Errorf("Bearer token over HTTP is insecure; use HTTPS, set GOCURL_ALLOW_INSECURE_AUTH=1, or WithAllowInsecureAuth(true)")
+		return fmt.Errorf("bearer token over HTTP is insecure; use HTTPS, set GOCURL_ALLOW_INSECURE_AUTH=1, or WithAllowInsecureAuth(true)")
 	}
 	return nil
 }

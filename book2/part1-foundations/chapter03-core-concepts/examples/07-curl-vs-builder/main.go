@@ -18,7 +18,7 @@ type HTTPBinResponse struct {
 }
 
 func main() {
-	fmt.Println("� Authentication Patterns Demonstration\n")
+	fmt.Print("� Authentication Patterns Demonstration\n\n")
 
 	// Pattern 1: API Key in header
 	pattern1_APIKey()

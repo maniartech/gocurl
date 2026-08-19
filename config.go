@@ -140,8 +140,10 @@ func (c *config) baseOptions() *options.RequestOptions {
 // Option configures a Client. Options are applied in order by New().
 type Option func(*config) error
 
-// WithTimeout sets the overall per-request timeout ceiling (http.Client.Timeout).
-// A per-request --max-time or context deadline may impose a shorter bound.
+// WithTimeout sets the overall per-request timeout ceiling for Client.Do. A
+// per-request --max-time or context deadline may impose a shorter bound. It does
+// not configure standalone Handler chains adapted with RoundTripperFromHandler;
+// set the surrounding http.Client.Timeout or request context in that path.
 func WithTimeout(d time.Duration) Option {
 	return func(c *config) error {
 		if d < 0 {
@@ -163,8 +165,9 @@ func WithConnectTimeout(d time.Duration) Option {
 	}
 }
 
-// WithFollowRedirects enables/disables following redirects for requests that do
-// not specify their own policy (e.g. a curl command without -L).
+// WithFollowRedirects enables/disables following redirects for Client requests
+// that do not specify their own policy (e.g. a curl command without -L). A
+// standalone Handler chain uses the surrounding http.Client's redirect policy.
 func WithFollowRedirects(follow bool) Option {
 	return func(c *config) error {
 		c.followRedirects = follow
@@ -175,7 +178,8 @@ func WithFollowRedirects(follow bool) Option {
 	}
 }
 
-// WithMaxRedirects sets the maximum number of redirects to follow.
+// WithMaxRedirects sets the maximum number of redirects followed by Client. It
+// does not apply to a standalone Handler chain.
 func WithMaxRedirects(n int) Option {
 	return func(c *config) error {
 		if n < 0 {
@@ -276,8 +280,9 @@ type RedirectPolicy struct {
 	Allow  func(req *http.Request, via []*http.Request) error
 }
 
-// WithRedirectPolicy sets the redirect policy. If Follow is true and Max is 0,
-// Max defaults to 30 (curl-like).
+// WithRedirectPolicy sets Client's redirect policy. If Follow is true and Max is
+// 0, Max defaults to 30 (curl-like). Standalone Handler chains use the
+// surrounding http.Client's CheckRedirect instead.
 func WithRedirectPolicy(p RedirectPolicy) Option {
 	return func(c *config) error {
 		if p.Max < 0 {
@@ -495,7 +500,9 @@ func WithRateLimit(rps float64, burst int) Option {
 // WithSSRFGuard enables the opt-in SSRF guard with the given policy. It blocks
 // the initial request and every redirect hop whose host resolves to a
 // policy-blocked address (loopback/link-local/private/cloud-metadata) unless
-// allow-listed. Use DefaultSSRFPolicy() for the recommended setting.
+// allow-listed, then pins each dial to the validated IP to prevent DNS
+// rebinding. Opaque custom transports that cannot enforce the pin fail closed.
+// Use DefaultSSRFPolicy() for the recommended setting.
 func WithSSRFGuard(policy SSRFPolicy) Option {
 	return func(c *config) error {
 		c.ssrfPolicy = &policy

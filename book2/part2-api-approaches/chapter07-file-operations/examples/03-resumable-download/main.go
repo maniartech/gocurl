@@ -84,7 +84,7 @@ func resumableDownload(ctx context.Context, url, filepath string) error {
 
 func main() {
 	fmt.Println("Example 3: Resumable Downloads")
-	fmt.Println("===============================\n")
+	fmt.Print("===============================\n\n")
 
 	ctx := context.Background()
 
@@ -93,7 +93,7 @@ func main() {
 	filepath := "resumable-download.bin"
 
 	fmt.Println("Demo: Simulating interrupted download")
-	fmt.Println("--------------------------------------\n")
+	fmt.Print("--------------------------------------\n\n")
 
 	// First attempt - download complete file
 	fmt.Println("Attempt 1:")

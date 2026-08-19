@@ -133,7 +133,7 @@ func (c *GitHubClient) SearchRepositories(query string, limit int) ([]GitHubRepo
 }
 
 func main() {
-	fmt.Println("🚀 Complete Practical API Client Demonstration\n")
+	fmt.Print("🚀 Complete Practical API Client Demonstration\n\n")
 
 	// Create client (token optional for public API)
 	client := NewGitHubClient("")

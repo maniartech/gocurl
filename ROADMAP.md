@@ -300,7 +300,7 @@ Spec 10. deps: M2, M3.
   Honest baseline recorded in `docs/benchmarking.md` with machine/Go/OS provenance: gocurl adds
   ~+13 allocs/op and a roughly constant ~40µs over bare net/http (parity, never "faster").
 - [x] **M10-T2 — Regression detection in CI.** `alloc_budget_test.go` (`testing.AllocsPerRun`
-  ceilings for `ExpandVariables`=6, `Prepare`=45, `Do`=100 — baselined, not zero) fails the build
+  ceilings for `ExpandVariables`=6, `Prepare`=45, `Do`=85 — baselined, not zero) fails the build
   on an allocation regression; a new non-`-race` `benchmarks` CI job runs every benchmark once
   (`-benchtime=1x`) as a smoke. `docs/benchmarking.md` documents the methodology, pprof/latency
   workflow, and the "parity, never superiority" claim policy; the legacy "zero-allocation /
@@ -367,7 +367,7 @@ in shipped code and a mis-targeted perf thesis; both are now in scope. See Spec 
   cross-Client bleed, concurrent wire correctness). Competitive: separate **`benchcmp/`** module
   (resty/req, root deps stay clean — `TestNoVendorDepsInRootModule`) with **identical transport tuning**
   enforced by `TestBenchFairness_DefaultTransportTuning` (fixes the rigged 100-vs-10 idle pool);
-  p50/p99/p999 two-arm latency (`TestLatencyDistribution`); ratcheted `Do` alloc budget 100→88; scheduled
+  p50/p99/p999 two-arm latency (`TestLatencyDistribution`); ratcheted `Do` alloc budget 100→85; scheduled
   CI benchstat job; honest table incl. losses in `docs/benchmarking.md`. *DoD: Spec 14 §B.*
 - [x] **M12-T3 — Soak + resource stability (Phase C). LANDED.** `TestClient_Soak` now runs two arms —
   uninstrumented AND instrumented (recording Tracer/Metrics/Logger/Hooks) — with `GOCURL_SOAK=<duration>`,
@@ -379,6 +379,37 @@ in shipped code and a mis-targeted perf thesis; both are now in scope. See Spec 
   easy→prod checklist); threat model in `SECURITY.md`; **honesty doc-lint** (`TestDocHonestyLint` —
   fails on a claim keyword without a real, un-skipped test/benchmark citation; gates the README
   "production-grade" wording on M12-T1); `docs/v1-readiness.md` checklist. *DoD: Spec 14 §D.*
+
+---
+
+## Milestone 13 — Composition-surface parity
+
+Origin: the July 2026 consumer integration audit (`docs/consumer-audit-2026-07.md`).
+The milestone makes the exported `Handler`/`Middleware` seam safe and explicit for
+foreign SDK injection while retaining one implementation of retries and observability.
+
+- [x] **M13-T1 — Export retry middleware.** `Retry(RetryPolicy)` delegates to the same
+  body-replay-aware, idempotency-aware engine as `Client.Do`; regression tests cover a
+  transient 503 and a non-idempotent POST.
+- [x] **M13-T2 — Export observability middleware.** `Observe(Hooks, Metrics, Tracer,
+  Logger)` uses the existing instrumentation middleware; standalone-chain coverage
+  verifies hooks, metrics, spans, logs, and retry events.
+- [x] **M13-T3 — Pin SSRF validation to the dial.** Native clients and
+  `HandlerFromRoundTripper` clone standard transports and dial the validated IP while
+  preserving the hostname for Host routing/TLS SNI. Unsupported opaque transports fail
+  closed. Native and injected regression tests assert the validated IP is dialed.
+- [x] **M13-T4 — Correct path-specific godoc.** Adapter, timeout, redirect, SSRF, and
+  one-shot documentation now state exactly where each behavior applies.
+- [x] **M13-T5 — Document SDK injection.** README includes a complete composition
+  example, convenience constructors, and feature matrix; doc lint guards the maintained
+  symbol list.
+- [x] **M13-T6 — Ratify the legacy protection policy.** Decision: `Curl*`/`Execute`
+  remain compatibility-oriented and protection-free. They honor curl retry/timeout/
+  redirect settings but do not inherit Client middleware, SSRF, breaker, limiter, or
+  observability. README, godoc, and CHANGELOG record the decision.
+- [x] **M13-T7 — Cross-path parity test.** `TestExecutionPathFeatureMatrix` runs native,
+  injected, and legacy requests against the same faulting server and pins retry/hook
+  engagement for each path.
 
 ---
 

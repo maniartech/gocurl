@@ -31,7 +31,7 @@ type HTTPBinResponse struct {
 
 func main() {
 	fmt.Println("Example 3: Sending JSON Data with POST")
-	fmt.Println("======================================\n")
+	fmt.Print("======================================\n\n")
 
 	ctx := context.Background()
 

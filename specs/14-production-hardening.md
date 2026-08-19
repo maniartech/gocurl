@@ -221,29 +221,34 @@ path past the signature-only api guard.
 
 ## Acceptance criteria / Definition of Done
 
-- [ ] **A.1/A.2** — two-tier harness; every matrix row tagged + reachable by its tier; each scenario
+Status note (2026-07): this section was the original M12 proposal. Completed M12 work is
+recorded in ROADMAP; remaining refinements discovered by real consumer use are tracked in
+`docs/readiness-hardening-2026-07.md`. `[~]` below means the original broad wording still
+contains a stricter sub-requirement than the landed milestone evidence.
+
+- [~] **A.1/A.2** — two-tier harness; every matrix row tagged + reachable by its tier; each scenario
       asserts no goroutine leak (`goroutinesAtMost`), no conn/fd leak (`ConnState`), and secret redaction;
       `-race` clean. Fast Tier-1 subset in CI `-short`; full matrix in a non-short job.
-- [ ] **A.3** — overall retry budget honored (wall-clock ≤ deadline+slack test); h2 `GOAWAY`/`RST_STREAM`
+- [~] **A.3** — overall retry budget honored (wall-clock ≤ deadline+slack test); h2 `GOAWAY`/`RST_STREAM`
       retried for idempotent GET (real-h2 test); shutdown-mid-stream does not truncate/leak (tied to
       panicking-middleware); `Client.Do` redirect-cap classifies as `ErrTooManyRedirects`.
-- [ ] **A.4** — default decompressed-bytes cap + opt-out sentinel; `MaxResponseHeaderBytes` tightened;
+- [x] **A.4** — default decompressed-bytes cap + opt-out sentinel; `MaxResponseHeaderBytes` tightened;
       §A rows proving each bound.
-- [ ] **B (clone-the-small)** — `opts.Clone()` per-`Do` eliminated via a Prepare-time template; the full
+- [x] **B (clone-the-small)** — `opts.Clone()` per-`Do` eliminated via a Prepare-time template; the full
       breaking-case validation matrix green under `-race`; a test proves the static header is not
       deep-cloned per `Do`; before/after `benchstat` shows the per-`Do` alloc/byte gap vs `net/http`
       shrink; no surface change; §A matrix + suite stay green.
-- [ ] **B (competitive)** — benchvendor (or benchcmp module) arms with **identical** transport tuning
+- [x] **B (competitive)** — benchvendor (or benchcmp module) arms with **identical** transport tuning
       across arms (guard test); p50/p99/p999 + throughput; `benchstat` regression gate (allocs/B hard,
       ns advisory); ratcheted `Do` alloc budget; honest results table incl. losses; `go mod tidy`
       diff-guard.
-- [ ] **C** — extended `TestClient_Soak` with uninstrumented + instrumented arms, no growth trend, pprof
+- [x] **C** — extended `TestClient_Soak` with uninstrumented + instrumented arms, no growth trend, pprof
       artifacts, alloc/op delta published; pool-churn/backpressure test.
-- [ ] **D** — `docs/operations.md`, threat model, honesty doc-lint (gating the "production-grade" wording),
+- [x] **D** — `docs/operations.md`, threat model, honesty doc-lint (gating the "production-grade" wording),
       and the v1.0-readiness checklist.
-- [ ] **Surface unchanged** — `api.txt`/`api_options.txt` guards green; the "easy as curl" one-liner
+- [x] **Surface unchanged** — `api.txt`/`api_options.txt` guards green; the "easy as curl" one-liner
       (happy + fault path) test passes.
-- [ ] All new tests hermetic and `-race` clean; coverage stays ≥ floor; no claim without a backing
+- [x] All new tests hermetic and `-race` clean; coverage stays ≥ floor; no claim without a backing
       benchmark/test (doc-lint enforced).
 
 ## Dependencies

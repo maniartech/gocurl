@@ -42,7 +42,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '1.25.x'
 
       - name: Install GoCurl
         run: |
@@ -106,7 +106,7 @@ variables:
 
 api-tests:
   stage: test
-  image: golang:1.21
+  image: golang:1.25
   script:
     # TODO: Install gocurl
     # TODO: Run tests
@@ -119,7 +119,7 @@ api-tests:
 
 health-check:
   stage: validate
-  image: golang:1.21
+  image: golang:1.25
   script:
     # TODO: Check API health
     # TODO: Verify endpoints

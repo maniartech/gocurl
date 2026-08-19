@@ -14,7 +14,7 @@ Complete these exercises to master file download and upload operations.
 
 - Completed Chapter 7 content
 - Reviewed examples 01-04
-- Go 1.18+ installed
+- Go 1.25+ installed
 - Sufficient disk space
 
 ## Exercises

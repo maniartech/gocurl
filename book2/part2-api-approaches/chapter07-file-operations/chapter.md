@@ -187,8 +187,8 @@ func downloadWithProgress(ctx context.Context, url, filepath string) error {
 func main() {
     ctx := context.Background()
 
-    url := "https://golang.org/dl/go1.21.0.linux-amd64.tar.gz"
-    err := downloadWithProgress(ctx, url, "go1.21.0.tar.gz")
+    url := "https://go.dev/dl/go1.25.0.linux-amd64.tar.gz"
+    err := downloadWithProgress(ctx, url, "go1.25.0.tar.gz")
 
     if err != nil {
         log.Fatal(err)
@@ -366,7 +366,7 @@ func uploadFile(ctx context.Context, url, fieldName, filepath string) error {
         Build()
 
     // Execute
-    httpResp, _, err := gocurl.Process(ctx, opts)
+    httpResp, err := gocurl.Execute(ctx, opts)
     if err != nil {
         return err
     }
@@ -426,7 +426,7 @@ func main() {
         AddFormField("category", "work").
         Build()
 
-    httpResp, _, err := gocurl.Process(ctx, opts)
+    httpResp, err := gocurl.Execute(ctx, opts)
     if err != nil {
         log.Fatal(err)
     }
@@ -632,7 +632,7 @@ func (s *S3Client) UploadFile(ctx context.Context, key, filepath string) error {
         SetBody(string(fileData)).
         Build()
 
-    httpResp, _, err := gocurl.Process(ctx, opts)
+    httpResp, err := gocurl.Execute(ctx, opts)
     if err != nil {
         return err
     }

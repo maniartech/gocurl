@@ -13,7 +13,7 @@ This directory contains working examples demonstrating installation verification
 
 ## Prerequisites
 
-- Go 1.21 or later installed
+- Go 1.25 or later installed
 - GoCurl library installed (`go get github.com/maniartech/gocurl`)
 - Internet connection for API requests
 

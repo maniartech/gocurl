@@ -48,26 +48,26 @@ The gap **Prepared − NetHTTP** is gocurl's honest execution overhead. The gap
 
 ## Recorded baseline
 
-Provenance: **AMD Ryzen 7 5700G, Windows, Go 1.26.0, GOMAXPROCS=16**, `-benchtime=2000x -count=6`, medians.
+Provenance: **AMD Ryzen 7 5700G, Windows, Go 1.26.0, GOMAXPROCS=16**, `-benchtime=2000x -count=5`, medians.
 These are one-machine numbers for orientation; reproduce locally with `benchstat` (below)
 before drawing conclusions. CI runs the benchmarks as a once-through **smoke** (no timing
-gate) on Linux/Go 1.23.x.
+gate) on Linux/Go 1.25.x.
 
 | Arm | ns/op (median) | B/op | allocs/op |
 |---|---|---|---|
-| `RoundTrip_NetHTTP` | ~113,000 | 5,940 | 69 |
-| `RoundTrip_Gocurl_Prepared` | ~151,000 | 12,940 | 82 |
-| `RoundTrip_Gocurl_PerCallParse` | ~137,000 | 13,800 | 92 |
+| `RoundTrip_NetHTTP` | ~203,000 | 5,499 | 65 |
+| `RoundTrip_Gocurl_Prepared` | ~247,000 | 6,648 | 77 |
+| `RoundTrip_Gocurl_PerCallParse` | ~256,000 | 8,378 | 92 |
 
 **Honest reading:**
 
-- **Execution overhead (Prepared vs NetHTTP):** ~+38µs and **+13 allocs/op**. The ~30% on a
+- **Execution overhead (Prepared vs NetHTTP):** ~+44µs, +1,149 B/op, and **+12 allocs/op**. The percentage on a
   near-zero-latency localhost server is an artifact of the trivial "network": the overhead is
   roughly *constant* (~40µs), so as a percentage it shrinks with real latency — a few percent
   at single-digit-millisecond endpoints, and well under 1% once latency reaches the tens of
   milliseconds. That is the parity claim: a thin, constant overhead, never "faster".
-- **Parse tax (PerCallParse vs Prepared):** clearest in **allocations** — +10 allocs/op
-  (92 vs 82) and +850 B/op. In ns/op it is lost in localhost round-trip + timer noise,
+- **Parse tax (PerCallParse vs Prepared):** clearest in **allocations** — +15 allocs/op
+  (92 vs 77) and +1,730 B/op. In ns/op it is partly lost in localhost round-trip + timer noise,
   which is itself the honest point: parsing is cheap relative to I/O, but the prepared API
   still removes those allocations and the repeated work, and the gap widens when the
   endpoint is fast or when you build many requests.
@@ -84,12 +84,30 @@ when a path exceeds a documented ceiling. Current baselines → budgets:
 |---|---|---|
 | `ExpandVariables` | 2 | 6 |
 | `Prepare` | 30 | 45 |
-| `Do` (round-trip) | 76 | 100 |
+| `Do` (round-trip) | 71 | 85 |
 
 Budgets are **ceilings from the measured baseline + headroom**, not zeros. Lowering a
 budget is a deliberate, reviewed change; raising one needs a one-line justification in the
-commit. `ExpandVariables`/`Prepare` budgets run in the normal (`-short`) test job; the
-I/O-bound `Do` budget skips under `-short`.
+commit. `ExpandVariables`/`Prepare` budgets run in the normal (`-short`) test job. The
+I/O-bound `Do` allocation/byte gates and deterministic composition budgets run in CI's
+dedicated non-short `performance-gates` job.
+
+## Exported composition-path budgets
+
+`TestCompositionPerformance_Budgets` measures request construction plus the exported
+`Handler` middleware path with a no-I/O base handler. Time remains advisory; bytes and
+allocations are hard CI ceilings.
+
+| Chain | Current B/op | Current allocs/op | Budget B/op | Budget allocs/op |
+|---|---:|---:|---:|---:|
+| bare handler | 704 | 5 | 1,024 | 8 |
+| `Retry` (one attempt) | 1,392 | 7 | 1,792 | 10 |
+| full `Observe` with no-op sinks | 1,714 | 23 | 2,304 | 27 |
+| literal-IP `SSRFGuard` | 912 | 12 | 1,280 | 16 |
+| Observe + SSRF + breaker + limiter + retry | 2,623 | 32 | 3,584 | 38 |
+
+These figures isolate gocurl's orchestration overhead. Real logger/tracer/metrics sinks
+have their own costs and remain the consumer's responsibility.
 
 ## Profiling workflow
 
@@ -168,19 +186,20 @@ To measure the library overhead itself, the `BenchmarkOverhead_*` arms replace t
 with a stub `RoundTripper` that returns a canned response with **no network and no second
 goroutine**. What remains is exactly each library's per-request work, with the noise removed —
 so the ranking is stable and reproducible. Averaged over `-count=5 -benchtime=200000x`
-(Windows/amd64, Go 1.23 — **reproduce on your hardware before quoting**):
+(Windows/amd64, Go 1.26 — **reproduce on your hardware before quoting**):
 
 | Arm | ns/op | B/op | allocs/op |
 |---|---|---|---|
-| net/http (raw transport, no resilience) | ~800 | 1,352 | 13 |
-| **gocurl prepared** | **~2,700** | **3,132** | **25** |
-| req | ~4,650 | 3,957 | 39 |
-| resty | ~4,800 | 3,678 | 28 |
+| net/http (raw transport, no resilience) | ~1,543 | 1,352 | 13 |
+| **gocurl prepared** | **~5,819** | **2,489** | **24** |
+| resty | ~9,880 | 3,684 | 28 |
+| req | ~10,955 | 3,956 | 39 |
 
-**gocurl adds the least per-request overhead of the three full-featured clients — on all
-three metrics** (ns/op, B/op, allocs/op) — while running its resilience pipeline. The
-separation between arms (2.7 vs 4.7 vs 4.8 µs) is far larger than the run-to-run spread
-(~5–13%), so unlike the round-trip ns/op, **this ranking holds.** Only raw `net/http`, which
+For the pinned Resty v2.16.5 and Req v3.50.0 arms, **gocurl has the lowest measured
+per-request overhead on all three metrics** (ns/op, B/op, allocs/op). This is a scoped
+comparison, not a claim about every Go HTTP client. The gocurl arm executes its normal
+prepared-request machinery with optional retry and observability features disabled; their
+incremental costs are reported in the composition table above. Only raw `net/http`, which
 carries no retry/redaction/observability machinery, is lighter — exactly as expected for a
 layer built on top of it.
 
@@ -197,10 +216,10 @@ wins are regression-gated (`TestByteBudget_Do`, `TestAllocBudget_Do`,
 by default; gocurl **streams** it. For a tiny body this slightly favors the bufferers; for
 large responses gocurl's streaming is the safer default. Every arm drains its body.
 
-The takeaway matches our claim policy: **the lowest client-side overhead of the full-featured
-clients, measured where it can be measured reliably** — and explicit *latency parity, no
-end-to-end winner claimed* on the network-dominated round-trip. Measured, reproducible,
-regression-gated; never a marketing claim.
+The takeaway matches our claim policy: **lower measured allocation overhead than the two
+pinned full-featured comparison clients** — and explicit *latency parity, no end-to-end
+winner claimed* on the network-dominated round-trip. The scheduled
+`TestCompetitiveOverheadBudgets` gate keeps this scoped statement tied to evidence.
 
 ## The soak/leak tests are elsewhere
 

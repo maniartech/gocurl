@@ -106,20 +106,21 @@ import (
     "log"
     "time"
 
-    "github.com/stackql/gocurl"
+    "github.com/maniartech/gocurl"
+    "github.com/maniartech/gocurl/options"
 )
 
 func main() {
     ctx := context.Background()
 
-    opts := gocurl.NewRequestOptionsBuilder().
+    opts := options.NewRequestOptionsBuilder().
         SetMethod("GET").
         SetURL("https://api.github.com/users/octocat").
         AddHeader("Accept", "application/vnd.github+json").
         SetTimeout(10 * time.Second).
         Build()
 
-    resp, err := gocurl.Process(ctx, opts)
+    resp, err := gocurl.Execute(ctx, opts)
     if err != nil {
         log.Fatalf("Request failed: %v", err)
     }
@@ -152,7 +153,7 @@ In this chapter, we explored the Builder pattern:
 Key pattern to remember:
 
 ```go
-opts := gocurl.NewRequestOptionsBuilder().
+opts := options.NewRequestOptionsBuilder().
     SetMethod("POST").
     SetURL(url).
     AddHeader("Content-Type", "application/json").
@@ -175,18 +176,19 @@ import (
     "context"
     "time"
 
-    "github.com/stackql/gocurl"
+    "github.com/maniartech/gocurl"
+    "github.com/maniartech/gocurl/options"
 )
 
 func BasicBuilder() error {
     ctx := context.Background()
 
-    opts := gocurl.NewRequestOptionsBuilder().
+    opts := options.NewRequestOptionsBuilder().
         SetURL("https://api.github.com").
         SetTimeout(10 * time.Second).
         Build()
 
-    resp, err := gocurl.Process(ctx, opts)
+    resp, err := gocurl.Execute(ctx, opts)
     if err != nil {
         return err
     }
@@ -279,21 +281,21 @@ Start simple, add features gradually:
 
 ```go
 // Step 1: Basic
-opts := gocurl.NewRequestOptionsBuilder().
+opts := options.NewRequestOptionsBuilder().
     SetURL(url).
     Build()
 
 // Step 2: Add auth
-opts := gocurl.NewRequestOptionsBuilder().
+opts := options.NewRequestOptionsBuilder().
     SetURL(url).
     SetBearerToken(token).
     Build()
 
 // Step 3: Add retry
-opts := gocurl.NewRequestOptionsBuilder().
+opts := options.NewRequestOptionsBuilder().
     SetURL(url).
     SetBearerToken(token).
-    SetRetryConfig(&gocurl.RetryConfig{MaxRetries: 3}).
+    SetRetryConfig(&options.RetryConfig{MaxRetries: 3}).
     Build()
 ```
 

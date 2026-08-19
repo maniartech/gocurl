@@ -60,6 +60,32 @@ func TestDocHonestyLint(t *testing.T) {
 				"every such claim must name an un-skipped test/benchmark", doc, claimKeywords)
 			continue
 		}
+
+		// A citation elsewhere in a long document is not evidence for every claim.
+		// Require each strong-claim occurrence to have a named test/benchmark within
+		// a small local window. Six lines allows a Markdown heading plus its opening
+		// paragraph/list while still preventing an unrelated appendix citation from
+		// laundering an unsupported claim near the top of the file.
+		lines := strings.Split(text, "\n")
+		for lineIndex, line := range lines {
+			lineLower := strings.ToLower(line)
+			for _, keyword := range claimKeywords {
+				if !strings.Contains(lineLower, keyword) {
+					continue
+				}
+				start := lineIndex - 6
+				if start < 0 {
+					start = 0
+				}
+				end := lineIndex + 7
+				if end > len(lines) {
+					end = len(lines)
+				}
+				if !citation.MatchString(strings.Join(lines[start:end], "\n")) {
+					t.Errorf("%s:%d makes strong claim %q without a nearby named test/benchmark citation", doc, lineIndex+1, keyword)
+				}
+			}
+		}
 		for _, m := range cites {
 			name := m[1]
 			body, ok := tests[name]
@@ -105,6 +131,21 @@ func TestDocHonestyLint(t *testing.T) {
 				t.Errorf("README claims 'production-grade' but ROADMAP M12-T1 is not marked landed — " +
 					"the claim precedes its evidence")
 			}
+		}
+	}
+
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	for _, symbol := range []string{
+		"SSRFGuard", "CircuitBreaker", "RateLimiter", "Retry", "Observe",
+		"RoundTripperFromHandler", "HandlerFromRoundTripper", "FromMiddlewareFunc",
+		"DefaultSSRFPolicy", "DefaultRetryPolicy", "ConstantBackoff",
+		"ExponentialJitter", "NewTokenBucket", "WithTransport", "NewRequest",
+	} {
+		if !strings.Contains(string(readme), symbol) {
+			t.Errorf("README.md must document composition symbol %s", symbol)
 		}
 	}
 }

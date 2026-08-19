@@ -28,7 +28,7 @@ This directory contains hands-on exercises to practice using the Builder pattern
 
 - Completed Chapter 5 main content
 - Reviewed all examples in `../examples/`
-- Go 1.21+ installed
+- Go 1.25+ installed
 - GoCurl library installed
 
 ## Learning Path

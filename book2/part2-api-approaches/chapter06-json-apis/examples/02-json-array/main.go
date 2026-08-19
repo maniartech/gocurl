@@ -24,7 +24,7 @@ type Repository struct {
 
 func main() {
 	fmt.Println("Example 2: Fetching JSON Arrays")
-	fmt.Println("================================\n")
+	fmt.Print("================================\n\n")
 
 	ctx := context.Background()
 

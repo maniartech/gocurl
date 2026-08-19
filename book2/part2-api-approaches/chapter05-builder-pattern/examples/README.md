@@ -24,7 +24,7 @@ go run main.go
 
 ## Prerequisites
 
-- Go 1.21 or higher
+- Go 1.25 or higher
 - GoCurl library: `go get github.com/maniartech/gocurl`
 - Internet connectivity
 

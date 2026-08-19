@@ -155,7 +155,7 @@ func createTestFile(filepath string, sizeKB int) error {
 
 func main() {
 	fmt.Println("Example 6: Upload with Progress Tracking")
-	fmt.Println("=========================================\n")
+	fmt.Print("=========================================\n\n")
 
 	ctx := context.Background()
 

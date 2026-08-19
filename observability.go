@@ -215,6 +215,34 @@ func resolveObs(c *config) *obs {
 	return o
 }
 
+// Observe returns a Middleware that brackets one logical request with hooks,
+// metrics, tracing, and structured logging. It uses the same instrumentation
+// path as Client.Do. Place Observe outside Retry so retries are recorded as
+// events within one logical request. Nil sinks and an empty Hooks value are
+// allowed; when all four inputs are disabled the returned middleware is an
+// identity wrapper.
+func Observe(hooks Hooks, metrics Metrics, tracer Tracer, logger Logger) Middleware {
+	// Resolve nil interfaces once, when the chain is assembled, rather than on
+	// every request. obs contains only immutable interface values and Hooks, so the
+	// resulting middleware is safe to reuse concurrently just like Client.Do's
+	// resolved bundle (sink implementations retain their documented concurrency
+	// responsibility).
+	active := hooks.any() || metrics != nil || tracer != nil || logger != nil
+	o := &obs{hooks: hooks, metrics: metrics, tracer: tracer, logger: logger, active: active}
+	if o.metrics == nil {
+		o.metrics = noopMetrics{}
+	}
+	if o.tracer == nil {
+		o.tracer = noopTracer{}
+	}
+	return func(next Handler) Handler {
+		if !o.active {
+			return next
+		}
+		return o.instrument(next)
+	}
+}
+
 // safe runs fn, recovering any panic from a user-supplied sink so a buggy sink
 // can never take down the request. The recovery is itself panic-guarded so a
 // panicking logger cannot escape.

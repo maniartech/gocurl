@@ -14,7 +14,8 @@ with a CLI that shares the exact same syntax. It removes the tax every Go develo
 when integrating a new API — mentally compiling a curl snippet from the docs into
 `http.NewRequest`, headers, body encoding, and auth — and backs it with the retries,
 circuit breaking, observability, SSRF protection, secret redaction, and typed errors that
-real integrations need in production.
+real integrations need in production (`TestFault_OverallRetryBudget`,
+`TestFault_NoSecretLeakOnFailurePaths`, `TestExecutionPathFeatureMatrix`).
 
 > **Persuasion by example, not by marketing.** Every performance and reliability claim in
 > this repo cites a test or benchmark you can run yourself — enforced by an automated
@@ -29,7 +30,8 @@ real integrations need in production.
 a coverage gate in CI, streaming bodies, connection pooling, and the resilience/observability/
 security stack below. The remaining pre-1.0 caveat is the *contract*, not the quality: the
 public API may still change and curl-flag coverage is still expanding, so pin a version and
-check the [CHANGELOG](CHANGELOG.md) when upgrading. Feedback and contributions are very welcome.
+check the [CHANGELOG](CHANGELOG.md) when upgrading. The race and resource claims are exercised by
+`TestFault_NoGoroutineLeakUnderStorm` and `TestClient_Soak`. Feedback and contributions are welcome.
 
 ### Proven, not promised
 
@@ -105,7 +107,7 @@ As a command-line tool:
 go install github.com/maniartech/gocurl/cmd/gocurl@latest
 ```
 
-Requires Go 1.23+.
+Requires Go 1.25+.
 
 ## Usage
 
@@ -189,6 +191,51 @@ if err != nil {
 }
 resp, err = client.Do(ctx, req)
 ```
+
+### One pipeline under any SDK
+
+When a vendor SDK accepts an `*http.Client`, compose gocurl's exported handler
+middleware and adapt it into the SDK's transport. Compose outermost-first; keep
+`Retry` innermost so the breaker records the final logical outcome rather than
+each attempt:
+
+```go
+base := gocurl.HandlerFromRoundTripper(http.DefaultTransport)
+limiter := gocurl.NewTokenBucket(20, 40)
+
+h := gocurl.Observe(hooks, metrics, tracer, logger)(
+    gocurl.SSRFGuard(gocurl.DefaultSSRFPolicy())(
+        gocurl.CircuitBreaker(breakerConfig)(
+            gocurl.RateLimiter(limiter)(
+                gocurl.Retry(gocurl.DefaultRetryPolicy(3))(base)))))
+
+sdkHTTPClient := &http.Client{
+    Transport: gocurl.RoundTripperFromHandler(h),
+    Timeout:   30 * time.Second,
+}
+```
+
+`HandlerFromRoundTripper` preserves the original hostname while pinning SSRF-validated
+IPs at dial time. `RoundTripperFromHandler` deliberately applies only the middleware
+shown above: the surrounding `http.Client` owns redirects, cookies, and its timeout.
+`WithTimeout`, redirect options, defaults, and `WithTransport` configure a gocurl
+`Client`; they are not ambient settings for a standalone chain. Legacy request-mutating
+middleware can be included with `FromMiddlewareFunc`.
+
+Backoff policies can use `ConstantBackoff` or `ExponentialJitter`. Programmatic native
+requests can be created with `NewRequest` and executed through a reusable `Client`.
+
+| Feature | `Client.Do` | Injected handler chain | `Curl*` / `Execute` |
+|---|---:|---:|---:|
+| Retry | configured with `WithRetry` | explicit `Retry` | curl/legacy retry options |
+| Circuit breaker / rate limiter | configured options | explicit `CircuitBreaker` / `RateLimiter` | unavailable |
+| SSRF guard with dial-IP pinning | `WithSSRFGuard` | explicit `SSRFGuard` + adapter | unavailable |
+| Hooks / metrics / tracing / logging | `WithHooks` etc. | explicit `Observe` | unavailable |
+| Redirects, cookies, defaults | client-managed | surrounding SDK/`http.Client` | curl options |
+
+The one-shot helpers intentionally remain compatibility-oriented and protection-free.
+For user-influenced URLs, use `Client.Do` with `WithSSRFGuard`, or build an explicit
+injected chain as above.
 
 ### Typed request building
 

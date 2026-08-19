@@ -97,7 +97,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/stackql/gocurl"
+    "github.com/maniartech/gocurl"
 )
 
 func main() {
@@ -121,9 +121,11 @@ package apiclient
 import (
     "context"
     "fmt"
+    "net/http"
     "time"
 
-    "github.com/stackql/gocurl"
+    "github.com/maniartech/gocurl"
+    "github.com/maniartech/gocurl/options"
 )
 
 type Client struct {
@@ -141,14 +143,14 @@ func NewClient(baseURL, token string) *Client {
 func (c *Client) Get(ctx context.Context, path string) (*http.Response, error) {
     url := c.baseURL + path
 
-    opts := gocurl.NewRequestOptionsBuilder().
+    opts := options.NewRequestOptionsBuilder().
         SetMethod("GET").
         SetURL(url).
         AddHeader("Authorization", "Bearer "+c.token).
         SetTimeout(10 * time.Second).
         Build()
 
-    return gocurl.Process(ctx, opts)
+    return gocurl.Execute(ctx, opts)
 }
 ```
 
@@ -285,7 +287,7 @@ defer resp.Body.Close()  // Safe: resp is non-nil
 
 ✅ **CORRECT:**
 ```go
-builder := gocurl.NewRequestOptionsBuilder()
+builder := options.NewRequestOptionsBuilder()
 defer builder.Cleanup()  // Always cleanup
 
 opts := builder.
@@ -293,7 +295,7 @@ opts := builder.
     SetURL(url).
     Build()
 
-resp, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 ```
 
 ---
@@ -368,7 +370,7 @@ import (
     "context"
     "testing"
 
-    "github.com/stackql/gocurl"
+    "github.com/maniartech/gocurl"
 )
 
 func TestGitHubClient(t *testing.T) {
@@ -398,7 +400,7 @@ go test -race ./...
 ```go
 func TestConcurrentRequests(t *testing.T) {
     ctx := context.Background()
-    baseOpts := gocurl.NewRequestOptions("https://api.example.com")
+    baseOpts := options.NewRequestOptions("https://api.example.com")
 
     var wg sync.WaitGroup
     for i := 0; i < 10; i++ {
@@ -410,7 +412,7 @@ func TestConcurrentRequests(t *testing.T) {
             opts := baseOpts.Clone()
             opts.AddQueryParam("id", fmt.Sprintf("%d", id))
 
-            resp, err := gocurl.Process(ctx, opts)
+            resp, err := gocurl.Execute(ctx, opts)
             if err != nil {
                 t.Errorf("Request %d failed: %v", id, err)
                 return
@@ -499,9 +501,9 @@ var timeout time.Duration = 10 * time.Second
 // FetchUser retrieves user information from the API
 func FetchUser(ctx context.Context, id string) (*User, error) {
     // Build request with retry configuration
-    opts := gocurl.NewRequestOptionsBuilder().
+    opts := options.NewRequestOptionsBuilder().
         SetURL(fmt.Sprintf("https://api.example.com/users/%s", id)).
-        SetRetryConfig(&gocurl.RetryConfig{
+        SetRetryConfig(&options.RetryConfig{
             MaxRetries: 3,
             RetryDelay: time.Second,
         }).
@@ -567,7 +569,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/stackql/gocurl"
+    "github.com/maniartech/gocurl"
 )
 
 func main() {
@@ -613,7 +615,7 @@ import (
     "fmt"
     "time"
 
-    "github.com/stackql/gocurl"
+    "github.com/maniartech/gocurl"
 )
 
 // Client provides a production-ready API client
@@ -634,13 +636,13 @@ func NewClient(baseURL, token string) *Client {
 func (c *Client) Get(ctx context.Context, path string, requestID string) (*http.Response, error) {
     url := c.baseURL + path
 
-    opts := gocurl.NewRequestOptionsBuilder().
+    opts := options.NewRequestOptionsBuilder().
         SetMethod("GET").
         SetURL(url).
         AddHeader("Authorization", "Bearer "+c.token).
         AddHeader("X-Request-ID", requestID).
         SetTimeout(10 * time.Second).
-        SetRetryConfig(&gocurl.RetryConfig{
+        SetRetryConfig(&options.RetryConfig{
             MaxRetries:  3,
             RetryDelay:  time.Second,
             RetryOnHTTP: []int{500, 502, 503, 504},
@@ -649,7 +651,7 @@ func (c *Client) Get(ctx context.Context, path string, requestID string) (*http.
         SetMaxRedirects(5).
         Build()
 
-    resp, err := gocurl.Process(ctx, opts)
+    resp, err := gocurl.Execute(ctx, opts)
     if err != nil {
         return nil, fmt.Errorf("GET %s failed: %w", path, err)
     }
@@ -661,7 +663,7 @@ func (c *Client) Get(ctx context.Context, path string, requestID string) (*http.
 func (c *Client) Post(ctx context.Context, path, body, requestID string) (*http.Response, error) {
     url := c.baseURL + path
 
-    opts := gocurl.NewRequestOptionsBuilder().
+    opts := options.NewRequestOptionsBuilder().
         SetMethod("POST").
         SetURL(url).
         AddHeader("Authorization", "Bearer "+c.token).
@@ -669,14 +671,14 @@ func (c *Client) Post(ctx context.Context, path, body, requestID string) (*http.
         AddHeader("X-Request-ID", requestID).
         SetBody(body).
         SetTimeout(15 * time.Second).
-        SetRetryConfig(&gocurl.RetryConfig{
+        SetRetryConfig(&options.RetryConfig{
             MaxRetries:  3,
             RetryDelay:  time.Second,
             RetryOnHTTP: []int{500, 502, 503, 504},
         }).
         Build()
 
-    resp, err := gocurl.Process(ctx, opts)
+    resp, err := gocurl.Execute(ctx, opts)
     if err != nil {
         return nil, fmt.Errorf("POST %s failed: %w", path, err)
     }
@@ -742,14 +744,14 @@ func TestClientRetry(t *testing.T) {
     }))
     defer server.Close()
 
-    opts := gocurl.NewRequestOptions(server.URL)
-    opts.RetryConfig = &gocurl.RetryConfig{
+    opts := options.NewRequestOptions(server.URL)
+    opts.RetryConfig = &options.RetryConfig{
         MaxRetries:  3,
         RetryDelay:  100 * time.Millisecond,
         RetryOnHTTP: []int{503},
     }
 
-    resp, err := gocurl.Process(context.Background(), opts)
+    resp, err := gocurl.Execute(context.Background(), opts)
     if err != nil {
         t.Fatalf("Request failed: %v", err)
     }
@@ -982,7 +984,7 @@ jobs:
 
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '1.25.x'
 
       - name: Format check
         run: |

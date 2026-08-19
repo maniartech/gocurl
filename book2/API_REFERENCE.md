@@ -2,8 +2,9 @@
 ## The Definitive Guide to the GoCurl Library
 
 **Version:** 1.0 (GoCurl v1.x)
-**Last Updated:** 2025
-**Package:** `github.com/stackql/gocurl`
+**Last Updated:** July 2026
+**Package:** `github.com/maniartech/gocurl`
+**Minimum Go:** 1.25
 
 ---
 
@@ -20,9 +21,10 @@
 3. [RequestOptions API](#requestoptions-api)
 4. [Builder Pattern API](#builder-pattern-api)
 5. [Middleware API](#middleware-api)
-6. [Process Function](#process-function)
-7. [Legacy API (Deprecated)](#legacy-api-deprecated)
-8. [Supporting Types](#supporting-types)
+6. [Execute Function](#execute-function)
+7. [SSRF Protection](#ssrf-protection)
+8. [Legacy API (Deprecated)](#legacy-api-deprecated)
+9. [Supporting Types](#supporting-types)
 
 ---
 
@@ -32,7 +34,7 @@ This reference documents all public APIs in the gocurl library. All examples sho
 
 **Import Statement:**
 ```go
-import "github.com/stackql/gocurl"
+import "github.com/maniartech/gocurl"
 ```
 
 **Common Imports:**
@@ -42,7 +44,9 @@ import (
     "net/http"
     "time"
 
-    "github.com/stackql/gocurl"
+    "github.com/maniartech/gocurl"
+    "github.com/maniartech/gocurl/middlewares"
+    "github.com/maniartech/gocurl/options"
 )
 ```
 
@@ -576,11 +580,11 @@ Creates a new `RequestOptions` with defaults aligned to curl's behavior.
 **Example:**
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.example.com/data")
+opts := options.NewRequestOptions("https://api.example.com/data")
 opts.Method = "GET"
 opts.AddHeader("Accept", "application/json")
 
-resp, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 ```
 
 ### RequestOptions Fields
@@ -669,21 +673,21 @@ Creates a deep copy of `RequestOptions`. Essential for concurrent use.
 **Example:**
 
 ```go
-baseOpts := gocurl.NewRequestOptions("https://api.example.com")
+baseOpts := options.NewRequestOptions("https://api.example.com")
 baseOpts.AddHeader("Authorization", "Bearer token")
 
 // Safe: Clone before modification in each goroutine
 go func() {
     opts1 := baseOpts.Clone()
     opts1.AddQueryParam("id", "1")
-    resp, _ := gocurl.Process(ctx, opts1)
+    resp, _ := gocurl.Execute(ctx, opts1)
     // ...
 }()
 
 go func() {
     opts2 := baseOpts.Clone()
     opts2.AddQueryParam("id", "2")
-    resp, _ := gocurl.Process(ctx, opts2)
+    resp, _ := gocurl.Execute(ctx, opts2)
     // ...
 }()
 ```
@@ -699,7 +703,7 @@ Marshals `RequestOptions` to JSON format.
 **Example:**
 
 ```go
-opts := gocurl.NewRequestOptions("https://example.com")
+opts := options.NewRequestOptions("https://example.com")
 opts.Method = "POST"
 opts.AddHeader("Content-Type", "application/json")
 
@@ -723,7 +727,7 @@ Adds a header to the request. Appends to existing values.
 **Example:**
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.example.com")
+opts := options.NewRequestOptions("https://api.example.com")
 opts.AddHeader("Accept", "application/json")
 opts.AddHeader("X-Custom-Header", "value1")
 opts.AddHeader("X-Custom-Header", "value2") // Multiple values
@@ -740,7 +744,7 @@ Sets a header, replacing any existing values.
 **Example:**
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.example.com")
+opts := options.NewRequestOptions("https://api.example.com")
 opts.SetHeader("Content-Type", "application/json")
 opts.SetHeader("Content-Type", "text/plain") // Replaces previous value
 ```
@@ -756,7 +760,7 @@ Adds a query parameter to the URL.
 **Example:**
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.example.com/search")
+opts := options.NewRequestOptions("https://api.example.com/search")
 opts.AddQueryParam("q", "golang")
 opts.AddQueryParam("limit", "10")
 // URL becomes: https://api.example.com/search?q=golang&limit=10
@@ -779,7 +783,7 @@ Creates a new builder instance.
 **Example:**
 
 ```go
-builder := gocurl.NewRequestOptionsBuilder()
+builder := options.NewRequestOptionsBuilder()
 ```
 
 ### Builder Methods
@@ -1077,14 +1081,14 @@ Builds and returns the `RequestOptions`.
 **Complete Example:**
 
 ```go
-opts := gocurl.NewRequestOptionsBuilder().
+opts := options.NewRequestOptionsBuilder().
     SetMethod("POST").
     SetURL("https://api.example.com/items").
     AddHeader("Content-Type", "application/json").
     AddHeader("Authorization", "Bearer token123").
     SetBody(`{"name":"test","value":42}`).
     SetTimeout(10 * time.Second).
-    SetRetryConfig(&gocurl.RetryConfig{
+    SetRetryConfig(&options.RetryConfig{
         MaxRetries:  3,
         RetryDelay:  time.Second,
         RetryOnHTTP: []int{500, 502, 503, 504},
@@ -1093,7 +1097,7 @@ opts := gocurl.NewRequestOptionsBuilder().
     SetMaxRedirects(5).
     Build()
 
-resp, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 if err != nil {
     return err
 }
@@ -1104,72 +1108,93 @@ defer resp.Body.Close()
 
 ## Middleware API
 
-Middleware allows request transformation before execution.
-
-### MiddlewareFunc Type
+The modern composition API wraps request execution, so middleware can observe both the
+outgoing request and its response or error:
 
 ```go
-type MiddlewareFunc func(*http.Request) (*http.Request, error)
+type Handler func(*http.Request) (*http.Response, error)
+type Middleware func(next Handler) Handler
 ```
 
-A middleware function transforms an `http.Request`.
-
-**Example:**
+The first middleware is conventionally the outermost. Put `Observe` outside `Retry` so
+one trace/metric represents the logical request while retry hooks still report attempts.
+The transport adapter is important: it consumes SSRF dial pins and preserves the original
+hostname for HTTP routing and TLS SNI.
 
 ```go
-// Add request ID to all requests
-func RequestIDMiddleware(req *http.Request) (*http.Request, error) {
-    reqID := uuid.New().String()
-    req.Header.Set("X-Request-ID", reqID)
-    return req, nil
+base := gocurl.HandlerFromRoundTripper(http.DefaultTransport)
+handler := gocurl.Observe(gocurl.Hooks{}, nil, nil, nil)(
+    gocurl.SSRFGuard(gocurl.DefaultSSRFPolicy())(
+        gocurl.Retry(gocurl.RetryPolicy{
+            MaxAttempts: 3,
+            MaxElapsed:  10 * time.Second,
+        })(base),
+    ),
+)
+
+req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.example.com", nil)
+if err != nil {
+    return err
+}
+resp, err := handler(req)
+```
+
+`HandlerFromRoundTripper` does not add client cookies, default headers, or redirect
+handling. Use `Client` for the full managed pipeline. When adapting back with
+`RoundTripperFromHandler`, the surrounding `http.Client` owns those behaviors.
+
+### Legacy request-mutator middleware
+
+`middlewares.MiddlewareFunc` only transforms a request. It remains supported through
+`options.RequestOptions.Middleware` and can join a modern chain via
+`gocurl.FromMiddlewareFunc`. It cannot directly observe a response.
+
+```go
+func addTimestamp(req *http.Request) (*http.Request, error) {
+    clone := req.Clone(req.Context())
+    clone.Header = req.Header.Clone()
+    clone.Header.Set("X-Timestamp", time.Now().Format(time.RFC3339))
+    return clone, nil
 }
 
-// Add timestamp header
-func TimestampMiddleware(req *http.Request) (*http.Request, error) {
-    req.Header.Set("X-Timestamp", time.Now().Format(time.RFC3339))
-    return req, nil
-}
-
-// Use middleware
-opts := gocurl.NewRequestOptions("https://api.example.com")
-opts.Middleware = []gocurl.MiddlewareFunc{
-    RequestIDMiddleware,
-    TimestampMiddleware,
-}
-
-resp, err := gocurl.Process(ctx, opts)
+var legacy middlewares.MiddlewareFunc = addTimestamp
+handler = gocurl.FromMiddlewareFunc(legacy)(handler)
 ```
 
 ---
 
-## Process Function
+## Execute Function
 
-The core execution function that all Curl functions call internally.
+`Execute` runs typed request options through the one-shot engine.
 
 ```go
-func Process(ctx context.Context, opts *RequestOptions) (*http.Response, error)
+func Execute(ctx context.Context, opts *options.RequestOptions) (*http.Response, error)
 ```
 
 **When to use:**
 - Direct control over request options
-- Custom retry logic
+- Legacy `options.RetryConfig` compatibility
 - Advanced configuration
 - Testing and mocking
+
+`Execute` does not inherit managed-client middleware, observability, circuit breaking,
+rate limiting, or SSRF protection. Use `Client.Prepare`/`Client.Do` when those guarantees
+are required.
 
 **Example:**
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.example.com/data")
+opts := options.NewRequestOptions("https://api.example.com/data")
 opts.Method = "POST"
 opts.AddHeader("Content-Type", "application/json")
 opts.Body = `{"key":"value"}`
-opts.RetryConfig = &gocurl.RetryConfig{
+opts.RetryConfig = &options.RetryConfig{
     MaxRetries:  3,
     RetryDelay:  time.Second,
     RetryOnHTTP: []int{500, 502, 503, 504},
 }
 
-resp, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 if err != nil {
     return fmt.Errorf("request failed: %w", err)
 }
@@ -1179,6 +1204,39 @@ if resp.StatusCode != 200 {
     return fmt.Errorf("unexpected status: %d", resp.StatusCode)
 }
 ```
+
+---
+
+## SSRF Protection
+
+SSRF protection is opt-in because blocking private or loopback destinations would break
+valid curl workflows. Enable it whenever a URL can be influenced by an untrusted user:
+
+```go
+client, err := gocurl.New(
+    gocurl.WithSSRFGuard(gocurl.DefaultSSRFPolicy()),
+    gocurl.WithRetry(gocurl.RetryPolicy{MaxAttempts: 3}),
+)
+if err != nil {
+    return err
+}
+defer client.Close()
+
+request, err := client.Prepare("curl https://api.example.com/data")
+if err != nil {
+    return err
+}
+resp, err := client.Do(ctx, request)
+```
+
+The default policy blocks loopback, link-local, private, and cloud-metadata addresses.
+It validates the initial destination and every redirect, then pins the network dial to
+the validated IPs to close the DNS-rebinding window. Resolution failure and opaque custom
+transports fail closed because proceeding would bypass that guarantee. Allow-list entries
+therefore require the same care as firewall rules.
+
+`SSRFPolicy.CheckSSRF` performs validation only. It does not pin a later independent
+dial; use `WithSSRFGuard`, or combine `SSRFGuard` with `HandlerFromRoundTripper`.
 
 ---
 
@@ -1209,7 +1267,7 @@ Legacy function with context. Use `Curl` or `CurlWithVars` instead.
 func Execute(ctx context.Context, opts *RequestOptions) (*Response, error)
 ```
 
-Legacy execution function. Use `Process` instead.
+Legacy execution function. Use `Execute` instead.
 
 ### Response Type (Deprecated)
 
@@ -1267,7 +1325,7 @@ HTTP Basic Authentication credentials.
 **Example:**
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.example.com")
+opts := options.NewRequestOptions("https://api.example.com")
 opts.BasicAuth = &gocurl.BasicAuth{
     Username: "user",
     Password: "pass",
@@ -1289,7 +1347,7 @@ Multipart file upload configuration.
 **Example:**
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.example.com/upload")
+opts := options.NewRequestOptions("https://api.example.com/upload")
 opts.Method = "POST"
 opts.FileUpload = &gocurl.FileUpload{
     FieldName: "file",
@@ -1313,8 +1371,8 @@ Automatic retry configuration.
 **Example:**
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.example.com")
-opts.RetryConfig = &gocurl.RetryConfig{
+opts := options.NewRequestOptions("https://api.example.com")
+opts.RetryConfig = &options.RetryConfig{
     MaxRetries:  3,
     RetryDelay:  time.Second,
     RetryOnHTTP: []int{500, 502, 503, 504},
@@ -1344,10 +1402,10 @@ func (m *MockClient) Do(req *http.Request) (*http.Response, error) {
     }, nil
 }
 
-opts := gocurl.NewRequestOptions("https://api.example.com")
+opts := options.NewRequestOptions("https://api.example.com")
 opts.CustomClient = &MockClient{}
 
-resp, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 ```
 
 ---
@@ -1364,7 +1422,7 @@ resp, err := gocurl.Process(ctx, opts)
 | JSON | `CurlJSON*` | `(*http.Response, error)` |
 | Download | `CurlDownload*` | `(int64, *http.Response, error)` |
 | WithVars | `Curl*WithVars` | `(*http.Response, error)` |
-| Core | `Process` | `(*http.Response, error)` |
+| Core | `Execute` | `(*http.Response, error)` |
 
 ### Decision Tree
 
@@ -1378,7 +1436,7 @@ What do you need?
 ├─ JSON unmarshaling → CurlJSON*()
 ├─ Download to file → CurlDownload*()
 ├─ No env expansion → Curl*WithVars()
-├─ Fine control → NewRequestOptions() + Process()
+├─ Fine control → NewRequestOptions() + Execute()
 └─ Fluent API → NewRequestOptionsBuilder().Build()
 ```
 

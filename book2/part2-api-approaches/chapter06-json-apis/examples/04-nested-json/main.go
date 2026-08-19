@@ -49,7 +49,7 @@ type Milestone struct {
 
 func main() {
 	fmt.Println("Example 4: Working with Nested JSON Structures")
-	fmt.Println("===============================================\n")
+	fmt.Print("===============================================\n\n")
 
 	ctx := context.Background()
 

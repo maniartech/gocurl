@@ -1,10 +1,25 @@
 # The Definitive Guide to the GoCurl Library
 
-**Book Structure and Planning Documents**
+**Book Structure, Planning Documents, and Runnable Examples**
+
+## Release compatibility
+
+The current gocurl release requires **Go 1.25 or later**. The authoritative public package
+is `github.com/maniartech/gocurl`; examples using the former module owner are invalid.
+
+Use `Client.Prepare`/`Client.Do` for the managed production pipeline. The `Curl*` helpers
+and `Execute` remain intentionally lightweight one-shot APIs and do not inherit client
+middleware, observability, circuit breaking, rate limiting, or the opt-in SSRF guard.
+The current Retry, Observe, middleware composition, and DNS-rebinding-safe SSRF examples
+are documented in [API_REFERENCE.md](API_REFERENCE.md#middleware-api) and
+[the original-path compatibility guide](../book/README.md).
 
 ## Directory Structure
 
-This directory contains the complete planning and structure for "HTTP Mastery with Go: From cURL to Production - The Definitive Guide to the GoCurl Library."
+This directory contains the evolving manuscript, runnable examples, and planning structure
+for "HTTP Mastery with Go: From cURL to Production." Planning files describe intended
+chapters and must not be treated as shipped API guarantees; the root API golden tests and
+the executable examples are authoritative.
 
 ```
 book2/
@@ -108,7 +123,7 @@ book2/
 
 ### Part III: Security & Configuration (~75 pages)
 8. **Security & TLS** - Certificates, pinning, mutual TLS
-9. **Advanced Configuration** - Custom clients, Process(), HTTP/2
+9. **Advanced Configuration** - Custom clients, Execute(), HTTP/2
 10. **Timeouts & Retries** - Reliability patterns
 
 ### Part IV: Enterprise Patterns (~75 pages)
@@ -142,7 +157,7 @@ book2/
 - [x] Master plan created
 - [x] Outline created (Chapters 1-3 fully detailed)
 - [x] Style guide established
-- [x] API reference documented
+- [x] Release-critical API reference reconciled with the July 2026 public API
 - [x] Code standards defined
 - [x] Directory structure created
 

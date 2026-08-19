@@ -99,7 +99,7 @@ func extractSimpleVariable(text string, start int) (string, int, error) {
 
 // lookupVariable looks up variable in vars map
 func lookupVariable(varName string, vars Variables) (string, error) {
-	if vars == nil || len(vars) == 0 {
+	if len(vars) == 0 {
 		return "", fmt.Errorf("undefined variable: %s", varName)
 	}
 

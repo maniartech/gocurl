@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	fmt.Println("⏱️  Context Timeout Example\n")
+	fmt.Print("⏱️  Context Timeout Example\n\n")
 
 	// Example 1: Successful request with reasonable timeout
 	fmt.Println("1️⃣  Request with 10-second timeout (should succeed)...")

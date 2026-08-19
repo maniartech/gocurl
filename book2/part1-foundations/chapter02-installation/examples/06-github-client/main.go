@@ -63,7 +63,7 @@ func (c *GitHubClient) GetRepository(ctx context.Context, owner, repo string) (*
 }
 
 func main() {
-	fmt.Println("🐙 GitHub Client Example\n")
+	fmt.Print("🐙 GitHub Client Example\n\n")
 
 	// Get token from environment (or use empty for public repos)
 	token := os.Getenv("GITHUB_TOKEN")

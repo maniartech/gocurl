@@ -116,7 +116,7 @@ func streamingHashCalculation(ctx context.Context, url, filepath string) (string
 
 func main() {
 	fmt.Println("Example 8: File Integrity Verification")
-	fmt.Println("=======================================\n")
+	fmt.Print("=======================================\n\n")
 
 	ctx := context.Background()
 
@@ -185,7 +185,7 @@ func main() {
 	file.WriteAt([]byte("CORRUPT"), 100) // Corrupt some bytes
 	file.Close()
 
-	fmt.Println("   Corrupted file artificially\n")
+	fmt.Print("   Corrupted file artificially\n\n")
 
 	// Try to verify (should fail)
 	fmt.Println("🔐 Verifying corrupted file...")

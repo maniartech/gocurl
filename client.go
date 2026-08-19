@@ -56,13 +56,14 @@ func New(opts ...Option) (*Client, error) {
 	// request-context redirect seam (composing with any user-supplied Allow hook),
 	// so a public URL that redirects to an internal address is blocked.
 	if cfg.ssrfPolicy != nil {
+		// Pin every redirect independently. A redirect can change hosts, so carrying
+		// the initial request's approved IP set forward would be both incorrect and
+		// unsafe; CheckRedirect validates and replaces the pin for each new hop.
 		pol := *cfg.ssrfPolicy
 		prev := cfg.redirectAllow
 		cfg.redirectAllow = func(req *http.Request, via []*http.Request) error {
-			if req.URL != nil {
-				if err := pol.CheckSSRF(req.Context(), req.URL.Host); err != nil {
-					return err
-				}
+			if err := pol.pinRequest(req); err != nil {
+				return err
 			}
 			if prev != nil {
 				return prev(req, via)
@@ -74,6 +75,11 @@ func New(opts ...Option) (*Client, error) {
 	transport, err := cfg.buildTransport()
 	if err != nil {
 		return nil, err
+	}
+	if cfg.ssrfPolicy != nil {
+		// Install dial enforcement only for guarded Clients. The default path keeps
+		// its original transport object and allocation profile byte-for-byte.
+		transport = withSSRFDialPinning(transport)
 	}
 
 	hc := &http.Client{

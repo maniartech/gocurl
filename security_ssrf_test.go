@@ -2,9 +2,13 @@ package gocurl
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -64,6 +68,128 @@ func TestSSRFPolicy_CheckSSRF(t *testing.T) {
 				t.Errorf("CheckSSRF(%q) = %v, want allowed", tc.host, err)
 			}
 		})
+	}
+}
+
+func TestSSRFGuard_HandlerAdapterDialsValidatedIP(t *testing.T) {
+	originalLookup := lookupIPAddr
+	t.Cleanup(func() { lookupIPAddr = originalLookup })
+	lookupCalls := 0
+	lookupIPAddr = func(context.Context, string) ([]net.IPAddr, error) {
+		lookupCalls++
+		// Model attacker-controlled DNS: validation receives a public address,
+		// while any accidental second lookup would receive cloud metadata.
+		if lookupCalls > 1 {
+			return []net.IPAddr{{IP: net.ParseIP("169.254.169.254")}}, nil
+		}
+		return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
+	}
+
+	var dialed string
+	stop := errors.New("stop after observing dial target")
+	rt := &http.Transport{
+		Proxy: nil,
+		DialContext: func(_ context.Context, _, address string) (net.Conn, error) {
+			dialed = address
+			return nil, stop
+		},
+	}
+	h := SSRFGuard(DefaultSSRFPolicy())(HandlerFromRoundTripper(rt))
+	req, _ := http.NewRequest(http.MethodGet, "http://rebind.example/resource", nil)
+
+	_, err := h(req)
+	if !errors.Is(err, stop) {
+		t.Fatalf("error=%v, want dial sentinel", err)
+	}
+	if lookupCalls != 1 {
+		t.Fatalf("DNS lookups=%d, want exactly the validation lookup", lookupCalls)
+	}
+	if dialed != "203.0.113.10:80" {
+		t.Fatalf("dialed %q, want validated IP", dialed)
+	}
+}
+
+func TestSSRFGuard_ClientDialsValidatedIP(t *testing.T) {
+	originalLookup := lookupIPAddr
+	t.Cleanup(func() { lookupIPAddr = originalLookup })
+	lookupIPAddr = func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("203.0.113.20")}}, nil
+	}
+
+	var dialed string
+	stop := errors.New("stop after observing client dial target")
+	rt := &http.Transport{
+		Proxy: nil,
+		DialContext: func(_ context.Context, _, address string) (net.Conn, error) {
+			dialed = address
+			return nil, stop
+		},
+	}
+	client, err := New(WithTransport(rt), WithSSRFGuard(DefaultSSRFPolicy()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	req, err := NewRequest(http.MethodGet, "http://native-rebind.example/resource")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.Do(context.Background(), req)
+	if !errors.Is(err, stop) {
+		t.Fatalf("error=%v, want dial sentinel", err)
+	}
+	if dialed != "203.0.113.20:80" {
+		t.Fatalf("dialed %q, want validated IP", dialed)
+	}
+}
+
+func TestCompositionRobustness_PinnedTLSPreservesServerName(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	originalLookup := lookupIPAddr
+	t.Cleanup(func() { lookupIPAddr = originalLookup })
+	lookupIPAddr = func(_ context.Context, host string) ([]net.IPAddr, error) {
+		if host != "example.com" {
+			return nil, errors.New("unexpected hostname")
+		}
+		return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+	}
+
+	pool := x509.NewCertPool()
+	pool.AddCert(srv.Certificate())
+	rt := &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: pool}}
+	policy := DefaultSSRFPolicy()
+	policy.AllowHosts = []string{"example.com"}
+	h := SSRFGuard(policy)(HandlerFromRoundTripper(rt))
+	port := strings.TrimPrefix(srv.URL, "https://127.0.0.1:")
+	req, _ := http.NewRequest(http.MethodGet, "https://example.com:"+port, nil)
+
+	resp, err := h(req)
+	if err != nil {
+		t.Fatalf("TLS request with pinned IP and original SNI failed: %v", err)
+	}
+	_ = resp.Body.Close()
+}
+
+func TestCompositionRobustness_OpaqueTransportFailsClosed(t *testing.T) {
+	called := false
+	opaque := roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		called = true
+		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
+	})
+	h := SSRFGuard(DefaultSSRFPolicy())(HandlerFromRoundTripper(opaque))
+	req, _ := http.NewRequest(http.MethodGet, "http://203.0.113.30", nil)
+
+	_, err := h(req)
+	if !errors.Is(err, ErrSSRFBlocked) {
+		t.Fatalf("error=%v, want fail-closed SSRF error", err)
+	}
+	if called {
+		t.Fatal("opaque transport was called despite being unable to enforce the dial pin")
 	}
 }
 

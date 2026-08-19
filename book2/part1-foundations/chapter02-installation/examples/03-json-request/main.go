@@ -20,7 +20,7 @@ type HTTPBinResponse struct {
 }
 
 func main() {
-	fmt.Println("📦 JSON Request Example\n")
+	fmt.Print("📦 JSON Request Example\n\n")
 
 	ctx := context.Background()
 

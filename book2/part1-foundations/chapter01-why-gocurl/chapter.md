@@ -273,7 +273,7 @@ Let's make your first successful API call with GoCurl. We'll query the GitHub AP
 ### Prerequisites
 
 ```bash
-go version  # Requires Go 1.21+
+go version  # Requires Go 1.25+
 ```
 
 ### Install GoCurl
@@ -711,17 +711,26 @@ GoCurl isn't just about syntax convenience—it provides enterprise-grade featur
 Network failures happen. GoCurl handles them gracefully:
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.example.com/data")
-opts.RetryConfig = &gocurl.RetryConfig{
-    MaxRetries:  3,
-    RetryDelay:  time.Second,
-    RetryOnHTTP: []int{500, 502, 503, 504},
+client, err := gocurl.New(gocurl.WithRetry(gocurl.RetryPolicy{
+    MaxAttempts: 4, // the initial request plus at most three retries
+    Backoff:     gocurl.ExponentialJitter(100*time.Millisecond, 5*time.Second),
+    MaxElapsed:  15 * time.Second,
+}))
+if err != nil {
+    return err
 }
+defer client.Close()
 
-resp, err := gocurl.Process(ctx, opts)
+request, err := client.Prepare("curl https://api.example.com/data")
+if err != nil {
+    return err
+}
+resp, err := client.Do(ctx, request)
 ```
 
-If the server returns 503 (Service Unavailable), GoCurl automatically retries up to 3 times with increasing delays: 1s, 2s, 4s.
+The modern policy retries only safe/idempotent methods by default and respects the elapsed
+budget. POST, PATCH, and CONNECT require an idempotency key or explicit opt-in; this avoids
+duplicating a side effect merely because a response was lost.
 
 **Covered in detail:** Chapter 10 - Timeouts & Retries
 
@@ -730,12 +739,12 @@ If the server returns 503 (Service Unavailable), GoCurl automatically retries up
 Protect against man-in-the-middle attacks by pinning expected certificate fingerprints:
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.bank.com/transfer")
+opts := options.NewRequestOptions("https://api.bank.com/transfer")
 opts.CertPinFingerprints = []string{
     "sha256/X3pGTSOuJeEVw989IJ/oKo9EgZ9GN6wpFevf0tVFJ0=",
 }
 
-resp, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 // Fails if server certificate doesn't match fingerprint
 ```
 
@@ -743,40 +752,35 @@ resp, err := gocurl.Process(ctx, opts)
 
 ### 3. Distributed Tracing Support
 
-Track requests across microservices with request IDs:
+Track logical requests through a vendor-neutral tracer and request IDs:
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.service-a.com/data")
-opts.RequestID = "req-12345-67890"
-
-resp, err := gocurl.Process(ctx, opts)
-// Request ID automatically added to logs and traces
+client, err := gocurl.New(
+    gocurl.WithTracer(tracer), // implements gocurl.Tracer
+    gocurl.WithRequestIDFunc(newRequestID),
+)
 ```
 
-Integrates with OpenTelemetry and other tracing systems.
+The core interfaces have no vendor dependency. The optional OpenTelemetry adapter lives in
+`observability/otel`; sink implementations must be concurrency-safe.
 
 **Covered in detail:** Chapter 12 - Enterprise Patterns
 
 ### 4. Middleware Pipeline
 
-Transform requests before execution:
+Wrap request execution so middleware can observe responses and errors:
 
 ```go
-// Add timestamp to all requests
-func TimestampMiddleware(req *http.Request) (*http.Request, error) {
-    req.Header.Set("X-Timestamp", time.Now().Format(time.RFC3339))
-    return req, nil
-}
-
-opts := gocurl.NewRequestOptions("https://api.example.com")
-opts.Middleware = []gocurl.MiddlewareFunc{
-    TimestampMiddleware,
-    AuthMiddleware,
-    LoggingMiddleware,
-}
-
-resp, err := gocurl.Process(ctx, opts)
+base := gocurl.HandlerFromRoundTripper(http.DefaultTransport)
+handler := gocurl.Observe(hooks, metrics, tracer, logger)(
+    gocurl.Retry(retryPolicy)(base),
+)
+resp, err := handler(req)
 ```
+
+The older `middlewares.MiddlewareFunc` request transformer remains supported and can be
+adapted with `gocurl.FromMiddlewareFunc`. Put `Observe` outside `Retry` when one span should
+represent the complete logical request.
 
 **Covered in detail:** Chapter 11 - Middleware System
 
@@ -799,15 +803,30 @@ resp, err := gocurl.Curl(ctx, "https://slow-api.com/data")
 Client certificate authentication for secure services:
 
 ```go
-opts := gocurl.NewRequestOptions("https://api.enterprise.com/secure")
+opts := options.NewRequestOptions("https://api.enterprise.com/secure")
 opts.CertFile = "/path/to/client-cert.pem"
 opts.KeyFile = "/path/to/client-key.pem"
 opts.CAFile = "/path/to/ca-cert.pem"
 
-resp, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 ```
 
 **Covered in detail:** Chapter 8 - Security & TLS
+
+### 7. SSRF and DNS-Rebinding Protection
+
+When users can influence a destination, use the managed client with the opt-in guard:
+
+```go
+client, err := gocurl.New(
+    gocurl.WithSSRFGuard(gocurl.DefaultSSRFPolicy()),
+)
+```
+
+The guard blocks loopback, link-local, private, and cloud-metadata destinations, checks
+every redirect, and pins the dial to the validated IPs. A validation-only call to
+`SSRFPolicy.CheckSSRF` cannot prevent a later independent DNS lookup, so it must not be
+used as a substitute for `WithSSRFGuard`.
 
 ---
 

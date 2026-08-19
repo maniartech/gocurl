@@ -134,7 +134,7 @@ chapter-XX-name/
 **Key Coverage:**
 - Clear explanation of TWO ways to use gocurl
 - When to use Curl* functions vs RequestOptions
-- Process() as the core execution function
+- Execute() as the core execution function
 
 **Hands-On:**
 - Environment variable expansion
@@ -307,19 +307,19 @@ chapter-XX-name/
 - **HTTP/2 control** (HTTP2, HTTP2Only)
 - **Cookie management** (CookieJar, CookieFile, sessions)
 - **Compression** (CompressionMethods, gzip, deflate, br)
-- **Process() function** (core execution, direct usage)
+- **Execute() function** (core execution, direct usage)
 - **Proxy bypass** (ProxyNoProxy rules)
 
 **Key Coverage:**
 - Complete coverage of advanced fields
-- Process() function explained
+- Execute() function explained
 - Custom client patterns for testing
 
 **Hands-On:**
 - Mock HTTP client for testing
 - Implement response body limits
 - Configure cookie persistence
-- Use Process() directly
+- Use Execute() directly
 
 **Learning Outcomes:**
 - Test with custom clients
@@ -602,7 +602,7 @@ chapter-XX-name/
 - Clone()
 
 **Core Functions:**
-- Process(ctx, opts) - CORE execution function
+- Execute(ctx, opts) - typed one-shot execution function
 
 **Legacy API (DEPRECATED):**
 - Request(command, vars)
@@ -640,13 +640,13 @@ var user User
 resp, err := gocurl.CurlJSON(ctx, &user, cmd)
 ```
 
-**Execute → Process:**
+**Typed options → Execute:**
 ```go
 // OLD
 resp, err := gocurl.Execute(ctx, opts)
 
 // NEW
-httpResp, _, err := gocurl.Process(ctx, opts)
+httpResp, err := gocurl.Execute(ctx, opts)
 ```
 
 **Side-by-side examples for all patterns**

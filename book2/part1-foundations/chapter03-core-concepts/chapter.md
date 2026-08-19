@@ -8,7 +8,7 @@
 > - Use variable expansion securely and effectively
 > - Implement proper context handling for timeouts and cancellation
 > - Parse responses using multiple techniques
-> - Understand the Process() function as gocurl's core execution engine
+> - Understand `Execute` as the typed entry point to gocurl's one-shot engine
 
 ## Introduction
 
@@ -25,7 +25,8 @@ GoCurl offers two distinct ways to make HTTP requests:
 1. **Curl-Syntax Functions** - String-based commands using curl syntax
 2. **Programmatic Builder** - Type-safe RequestOptions and Builder pattern
 
-Both approaches ultimately call the same core `Process()` function, but they serve different use cases.
+Both approaches use the same one-shot execution engine, but they enter it differently:
+the curl helpers parse text first, while `Execute` accepts typed options directly.
 
 ### Approach 1: Curl-Syntax Functions
 
@@ -66,7 +67,7 @@ opts := options.NewRequestOptionsBuilder().
     SetHeader("Accept", "application/json").
     Build()
 
-httpResp, _, err := gocurl.Process(ctx, opts)
+httpResp, err := gocurl.Execute(ctx, opts)
 ```
 
 **When to use:**
@@ -101,18 +102,22 @@ Curl Command String
         ↓
  RequestOptions ← Builder Pattern
         ↓
-   Process()
+ Shared one-shot engine
         ↓
   http.Client
         ↓
  *http.Response
 ```
 
-Both paths converge at `Process()`, which is the core execution engine. This means:
+Both paths converge in the one-shot engine. This means:
 - Same performance characteristics
 - Same features available
 - Same error handling
 - Choose based on developer ergonomics, not technical limitations
+
+The reusable `Client.Prepare`/`Client.Do` API is a separate managed path. Choose it when
+you need modern execution middleware, observability, circuit breaking, rate limiting, or
+the opt-in SSRF guard; those guarantees are intentionally not inherited by `Execute`.
 
 ## Understanding the Six Function Categories
 
@@ -308,8 +313,8 @@ written, resp, err := gocurl.CurlDownloadArgs(ctx,
 **Example:**
 ```go
 written, resp, err := gocurl.CurlDownload(ctx,
-    "/tmp/golang-1.21.tar.gz",
-    "https://go.dev/dl/go1.21.linux-amd64.tar.gz")
+    "/tmp/golang-1.25.tar.gz",
+    "https://go.dev/dl/go1.25.0.linux-amd64.tar.gz")
 if err != nil {
     return err
 }
@@ -801,14 +806,16 @@ if err := scanner.Err(); err != nil {
 }
 ```
 
-## The Process() Function - Core Execution Engine
+## The Execute() Function - Typed One-Shot Execution
 
-`Process()` is the heart of gocurl. All Curl* functions eventually call it.
+`Execute()` is the public programmatic counterpart to the curl-string helpers. It accepts
+the same `options.RequestOptions` produced by the parser, then invokes the shared one-shot
+engine without reparsing a command.
 
-### Process() Signature
+### Execute() Signature
 
 ```go
-func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response, *http.Response, error)
+func Execute(ctx context.Context, opts *options.RequestOptions) (*http.Response, error)
 ```
 
 **Parameters:**
@@ -816,20 +823,22 @@ func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response,
 - `opts` - RequestOptions struct with all configuration
 
 **Returns:**
-- First `*http.Response` - The actual HTTP response
-- Second `*http.Response` - Same response (for convenience)
-- `error` - Any error that occurred
+- `*http.Response` - The live HTTP response; the caller must close its body
+- `error` - Any validation, transport, status, or body-limit error
 
-### What Process() Does
+### What Execute() Does
 
 1. Validates RequestOptions
-2. Applies middleware pipeline
+2. Applies legacy request-mutator middleware from `RequestOptions.Middleware`
 3. Builds http.Request
-4. Executes request with http.Client
-5. Handles retries (if configured)
-6. Returns response
+4. Executes the request with the configured one-shot HTTP client
+5. Handles legacy `options.RetryConfig` retries, if configured
+6. Applies response limits and fail-on-status behavior
 
-### Using Process() Directly
+It does not apply managed `Client` middleware or `WithSSRFGuard`. This distinction is
+security-relevant when a destination is influenced by untrusted input.
+
+### Using Execute() Directly
 
 When you build RequestOptions programmatically:
 
@@ -844,7 +853,7 @@ opts := &options.RequestOptions{
     Timeout: 30 * time.Second,
 }
 
-resp, _, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 if err != nil {
     return err
 }
@@ -869,9 +878,8 @@ func CurlCommand(ctx context.Context, command string) (*http.Response, error) {
         return nil, err
     }
 
-    // 4. Call Process()
-    resp, _, err := Process(ctx, opts)
-    return resp, err
+    // 4. Enter the shared one-shot engine.
+    return executeOpts(ctx, opts)
 }
 ```
 
@@ -879,20 +887,17 @@ Similarly for `CurlString`:
 
 ```go
 func CurlString(ctx context.Context, command ...string) (string, *http.Response, error) {
-    // Convert to RequestOptions (same process)
-    opts, err := parseToRequestOptions(command...)
+    // Curl performs parsing and enters the same one-shot engine.
+    resp, err := Curl(ctx, command...)
     if err != nil {
         return "", nil, err
     }
 
-    // Call Process()
-    resp, _, err := Process(ctx, opts)
-    if err != nil {
-        return "", nil, err
-    }
+    // The real helper uses a bounded read to prevent untrusted compressed
+    // responses from growing memory without limit.
 
     // Read body as string
-    body, err := io.ReadAll(resp.Body)
+    body, err := readBounded(resp.Body, defaultBufferedResponseLimit)
     if err != nil {
         return "", resp, err
     }
@@ -901,14 +906,14 @@ func CurlString(ctx context.Context, command ...string) (string, *http.Response,
 }
 ```
 
-### When to Use Process() Directly
+### When to Use Execute() Directly
 
-Use `Process()` when:
+Use `Execute()` when:
 
 1. **Building requests programmatically**
    ```go
    opts := buildRequestOptions(config)
-   resp, _, err := gocurl.Process(ctx, opts)
+   resp, err := gocurl.Execute(ctx, opts)
    ```
 
 2. **Reusing RequestOptions**
@@ -929,7 +934,7 @@ Use `Process()` when:
        URL: testServer.URL,
        CustomClient: mockHTTPClient,
    }
-   resp, _, err := gocurl.Process(ctx, opts)
+   resp, err := gocurl.Execute(ctx, opts)
    ```
 
 4. **Implementing custom abstractions**
@@ -937,7 +942,7 @@ Use `Process()` when:
    func (c *APIClient) request(endpoint string) (*http.Response, error) {
        opts := c.baseOptions.Clone()
        opts.URL = c.baseURL + endpoint
-       return gocurl.Process(c.ctx, opts)
+       return gocurl.Execute(c.ctx, opts)
    }
    ```
 
@@ -1045,7 +1050,7 @@ In this chapter, you learned:
 - ✅ **Variable expansion** - Automatic environment expansion vs explicit maps
 - ✅ **Context management** - Timeouts, cancellation, and deadline control
 - ✅ **Response handling** - Multiple patterns for different scenarios
-- ✅ **Process() function** - The core execution engine powering all requests
+- ✅ **Execute() function** - The core execution engine powering all requests
 
 **Key Takeaways:**
 

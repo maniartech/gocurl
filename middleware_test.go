@@ -1,10 +1,14 @@
 package gocurl
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/maniartech/gocurl/middlewares"
 )
@@ -12,6 +16,89 @@ import (
 func okHandler() Handler {
 	return func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: http.NoBody}, nil
+	}
+}
+
+func TestRetryMiddleware_RetriesTransientResponse(t *testing.T) {
+	attempts := 0
+	base := Handler(func(*http.Request) (*http.Response, error) {
+		attempts++
+		status := http.StatusServiceUnavailable
+		if attempts == 2 {
+			status = http.StatusOK
+		}
+		return &http.Response{StatusCode: status, Header: make(http.Header), Body: http.NoBody}, nil
+	})
+	h := Retry(RetryPolicy{MaxAttempts: 2, Backoff: ConstantBackoff(0)})(base)
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+
+	resp, err := h(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK || attempts != 2 {
+		t.Fatalf("status=%d attempts=%d, want 200 and 2", resp.StatusCode, attempts)
+	}
+}
+
+func TestRetryMiddleware_DoesNotRetryNonIdempotentPost(t *testing.T) {
+	attempts := 0
+	base := Handler(func(req *http.Request) (*http.Response, error) {
+		attempts++
+		_, _ = io.Copy(io.Discard, req.Body)
+		return &http.Response{StatusCode: http.StatusServiceUnavailable, Header: make(http.Header), Body: http.NoBody}, nil
+	})
+	h := Retry(RetryPolicy{MaxAttempts: 3, Backoff: ConstantBackoff(0)})(base)
+	req, _ := http.NewRequest(http.MethodPost, "http://example.com", strings.NewReader("payload"))
+
+	if _, err := h(req); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts=%d, want 1", attempts)
+	}
+}
+
+func TestObserveMiddleware_InstrumentsStandaloneRetryChain(t *testing.T) {
+	metrics := &fakeMetrics{}
+	span := &fakeSpan{}
+	tracer := &fakeTracer{span: span}
+	logger := &fakeLogger{}
+	requests, retries, responses := 0, 0, 0
+	hooks := Hooks{
+		OnRequest:  func(context.Context, *http.Request) { requests++ },
+		OnRetry:    func(context.Context, *http.Request, int, error, *http.Response) { retries++ },
+		OnResponse: func(context.Context, *http.Request, *http.Response, time.Duration) { responses++ },
+	}
+
+	attempts := 0
+	base := Handler(func(*http.Request) (*http.Response, error) {
+		attempts++
+		status := http.StatusServiceUnavailable
+		if attempts == 2 {
+			status = http.StatusOK
+		}
+		return &http.Response{StatusCode: status, Header: make(http.Header), Body: http.NoBody}, nil
+	})
+	h := Observe(hooks, metrics, tracer, logger)(
+		Retry(RetryPolicy{MaxAttempts: 2, Backoff: ConstantBackoff(0)})(base),
+	)
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+
+	if _, err := h(req); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 1 || retries != 1 || responses != 1 {
+		t.Fatalf("hooks request/retry/response = %d/%d/%d, want 1/1/1", requests, retries, responses)
+	}
+	if metrics.requests != 1 || metrics.retries != 1 || metrics.latencies != 1 || metrics.inFlight != 0 {
+		t.Fatalf("metrics request/retry/latency/inflight = %d/%d/%d/%d", metrics.requests, metrics.retries, metrics.latencies, metrics.inFlight)
+	}
+	if span.ended != 1 || len(span.events) != 1 {
+		t.Fatalf("span ended/events = %d/%d, want 1/1", span.ended, len(span.events))
+	}
+	if len(logger.entries) != 1 {
+		t.Fatalf("log entries=%d, want 1", len(logger.entries))
 	}
 }
 

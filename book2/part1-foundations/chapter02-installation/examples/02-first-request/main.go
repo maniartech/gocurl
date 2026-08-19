@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🚀 Your First GoCurl Request\n")
+	fmt.Print("🚀 Your First GoCurl Request\n\n")
 
 	// Create context with timeout to prevent hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

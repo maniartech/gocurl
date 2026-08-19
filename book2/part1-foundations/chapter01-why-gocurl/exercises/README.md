@@ -5,7 +5,7 @@ These exercises will help you practice the concepts learned in Chapter 1.
 ## Prerequisites
 
 - Completed Chapter 1
-- Go 1.21+ installed
+- Go 1.25+ installed
 - GoCurl library installed
 - Internet connection
 

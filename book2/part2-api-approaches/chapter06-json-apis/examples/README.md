@@ -31,7 +31,7 @@ go run main.go
 
 ## Prerequisites
 
-- Go 1.18+ (for generics in examples 09 and 10)
+- Go 1.25+ (the examples use the same supported toolchain as gocurl)
 - GitHub token (for example 07 - set `GITHUB_TOKEN` environment variable)
 - Internet connection (examples use real APIs)
 

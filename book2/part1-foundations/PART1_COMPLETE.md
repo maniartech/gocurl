@@ -41,7 +41,7 @@
 **Content:** 6,000+ words (~20 pages), 6 examples, 1 comprehensive exercise
 
 **Main Topics:**
-- Prerequisites (Go 1.21+)
+- Prerequisites (Go 1.25+)
 - Library installation (`go get`)
 - CLI tool installation
 - IDE setup (VS Code, GoLand, Vim)
@@ -75,7 +75,7 @@
 - Context patterns (timeout, cancellation, deadline)
 - Response handling
 - Error handling
-- Process() internals
+- Execute() internals
 
 **Function Categories Covered:**
 1. Basic (Curl, CurlCommand, CurlArgs)
@@ -192,7 +192,7 @@ During development, we discovered several API constraints:
 1. **WithVars Family:** Only basic variants exist (no String/Bytes/JSON/Download)
 2. **Return Values:** WithVars returns `(*http.Response, error)`, must read body manually
 3. **Variable Expansion:** WithVars does NOT expand env vars (only uses provided map)
-4. **Process Function:** Returns 3 values: `(*http.Response, string, error)`
+4. **Execute Function:** Returns 2 values: `(*http.Response, error)`
 5. **Internal APIs:** Some functions like `ParseCommand` are not suitable for public examples
 
 These discoveries led to more accurate examples and better documentation.

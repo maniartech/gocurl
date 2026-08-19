@@ -7,6 +7,38 @@ a tagged release.
 
 ## [Unreleased]
 
+### Security — supported toolchain and HTTP stack
+
+- Raised the minimum Go version from 1.23 to 1.25 and upgraded `golang.org/x/net`
+  from 0.38.0 to 0.55.0 across every runtime/example/adapter module. This is required
+  to consume fixes for reachable 2026 HTTP/2 and IDNA advisories reported by
+  `govulncheck`; retaining Go 1.23 would make the fixed `x/net` release unavailable.
+- CI now tests Go 1.25 plus the current stable Go release and runs pinned
+  `govulncheck`/`staticcheck` jobs. Consumers must also run a patched Go point release;
+  for the current Go 1.26 line that means Go 1.26.5 or newer.
+
+### Added — composition-surface parity
+
+- Added `Retry(RetryPolicy) Middleware` for SDK-injected handler chains. It uses the same
+  idempotency checks, body replay cap, retry statuses, `Retry-After`, elapsed budget, and
+  retry-budget machinery as `Client.Do`.
+- Added `Observe(Hooks, Metrics, Tracer, Logger) Middleware`, backed by the same logical-
+  request instrumentation used by `Client.Do`.
+- `SSRFGuard` now pins standard-transport dials to the IPs validated during the policy
+  check, preserving the original hostname for HTTP Host routing and TLS SNI. This closes
+  the DNS-rebinding check/dial race for native clients and chains ending in
+  `HandlerFromRoundTripper`; opaque transports that cannot enforce the pin fail closed.
+- Added an executable native/injected/legacy feature matrix and README coverage lint for
+  the public composition symbols.
+
+### Changed — one-shot execution policy
+
+- Ratified that package-level `Curl*` and `Execute` remain compatibility-oriented one-shot
+  APIs. They honor their curl/legacy retry, timeout, and redirect settings, but do not
+  inherit reusable-Client middleware, circuit breaking, rate limiting, SSRF protection,
+  or observability. Use `Client.Do` or an explicit injected handler chain for those
+  controls.
+
 ### Added — HTTP/1.x version pinning curl flags
 
 - **`--http1.1`** pins HTTP/1.1, suppressing HTTP/2 negotiation even against an h2-capable

@@ -141,7 +141,7 @@ opts := builder.
     }).
     Build()
 
-httpResp, _, err := gocurl.Process(ctx, opts)
+httpResp, err := gocurl.Execute(ctx, opts)
 ```
 
 **You choose the approach that fits your use case.**
@@ -448,7 +448,7 @@ opts := &options.RequestOptions{
     },
 }
 
-resp, _, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 ```
 
 **2. Certificate Pinning:**
@@ -632,7 +632,7 @@ go run main.go golang/go
 ### Installing the Library (3 pages)
 
 **Prerequisites:**
-- Go 1.21 or later
+- Go 1.25 or later
 - Git (for go get)
 - Internet connection
 
@@ -652,7 +652,7 @@ go list -m github.com/maniartech/gocurl
 // go.mod
 module myproject
 
-go 1.21
+go 1.25.0
 
 require github.com/maniartech/gocurl v1.0.0
 ```
@@ -1051,7 +1051,7 @@ opts := options.NewRequestOptionsBuilder().
     SetHeader("Authorization", "Bearer token").
     Build()
 
-resp, _, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 ```
 
 **How they relate:**
@@ -1080,7 +1080,7 @@ User Code ───────>│ Builder   │
                         │
                         ▼
                  ┌──────────────┐
-                 │  Process()   │◄───── Core Execution
+                 │  Execute()   │◄───── Core Execution
                  └──────────────┘
                         │
                         ▼
@@ -1376,7 +1376,7 @@ opts := &options.RequestOptions{
     },
 }
 
-resp, _, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 ```
 
 ### Response Handling (5 pages)
@@ -1507,18 +1507,19 @@ if err := json.Unmarshal([]byte(body), &result); err != nil {
 }
 ```
 
-### Process() - The Core Function (4 pages)
+### Execute() - Typed One-Shot Execution (4 pages)
 
-**What is Process():**
+**What is Execute():**
 
-Process() is the internal function that ALL Curl* functions call. It's the core execution engine.
+`Execute` is the public typed entry point to the one-shot engine. Curl helpers enter the
+same engine after parsing; the managed `Client` pipeline is separate.
 
 ```go
 // Signature
-func Process(ctx context.Context, opts *options.RequestOptions) (*http.Response, *http.Response, error)
+func Execute(ctx context.Context, opts *options.RequestOptions) (*http.Response, error)
 ```
 
-**When to use Process() directly:**
+**When to use Execute() directly:**
 
 1. You've built RequestOptions programmatically
 2. You need to reuse the same options
@@ -1535,8 +1536,8 @@ opts.Headers = http.Header{
 }
 opts.Body = `{"key":"value"}`
 
-// Execute with Process()
-resp, _, err := gocurl.Process(ctx, opts)
+// Execute with Execute()
+resp, err := gocurl.Execute(ctx, opts)
 if err != nil {
     return err
 }
@@ -1563,9 +1564,8 @@ func CurlCommand(ctx context.Context, command string) (*http.Response, error) {
         return nil, err
     }
 
-    // 4. Call Process()
-    resp, _, err := Process(ctx, opts)
-    return resp, err
+    // 4. Enter the shared one-shot engine.
+    return executeOpts(ctx, opts)
 }
 ```
 
@@ -1679,7 +1679,7 @@ func testHeaders(ctx context.Context) {
 - ✅ Variable expansion (environment + explicit)
 - ✅ Context for timeouts and cancellation
 - ✅ Response handling patterns
-- ✅ Process() as the core execution engine
+- ✅ Execute() as the core execution engine
 
 **Next Chapter:** Command-Line Interface - Master the gocurl CLI tool
 
@@ -1728,7 +1728,7 @@ resp, err := gocurl.CurlArgsWithVars(ctx, vars, args...)
 
 **Core Execution:**
 ```go
-resp, _, err := gocurl.Process(ctx, opts)
+resp, err := gocurl.Execute(ctx, opts)
 ```
 
 ---

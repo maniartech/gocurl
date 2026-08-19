@@ -38,7 +38,7 @@ type HTTPBinPost struct {
 }
 
 func main() {
-	fmt.Println("🔍 Advanced JSON Parsing Demonstration\n")
+	fmt.Print("🔍 Advanced JSON Parsing Demonstration\n\n")
 
 	// Pattern 1: Automatic unmarshaling (CurlJSON)
 	pattern1_AutomaticUnmarshaling()

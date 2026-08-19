@@ -14,7 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: ['1.23.x', '1.24.x']
+        # Minimum supported toolchain plus the current stable release. This
+        # catches compatibility regressions without freezing CI two releases back.
+        go: ['1.25.x', 'stable']
     steps:
       - uses: actions/checkout@v4
 
@@ -41,24 +43,59 @@ jobs:
       - name: Test (race, hermetic)
         run: go test -short -race -timeout 240s ./...
 
-      - name: Coverage (floor 75%)
+      - name: Coverage (aggregate + critical-path floors)
         run: |
           # -count=1 is REQUIRED: without it, cached packages reuse stale coverage
           # profiles and the -coverpkg merge reports an artificially low, variable
           # total (~76.9% vs the true 80.8%), which can spuriously breach the floor.
           go test -short -count=1 -coverpkg=./... -coverprofile=coverage.out ./...
-          total=$(go tool cover -func=coverage.out | tail -1 | grep -oE '[0-9]+\.[0-9]+' | tail -1)
-          echo "Total coverage: ${total}%"
-          floor=75.0
-          if awk "BEGIN{exit !(${total} < ${floor})}"; then
-            echo "::error::coverage ${total}% is below the ${floor}% floor"
-            exit 1
-          fi
+          bash scripts/check-coverage.sh coverage.out
+          go test -count=1 -coverprofile=options-coverage.out ./options
+          bash scripts/check-package-coverage.sh options-coverage.out 90.0 options
+          go test -count=1 -coverprofile=proxy-coverage.out ./proxy
+          bash scripts/check-package-coverage.sh proxy-coverage.out 65.0 proxy
 
       - name: Fuzz smoke (30s per target)
         run: |
           go test -run='^$' -fuzz='FuzzTokenize$' -fuzztime=30s ./tokenizer/
           go test -run='^$' -fuzz='FuzzParseCommand$' -fuzztime=30s .
+
+  windows-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - name: Verify formatting
+        shell: pwsh
+        run: |
+          $unformatted = gofmt -l . | Where-Object { $_ -notlike 'book2/*' -and $_ -notlike 'book2\*' }
+          if ($unformatted) {
+            $unformatted
+            throw 'gofmt check failed'
+          }
+      - name: Build and test
+        run: |
+          go vet ./...
+          go build ./...
+          go test -short -count=1 ./...
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - name: Staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
+          staticcheck ./...
+      - name: Vulnerability scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          govulncheck ./...
 
   benchmarks:
     # Benchmarks run without -race (which perturbs timing/allocs) on a single pinned
@@ -70,9 +107,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23.x'
+          go-version: '1.25.x'
       - name: Benchmark smoke (no -race, run once)
         run: go test -run='^$' -bench=. -benchmem -benchtime=1x ./...
+
+  performance-gates:
+    # These tests intentionally do real I/O or run testing.Benchmark internally,
+    # so they are excluded by -short in the main race job and enforced here.
+    # Timing is advisory; allocation and byte ceilings are hard merge gates.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+      - name: Hot-path allocation and byte budgets
+        run: >-
+          go test -count=1 -run
+          '^(TestAllocBudget_Do|TestByteBudget_Do|TestCompositionPerformance_Budgets)$'
+          -v .
 
   competitive-benchmarks:
     # Scheduled only (cron) — never on PRs. Runs the separate benchcmp module's
@@ -86,10 +139,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23.x'
+          go-version: '1.25.x'
       - name: Run competitive arms (count=10)
         working-directory: benchcmp
         run: |
+          go test -run '^TestCompetitiveOverheadBudgets$' -count=1 -v .
           # BenchmarkOverhead_* (stub transport) is the reliable client-overhead
           # comparison; BenchmarkCmp_* (real loopback) is end-to-end realism, ns/op
           # advisory (network-dominated). See docs/benchmarking.md.
@@ -109,8 +163,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23.x'
-      - name: Soak (2 min/arm) + backpressure
+          go-version: '1.25.x'
+      - name: Soak (10 min/arm) + backpressure
         env:
-          GOCURL_SOAK: 2m
-        run: go test -run 'TestClient_Soak' -timeout 20m -v .
+          GOCURL_SOAK: 10m
+        run: go test -run 'TestClient_Soak' -timeout 30m -v .
+
+  fuzz-long:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - name: Parser fuzz (5 minutes)
+        run: go test -run='^$' -fuzz='FuzzParseCommand$' -fuzztime=5m .
+      - name: Tokenizer fuzz (5 minutes)
+        run: go test -run='^$' -fuzz='FuzzTokenize$' -fuzztime=5m ./tokenizer/

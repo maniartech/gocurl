@@ -445,7 +445,7 @@ stages:
 
 api-tests:
   stage: test
-  image: golang:1.21
+  image: golang:1.25
   script:
     - go install github.com/maniartech/gocurl/cmd/gocurl@latest
     - export PATH=$PATH:$(go env GOPATH)/bin

@@ -114,7 +114,7 @@ func createTestFile(filepath string, sizeKB int) error {
 
 func main() {
 	fmt.Println("Example 5: File Upload with Multipart Form")
-	fmt.Println("===========================================\n")
+	fmt.Print("===========================================\n\n")
 
 	ctx := context.Background()
 
@@ -139,7 +139,7 @@ func main() {
 	}
 
 	fmt.Println("\n" + string(make([]byte, 50)))
-	fmt.Println("✅ Upload successful!\n")
+	fmt.Print("✅ Upload successful!\n\n")
 
 	fmt.Println("Key Features:")
 	fmt.Println("  • Multipart form-data encoding")

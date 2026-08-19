@@ -90,7 +90,7 @@ func downloadParallel(ctx context.Context, tasks []DownloadTask, concurrency int
 
 func main() {
 	fmt.Println("Example 4: Parallel Downloads")
-	fmt.Println("==============================\n")
+	fmt.Print("==============================\n\n")
 
 	ctx := context.Background()
 

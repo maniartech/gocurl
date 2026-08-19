@@ -4,7 +4,7 @@ This directory contains runnable code examples from Chapter 1. Each example is i
 
 ## Prerequisites
 
-- Go 1.21 or higher
+- Go 1.25 or higher
 - GoCurl installed (from parent repository)
 - Internet connection for API calls
 - API keys for certain examples (see individual directories)

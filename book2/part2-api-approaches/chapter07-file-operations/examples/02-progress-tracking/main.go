@@ -105,7 +105,7 @@ func downloadWithProgress(ctx context.Context, url, filepath string) error {
 
 func main() {
 	fmt.Println("Example 2: Download with Progress Tracking")
-	fmt.Println("===========================================\n")
+	fmt.Print("===========================================\n\n")
 
 	ctx := context.Background()
 

@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	fmt.Println("📚 GoCurl Function Categories Demonstration\n")
+	fmt.Print("📚 GoCurl Function Categories Demonstration\n\n")
 
 	ctx := context.Background()
 

@@ -434,17 +434,3 @@ func (b *RequestOptionsBuilder) Cleanup() {
 		b.cancel()
 	}
 }
-
-// Example usage
-func example() {
-	builder := NewRequestOptionsBuilder()
-	requestOptions := builder.
-		Post("https://example.com", "{\"name\":\"example\"}", http.Header{"Content-Type": []string{"application/json"}}).
-		SetTimeout(30 * time.Second).
-		SetFollowRedirects(true).
-		SetVerbose(true).
-		Build()
-
-	// Use requestOptions as needed
-	_ = requestOptions
-}

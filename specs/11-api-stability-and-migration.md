@@ -175,7 +175,7 @@ existing `Curl*` caller needs to change a line to move from v0.x to v1.
   `cmd/gocurl`. The library must never print, so this relocation is also a correctness fix.
   The CLI's exported `gocurl` dependencies shrink to the redaction helpers + `Curl*`.
 - **`go.mod` go directive:** currently `go 1.23.0` (raised from 1.22.3 to take the
-  `golang.org/x/net` ≥0.38.0 security fixes, which require Go 1.23). Future bumps happen only on a
+  `golang.org/x/net` ≥0.55.0 security fixes, which require Go 1.25). Future bumps happen only on a
   minor and are called out as a breaking-ish note, not hidden in a patch.
 - **Pre-1.0 `pseudo-versions`:** until the first tag, `go get` resolves pseudo-versions
   (`v0.0.0-<date>-<sha>`). The first real tag (`v0.1.0`) immediately improves resolvability.

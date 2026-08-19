@@ -2,11 +2,12 @@ package gocurl_test
 
 import (
 	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/printer"
 	"go/token"
-	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -80,15 +81,23 @@ func embeddedName(t ast.Expr) string {
 func collectAPISurface(t *testing.T, dir, pkgName string) string {
 	t.Helper()
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, func(fi fs.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, 0)
+	buildPkg, err := build.Default.ImportDir(dir, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pkg := pkgs[pkgName]
-	if pkg == nil {
-		t.Fatalf("package %q not found in %s", pkgName, dir)
+	files := map[string]*ast.File{}
+	for _, name := range append(append([]string(nil), buildPkg.GoFiles...), buildPkg.CgoFiles...) {
+		path := filepath.Join(dir, name)
+		file, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		if file.Name.Name == pkgName {
+			files[path] = file
+		}
+	}
+	if len(files) == 0 {
+		t.Fatalf("package %q has no build-selected source files in %s", pkgName, dir)
 	}
 
 	render := func(n ast.Node) string {
@@ -132,7 +141,7 @@ func collectAPISurface(t *testing.T, dir, pkgName string) string {
 	}
 
 	var lines []string
-	for _, file := range pkg.Files {
+	for _, file := range files {
 		for _, decl := range file.Decls {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:

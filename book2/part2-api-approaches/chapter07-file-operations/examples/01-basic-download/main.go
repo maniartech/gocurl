@@ -10,7 +10,7 @@ import (
 
 func main() {
 	fmt.Println("Example 1: Basic File Download with CurlDownload")
-	fmt.Println("==================================================\n")
+	fmt.Print("==================================================\n\n")
 
 	ctx := context.Background()
 

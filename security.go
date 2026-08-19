@@ -150,7 +150,7 @@ func validateTLSConfig(tlsConfig *tls.Config, opts *options.RequestOptions) erro
 	// Warn if InsecureSkipVerify is enabled
 	if tlsConfig.InsecureSkipVerify {
 		// This is allowed but should be explicit via opts.Insecure
-		if !opts.Insecure && (opts.CertPinFingerprints == nil || len(opts.CertPinFingerprints) == 0) {
+		if !opts.Insecure && len(opts.CertPinFingerprints) == 0 {
 			return fmt.Errorf("InsecureSkipVerify is enabled but --insecure flag not set")
 		}
 	}

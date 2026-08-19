@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🔐 Variable Expansion Demonstration\n")
+	fmt.Print("🔐 Variable Expansion Demonstration\n\n")
 
 	// Example 1: Automatic environment expansion
 	example1_EnvironmentExpansion()

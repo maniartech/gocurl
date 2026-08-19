@@ -44,42 +44,66 @@ var blockedMetadataHostnames = map[string]bool{
 	"metadata.google.internal": true,
 }
 
-// CheckSSRF resolves host and rejects the request if any resolved IP is blocked
-// by the policy and not on the allow-list. A resolution failure is NOT a policy
-// block (it surfaces later as a normal dial error). host may be "host" or
-// "host:port" (bracketed IPv6 accepted).
+// lookupIPAddr is a narrow test seam for deterministic rebinding simulations.
+// Production always uses net.DefaultResolver; keeping the seam at this lowest
+// level ensures CheckSSRF and dial pinning cannot accidentally use two resolvers.
+var lookupIPAddr = net.DefaultResolver.LookupIPAddr
+
+// CheckSSRF resolves host and rejects the request if resolution fails or any
+// resolved IP is blocked by the policy and not on the allow-list. host may be
+// "host" or "host:port" (bracketed IPv6 accepted).
+//
+// CheckSSRF performs validation only. To prevent DNS rebinding, execute requests
+// through SSRFGuard with HandlerFromRoundTripper, or use WithSSRFGuard on Client;
+// those paths pin the subsequent dial to the IPs validated here.
 func (p SSRFPolicy) CheckSSRF(ctx context.Context, host string) error {
+	_, err := p.resolveAndCheck(ctx, host)
+	return err
+}
+
+func (p SSRFPolicy) resolveAndCheck(ctx context.Context, host string) ([]net.IP, error) {
 	host = hostOnly(host)
 	if host == "" {
-		return nil
+		return nil, nil
 	}
 
 	// Allow-list by host name takes precedence over every block.
+	hostAllowed := false
 	for _, a := range p.AllowHosts {
 		if strings.EqualFold(hostOnly(a), host) {
-			return nil
+			hostAllowed = true
+			break
 		}
 	}
 
 	// Known cloud-metadata hostnames are blocked by name (they may resolve to a
 	// non-link-local address, or not resolve at all in the test environment).
-	if p.BlockCloudMetadata && blockedMetadataHostnames[strings.ToLower(host)] {
-		return ssrfError(host, "cloud metadata host")
+	if !hostAllowed && p.BlockCloudMetadata && blockedMetadataHostnames[strings.ToLower(host)] {
+		return nil, ssrfError(host, "cloud metadata host")
 	}
 
 	ips, err := resolveIPs(ctx, host)
 	if err != nil {
-		return nil // not a policy decision; let the dial fail naturally
+		// Once pinning is enabled, continuing after a failed validation lookup
+		// would necessarily make the transport resolve the hostname independently
+		// and recreate the rebinding window. Fail closed instead.
+		return nil, ssrfError(host, "destination could not be resolved")
+	}
+	if len(ips) == 0 {
+		return nil, ssrfError(host, "destination resolved to no addresses")
+	}
+	if hostAllowed {
+		return ips, nil
 	}
 	for _, ip := range ips {
 		if p.ipAllowed(ip) {
 			continue
 		}
 		if reason := p.blockReason(ip); reason != "" {
-			return ssrfError(host, reason)
+			return nil, ssrfError(host, reason)
 		}
 	}
-	return nil
+	return ips, nil
 }
 
 // blockReason returns a non-empty reason when ip is blocked by the policy.
@@ -145,7 +169,7 @@ func resolveIPs(ctx context.Context, host string) ([]net.IP, error) {
 	if ip := net.ParseIP(host); ip != nil {
 		return []net.IP{ip}, nil
 	}
-	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	addrs, err := lookupIPAddr(ctx, host)
 	if err != nil {
 		return nil, err
 	}
@@ -165,17 +189,50 @@ func ssrfError(host, reason string) error {
 	}
 }
 
-// SSRFGuard returns a Middleware that runs the SSRF policy pre-flight check on
-// the initial request before it leaves the chain.
+// SSRFGuard returns a Middleware that validates the destination and carries the
+// approved IPs to the dial. Pair it with HandlerFromRoundTripper (or use
+// WithSSRFGuard on Client) so the transport consumes the pin while preserving
+// the original hostname for HTTP Host routing and TLS SNI. A raw custom Handler
+// is responsible for honoring the pin itself.
 func SSRFGuard(policy SSRFPolicy) Middleware {
 	return func(next Handler) Handler {
 		return func(req *http.Request) (*http.Response, error) {
-			if req.URL != nil {
-				if err := policy.CheckSSRF(req.Context(), req.URL.Host); err != nil {
-					return nil, err
-				}
+			if req == nil {
+				return nil, ssrfError("", "nil request")
+			}
+			if err := policy.pinRequest(req); err != nil {
+				return nil, err
 			}
 			return next(req)
 		}
 	}
+}
+
+func (p SSRFPolicy) pinRequest(req *http.Request) error {
+	if req.URL == nil || req.URL.Host == "" {
+		return nil
+	}
+	ips, err := p.resolveAndCheck(req.Context(), req.URL.Host)
+	if err != nil {
+		return err
+	}
+	// Preserve the URL and Host exactly as supplied. The transport reads this
+	// context value only at dial time, which pins the socket address without
+	// changing virtual-host routing or the TLS ServerName derived by net/http.
+	pin := ssrfDialPin{host: req.URL.Hostname(), ips: cloneIPs(ips)}
+	// Redirect requests are owned by net/http and handed to CheckRedirect as a
+	// mutable pointer. Replacing the pointed-to value makes the new hop carry its
+	// own pin while retaining all other request fields.
+	*req = *req.WithContext(context.WithValue(req.Context(), ssrfDialPinKey{}, pin))
+	return nil
+}
+
+func cloneIPs(ips []net.IP) []net.IP {
+	// net.IP is a byte slice. Deep-copy it so resolver-owned backing arrays cannot
+	// be reused or mutated while a concurrent dial is consuming the approved set.
+	cloned := make([]net.IP, len(ips))
+	for i, ip := range ips {
+		cloned[i] = append(net.IP(nil), ip...)
+	}
+	return cloned
 }

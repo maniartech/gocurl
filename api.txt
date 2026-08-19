@@ -112,6 +112,7 @@ func NewRequest(method, rawURL string, opts ...RequestOption) (*Request, error)
 func NewResponseReader(resp *http.Response) *ResponseReader
 func NewRetryBudget(ratio, minPerSec float64) *RetryBudget
 func NewTokenBucket(rps float64, burst int) *TokenBucket
+func Observe(hooks Hooks, metrics Metrics, tracer Tracer, logger Logger) Middleware
 func ParseError(command string, err error) error
 func Query(key, value string) RequestOption
 func RateLimiter(l Limiter) Middleware
@@ -121,6 +122,7 @@ func RedactHeaders(headers map[string][]string) map[string][]string
 func RedactURL(raw string) string
 func RequestError(url string, err error) error
 func ResponseError(url string, err error) error
+func Retry(policy RetryPolicy) Middleware
 func RetryError(url string, attempts int, err error) error
 func RoundTripperFromHandler(h Handler) http.RoundTripper
 func SSRFGuard(policy SSRFPolicy) Middleware

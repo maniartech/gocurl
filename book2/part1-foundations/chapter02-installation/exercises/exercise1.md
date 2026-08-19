@@ -16,7 +16,7 @@ This exercise reinforces Chapter 2's installation and verification concepts.
 
 ## Objectives
 
-- Verify Go installation (version 1.21+)
+- Verify Go installation (version 1.25+)
 - Confirm GoCurl is properly installed
 - Test network connectivity
 - Validate HTTPS/TLS support
@@ -73,12 +73,12 @@ func main() {
 }
 
 // TODO 1: Implement checkGoVersion
-// Check if Go version is 1.21 or higher
+// Check if Go version is 1.25 or higher
 // Hint: Use runtime.Version() and parse the version string
 func checkGoVersion() TestResult {
 	version := runtime.Version()
 
-	// TODO: Parse version and check >= 1.21
+	// TODO: Parse version and check >= 1.25
 	// Return TestResult with appropriate Passed, Message, and Details
 
 	return TestResult{
@@ -241,8 +241,8 @@ func displaySummary(results []TestResult) {
 
 ```go
 version := runtime.Version()
-// Parse "go1.21.0" -> major=1, minor=21
-// Check if version >= 1.21
+// Parse "go1.25.0" -> major=1, minor=25
+// Check if version >= 1.25
 ```
 
 ### Test 2: GoCurl Import
@@ -308,8 +308,8 @@ if ctx.Err() == context.DeadlineExceeded {
 ====================================
 
 1. ✅ Go Version Check
-   Go version 1.21.5 (meets requirement >= 1.21)
-   Details: Current: go1.21.5
+   Go version 1.25.1 (meets requirement >= 1.25)
+   Details: Current: go1.25.1
 
 2. ✅ GoCurl Import
    GoCurl library imported and functional
@@ -359,7 +359,7 @@ Summary: 7/7 tests passed
 **Solution:** Verify httpbin.org is accessible
 
 **Issue:** Go version check fails
-**Solution:** Update Go to 1.21 or higher
+**Solution:** Update Go to 1.25 or higher
 
 **Issue:** Context timeout doesn't work
 **Solution:** Check that delay endpoint is used (delay/5)

@@ -265,7 +265,6 @@ func TestSecureDefaults(t *testing.T) {
 	assert.NotNil(t, cfg)
 	assert.Equal(t, uint16(tls.VersionTLS12), cfg.MinVersion, "Should use TLS 1.2 minimum")
 	assert.NotEmpty(t, cfg.CipherSuites, "Should have cipher suites configured")
-	assert.False(t, cfg.PreferServerCipherSuites, "Should prefer client cipher suites")
 }
 
 func TestValidateVariables(t *testing.T) {

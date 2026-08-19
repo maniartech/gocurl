@@ -9,7 +9,7 @@ Working examples demonstrating gocurl's core concepts and function categories.
 3. **03-context-patterns** - Timeout, cancellation, deadline examples
 4. **04-response-handling** - Different response parsing techniques
 5. **05-error-handling** - Status codes and error response patterns
-6. **06-process-direct** - Using Process() function directly
+6. **06-process-direct** - Using Execute() function directly
 7. **07-curl-vs-builder** - Comparing curl-syntax vs builder approaches
 8. **08-streaming** - Streaming large responses
 9. **09-json-parsing** - Advanced JSON unmarshaling patterns
@@ -28,7 +28,7 @@ go run 01-function-categories/main.go
 
 ## Prerequisites
 
-- Go 1.21+
+- Go 1.25+
 - GoCurl installed
 - Internet connection
 - Some examples need environment variables (see example code)
@@ -39,7 +39,7 @@ go run 01-function-categories/main.go
 - **Variable Expansion**: Automatic vs explicit, security best practices
 - **Context Management**: Timeouts, cancellation, deadline control
 - **Response Handling**: String, bytes, JSON, streaming, error responses
-- **Process() Function**: Core execution engine usage
+- **Execute() Function**: Core execution engine usage
 
 ## Learning Path
 

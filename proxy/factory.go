@@ -103,9 +103,15 @@ func createProxyTLSConfig(config ProxyConfig) (*tls.Config, error) {
 		if tlsConfig.RootCAs == nil {
 			tlsConfig.RootCAs = caCert
 		} else {
-			// Append to existing pool
-			for _, cert := range caCert.Subjects() {
-				tlsConfig.RootCAs.AppendCertsFromPEM(cert)
+			// CertPool.Subjects returns DER-encoded subject names, not certificates;
+			// feeding those bytes to AppendCertsFromPEM silently appends nothing.
+			// Re-read the canonical PEM and append it to the caller's cloned pool.
+			caPEM, readErr := os.ReadFile(config.CACert)
+			if readErr != nil {
+				return nil, fmt.Errorf("failed to load proxy CA certificate: %v", readErr)
+			}
+			if !tlsConfig.RootCAs.AppendCertsFromPEM(caPEM) {
+				return nil, fmt.Errorf("failed to load proxy CA certificate: failed to parse CA certificate")
 			}
 		}
 	}

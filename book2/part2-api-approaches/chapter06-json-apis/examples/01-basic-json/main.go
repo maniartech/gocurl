@@ -22,7 +22,7 @@ type GitHubUser struct {
 
 func main() {
 	fmt.Println("Example 1: Basic JSON GET with CurlJSON")
-	fmt.Println("========================================\n")
+	fmt.Print("========================================\n\n")
 
 	ctx := context.Background()
 

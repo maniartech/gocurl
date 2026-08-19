@@ -111,10 +111,12 @@ Two enforcement points, because a single check is insufficient against DNS rebin
    the redirect chain) when the next hop resolves to a blocked address. This catches the classic
    "public URL 302s to 169.254.169.254" attack that the middleware alone cannot see.
 
-Resolution happens against the addresses the dialer will actually use; to close the rebinding gap we
-also expose the option (open question below) of pinning the dial to the vetted IP via a custom
-`DialContext`. The guard returns a typed, classifiable error (Spec 08) so callers can distinguish a
-policy block from a network failure.
+Resolution happens once and the approved addresses are carried in the request context to a cloned
+standard transport whose `DialContext` connects to the vetted IP while retaining the original URL
+hostname for Host routing and TLS SNI. `HandlerFromRoundTripper` installs the same pin-aware adapter
+for injected chains. Opaque custom transports and proxy paths that cannot prove enforcement fail
+closed. The guard returns a typed, classifiable error (Spec 08) so callers can distinguish a policy
+block from a network failure.
 
 ### 3. Secret handling & redaction (everywhere)
 
@@ -208,8 +210,8 @@ Change the guard from `Username != "" && Password != ""` to `Username != ""`, en
   the block. An explicit allow of `127.0.0.1` lets local testing work with the guard enabled.
 - **SSRF and redirects**: a 3xx whose `Location` resolves to a blocked IP aborts the redirect chain
   with a classifiable SSRF error, even if the original host was public.
-- **DNS rebinding**: middleware-time resolution can differ from dial-time resolution; mitigated only
-  if dial-IP pinning is adopted (open question). Documented as a residual risk otherwise.
+- **DNS rebinding**: middleware-time validation and dial use the same approved IP set; there is no
+  second origin-hostname lookup. The original hostname remains available for Host routing and SNI.
 - **IPv6 forms**: guard normalizes and matches `::1`, `fe80::/10`, `fc00::/7`, and bracketed
   `[::1]:port` host forms; `host:port` is split before resolution.
 - **Cloud metadata**: blocked set includes `169.254.169.254` (AWS/Azure/GCP/OpenStack),
@@ -260,10 +262,8 @@ Change the guard from `Username != "" && Password != ""` to `Username != ""`, en
 
 ## Open questions / decisions to confirm in review
 
-- **Dial-IP pinning for SSRF**: do we pin the dial to the vetted IP (full rebinding protection,
-  custom `DialContext`, interacts with the pooled transport in `clientpool.go`) or accept the
-  resolve-then-dial race as a documented residual risk for v1? *Proposed: document the residual risk
-  in v1; add dial pinning behind the option later.*
+- **Dial-IP pinning for SSRF — decided:** pin the dial to the vetted IP. Standard transports retain
+  pooling and TLS hostname behavior; unsupported opaque transports fail closed.
 - **SSRF default**: confirm the guard stays fully opt-in (no default-on), to preserve the
   paste-and-run promise. *Proposed: opt-in, with `DefaultSSRFPolicy()` as the recommended setting.*
 - **Forbidden-header enforcement**: erroring on `-H Host:` / `-H Content-Length:` is a behavior

@@ -4,10 +4,16 @@ gocurl is **production-grade and pre-1.0**: the engine is hardened, tested, and 
 the remaining gate to a `v1.0.0` tag is *API-contract confidence from real usage*, which is
 the maintainer's call (per [Spec 11](../specs/11-api-stability-and-migration.md)). This
 checklist tracks the objective gates. When all are green, cutting the tag is a near-trivial
-step.
+step. Reliability and resource evidence includes `TestFault_OverallRetryBudget`,
+`TestFault_NoSecretLeakOnFailurePaths`, and `TestClient_Soak`.
 
 Every "proven" item below cites an un-skipped test/benchmark; the honesty doc-lint
 (`TestDocHonestyLint`) fails the build if a claim here lacks its citation.
+
+The post-consumer-audit hardening gates are tracked idempotently in
+[readiness-hardening-2026-07.md](readiness-hardening-2026-07.md). That tracker is the
+authoritative resume point for work newer than Milestone 12; a v1 tag additionally
+requires every `RH-*` task there to be complete.
 
 ## Reliability (M12 Phase A) — ✅ done
 
@@ -50,6 +56,10 @@ Every "proven" item below cites an un-skipped test/benchmark; the honesty doc-li
       (`TestDocHonestyLint`).
 
 ## Remaining before a v1.0 tag — maintainer's call
+
+- [ ] **July 2026 hardening tracker.** Complete every gate in
+      [readiness-hardening-2026-07.md](readiness-hardening-2026-07.md), including the final
+      clean-tree-independent audit command set.
 
 - [ ] **API-contract confidence.** Validate the public surface against real-world usage; the
       `api.txt` / `api_options.txt` guards lock it, but v1 is a *stability promise*, made only

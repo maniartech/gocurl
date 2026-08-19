@@ -20,7 +20,7 @@ Unlike some libraries that require complex configuration, gocurl follows Go's ph
 
 Before installing gocurl, ensure you have:
 
-- **Go 1.21 or later** - gocurl uses modern Go features
+- **Go 1.25 or later** - gocurl's patched networking dependencies require this baseline
 - **Git** - Required for `go get` to download dependencies
 - **Internet connection** - For downloading the library and testing
 - **Terminal/command line** - Basic familiarity with command-line tools
@@ -30,7 +30,7 @@ Before installing gocurl, ensure you have:
 
 ```bash
 go version
-# Output should be: go version go1.21 or higher
+# Output should be: go version go1.25 or higher
 ```
 
 If you need to install or upgrade Go, visit [golang.org/dl](https://golang.org/dl).
@@ -949,6 +949,6 @@ In **Chapter 3: Core Concepts**, we'll dive deep into:
 - Variable expansion and substitution
 - Context usage for timeouts and cancellation
 - Response handling patterns
-- The `Process()` function as the core execution engine
+- The `Execute()` function as the core execution engine
 
 You'll gain a complete understanding of gocurl's architecture and how to choose the right function for every use case.

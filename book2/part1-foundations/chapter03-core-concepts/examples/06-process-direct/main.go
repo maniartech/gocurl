@@ -21,7 +21,7 @@ type HTTPBinResponse struct {
 }
 
 func main() {
-	fmt.Println("🔧 HTTP Methods Demonstration\n")
+	fmt.Print("🔧 HTTP Methods Demonstration\n\n")
 
 	// Method 1: GET request
 	method1_GET()

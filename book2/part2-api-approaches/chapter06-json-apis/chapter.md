@@ -226,7 +226,7 @@ func main() {
         Build()
 
     // Execute
-    httpResp, _, err := gocurl.Process(ctx, opts)
+    httpResp, err := gocurl.Execute(ctx, opts)
     if err != nil {
         log.Fatal(err)
     }

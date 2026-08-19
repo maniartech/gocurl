@@ -74,25 +74,6 @@ func readWithPooledBuffer(r io.Reader, expectedSize int) ([]byte, error) {
 	return result, nil
 }
 
-// streamResponse handles large response streaming
-// This can be used for downloading large files
-func streamResponse(resp *http.Response, writer io.Writer) (int64, error) {
-	if resp == nil || resp.Body == nil {
-		return 0, fmt.Errorf("response or body is nil")
-	}
-	defer resp.Body.Close()
-
-	// Use pooled buffer for streaming copy
-	buf := responseBufferPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer responseBufferPool.Put(buf)
-
-	// Grow buffer to a good size for streaming
-	buf.Grow(64 * 1024) // 64KB chunks
-
-	return io.CopyBuffer(writer, resp.Body, buf.Bytes()[:cap(buf.Bytes())])
-}
-
 // ResponseReader wraps a response for efficient reading
 type ResponseReader struct {
 	resp   *http.Response

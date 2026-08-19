@@ -14,7 +14,7 @@ Complete these exercises to master JSON operations with GoCurl.
 
 - Completed Chapter 6 content
 - Reviewed examples 01-05
-- Go 1.18+ installed
+- Go 1.25+ installed
 - Internet connection
 
 ## Exercises
