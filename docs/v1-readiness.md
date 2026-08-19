@@ -10,10 +10,8 @@ step. Reliability and resource evidence includes `TestFault_OverallRetryBudget`,
 Every "proven" item below cites an un-skipped test/benchmark; the honesty doc-lint
 (`TestDocHonestyLint`) fails the build if a claim here lacks its citation.
 
-The post-consumer-audit hardening gates are tracked idempotently in
-[readiness-hardening-2026-07.md](readiness-hardening-2026-07.md). That tracker is the
-authoritative resume point for work newer than Milestone 12; a v1 tag additionally
-requires every `RH-*` task there to be complete.
+The post-audit hardening gates (`RH-*`) that followed Milestone 12 are all complete; the
+evidence for each is summarized below and enforced by the test suite.
 
 ## Reliability (M12 Phase A) — ✅ done
 
@@ -57,9 +55,9 @@ requires every `RH-*` task there to be complete.
 
 ## Shipped: v0.5.0 — the public release
 
-- [x] **July 2026 hardening tracker.** Every gate in
-      [readiness-hardening-2026-07.md](readiness-hardening-2026-07.md) is complete, including
-      the final clean-tree-independent audit command set.
+- [x] **July 2026 hardening gates.** Performance enforcement in CI, the composition
+      robustness matrix, critical-path coverage floors, claim/evidence integrity, a
+      reproducible benchmark baseline, and the final release audit are all complete.
 - [x] **Tagged and published as `v0.5.0`.** See the [CHANGELOG](../CHANGELOG.md).
 
 **Why v0.5.0 and not v1.0.0.** Every *quality* gate above is green — this is not a

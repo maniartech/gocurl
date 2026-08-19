@@ -384,7 +384,8 @@ in shipped code and a mis-targeted perf thesis; both are now in scope. See Spec 
 
 ## Milestone 13 — Composition-surface parity
 
-Origin: the July 2026 consumer integration audit (`docs/consumer-audit-2026-07.md`).
+Origin: a July 2026 audit of the first real third-party consumption of gocurl, where an
+SDK-injected handler chain silently lost retries.
 The milestone makes the exported `Handler`/`Middleware` seam safe and explicit for
 foreign SDK injection while retaining one implementation of retries and observability.
 

@@ -222,9 +222,9 @@ path past the signature-only api guard.
 ## Acceptance criteria / Definition of Done
 
 Status note (2026-07): this section was the original M12 proposal. Completed M12 work is
-recorded in ROADMAP; remaining refinements discovered by real consumer use are tracked in
-`docs/readiness-hardening-2026-07.md`. `[~]` below means the original broad wording still
-contains a stricter sub-requirement than the landed milestone evidence.
+recorded in ROADMAP; refinements discovered by real consumer use landed in Milestone 13.
+`[~]` below means the original broad wording still contains a stricter sub-requirement
+than the landed milestone evidence.
 
 - [~] **A.1/A.2** — two-tier harness; every matrix row tagged + reachable by its tier; each scenario
       asserts no goroutine leak (`goroutinesAtMost`), no conn/fd leak (`ConnState`), and secret redaction;

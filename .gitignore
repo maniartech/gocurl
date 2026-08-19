@@ -27,3 +27,11 @@ go.work.sum
 
 # env file
 .env
+
+# Private working material — internal notes, audits, and authoring scaffolding.
+# Kept on disk for the maintainer, deliberately never published.
+.private/
+
+# Agent/AI coding instructions: local development process, not part of the
+# published library.
+AGENTS.md
