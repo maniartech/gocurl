@@ -46,11 +46,13 @@ One raw string, multi-line and backslash-continued exactly as the docs print it,
 straight into your own struct. That is the whole integration — no SDK, no hand-translation
 into `http.NewRequest`. (Verified end-to-end by `TestReadmeExample_OpenAIStyleRawString`.)
 
-GoCurl is a curl-ergonomic HTTP client for Go, built on `net/http`, with a CLI that shares
-the exact same syntax. It removes the tax every Go developer pays when integrating a new
-API — mentally compiling a curl snippet from the docs into `http.NewRequest`, headers, body
-encoding, and auth — and wraps it in the retries, circuit breaking, observability, SSRF
-protection, secret redaction, and typed errors that real integrations need.
+**GoCurl is an ergonomic HTTP framework for Go**, built on `net/http`, with a CLI that
+shares the exact same syntax. It does two things at once: it brings foreign APIs into your
+codebase without translation — no more hand-compiling a curl snippet into `http.NewRequest`,
+headers, body encoding, and auth — and it wraps them in a production-grade execution layer:
+retries, circuit breaking, observability, SSRF protection, secret redaction, and typed
+errors. The novelty is the ergonomics, not the mechanism: curl syntax you already know on
+the outside, `net/http` you already trust on the inside.
 
 Released at **`v0.5.0`**; the `v0` is about the API contract, not the quality — see
 [Project status](#project-status). Requires **Go 1.25+**.
@@ -236,8 +238,7 @@ That pipeline is why GoCurl fits:
 
 Built on `net/http` and organized around **parse once, execute many** — `Prepare` a request
 once, then `Do` it repeatedly over a pooled `Client` — so the per-request overhead above a
-hand-written request is small and constant. The goal is parity with a well-tuned `net/http`
-client plus the ergonomics and reliability above; we make no "faster than net/http" claims.
+hand-written request is small and constant, at parity with a well-tuned `net/http` client.
 
 ## Built for real integrations
 

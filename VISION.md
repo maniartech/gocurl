@@ -73,7 +73,14 @@ un-skipped test (`TestDocHonestyLint`). See the
 
 ## What GoCurl is
 
-- A **curl-ergonomic HTTP client built on `net/http`**, with a CLI that shares the exact
+**GoCurl is an ergonomic HTTP framework for Go.** It does two things at once: it brings
+foreign APIs into your codebase without translation, and it wraps them in a production-grade
+execution layer — using an approach every developer already knows. The novelty is the
+ergonomics, not the mechanism: curl syntax you have used for years on the outside,
+`net/http` you already trust on the inside (`TestCurlParity_DifferentialVsRealCurl`,
+`TestFault_OverallRetryBudget`).
+
+- A **curl-ergonomic HTTP framework built on `net/http`**, with a CLI that shares the exact
   same syntax.
 - It parses real curl commands (string or `[]string`), expands variables, executes the
   request, and hands you a standard `*http.Response` plus typed helpers (`CurlString`,
@@ -89,9 +96,6 @@ un-skipped test (`TestDocHonestyLint`). See the
 - **Not a `net/http` replacement.** It's built on `net/http` and embraces it — GoCurl adds
   curl ergonomics and a production middleware stack (resilience, observability, security) on
   top of the standard engine rather than replacing it.
-- **Not a performance play.** We make no zero-allocation / "faster than net/http" claims; the
-  target is parity with a well-tuned `net/http` client. Any performance statement in our docs
-  is backed by a reproducible, un-skipped benchmark or it isn't made.
 - **Not full curl.** HTTP/HTTPS only — no FTP/SMTP/etc., and only the HTTP flags that
   show up in real-world API documentation.
 - **Not a code generator or SDK builder.** The curl command is the interface.
