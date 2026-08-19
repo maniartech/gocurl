@@ -26,12 +26,18 @@ real integrations need in production (`TestFault_OverallRetryBudget`,
 
 ## Project status
 
-**Production-grade, pre-1.0.** The engine is hardened and tested — race-clean, fuzzed, with
-a coverage gate in CI, streaming bodies, connection pooling, and the resilience/observability/
-security stack below. The remaining pre-1.0 caveat is the *contract*, not the quality: the
-public API may still change and curl-flag coverage is still expanding, so pin a version and
-check the [CHANGELOG](CHANGELOG.md) when upgrading. The race and resource claims are exercised by
-`TestFault_NoGoroutineLeakUnderStorm` and `TestClient_Soak`. Feedback and contributions are welcome.
+**Production-grade, released at `v0.9.0`.** The engine is hardened and tested — race-clean,
+fuzzed, with a coverage gate in CI, streaming bodies, connection pooling, and the
+resilience/observability/security stack below. The race and resource claims are exercised by
+`TestFault_NoGoroutineLeakUnderStorm` and `TestClient_Soak`.
+
+The `v0` is about the *contract*, not the quality. Under semver a v1 major promises the API
+will not change, and in Go that promise is costly to revise — `v1 → v2` forces every importer
+to rewrite their import path to `/v2`, while `v0.x → v1.0` costs them nothing. We would rather
+take API feedback from real integrations first. So: pin a version, check the
+[CHANGELOG](CHANGELOG.md) when upgrading, and expect the API to settle rather than churn.
+Feedback and contributions are very welcome — see [docs/v1-readiness.md](docs/v1-readiness.md)
+for exactly what stands between here and v1.0.
 
 ### Proven, not promised
 

@@ -55,15 +55,26 @@ requires every `RH-*` task there to be complete.
 - [x] Honesty doc-lint gating performance/reliability claims on cited, un-skipped tests
       (`TestDocHonestyLint`).
 
-## Remaining before a v1.0 tag — maintainer's call
+## Shipped: v0.9.0 — the public release
 
-- [ ] **July 2026 hardening tracker.** Complete every gate in
-      [readiness-hardening-2026-07.md](readiness-hardening-2026-07.md), including the final
-      clean-tree-independent audit command set.
+- [x] **July 2026 hardening tracker.** Every gate in
+      [readiness-hardening-2026-07.md](readiness-hardening-2026-07.md) is complete, including
+      the final clean-tree-independent audit command set.
+- [x] **Tagged and published as `v0.9.0`.** See the [CHANGELOG](../CHANGELOG.md).
+
+**Why v0.9.0 and not v1.0.0.** Every *quality* gate above is green — this is not a
+maturity hedge. It is a semver decision. A `v1` major is a promise that the exported API
+will not change, and in Go that promise is expensive to revise: `v1 → v2` forces every
+importer to rewrite their import path to `/v2`, whereas `v0.x → v1.0` costs them nothing.
+Shipping at v0.9.0 lets real integrations pressure-test the API shape while breaking
+changes are still cheap for users. It is the conservative choice, not the timid one.
+
+## Remaining before a v1.0 tag — maintainer's call
 
 - [ ] **API-contract confidence.** Validate the public surface against real-world usage; the
       `api.txt` / `api_options.txt` guards lock it, but v1 is a *stability promise*, made only
-      once the surface has been exercised by real integrations.
+      once the surface has been exercised by several independent integrations.
 - [ ] **curl-flag coverage** continues to expand (see [VISION.md](../VISION.md)); the gaps are
       documented and non-blocking for the engine's production use.
-- [ ] **Tag.** With the above green, `v1.0.0` is a deliberate, low-risk step.
+- [ ] **Tag `v1.0.0`.** When the API has survived real usage without a breaking change for a
+      meaningful stretch, promoting v0.9.x → v1.0.0 is a near-trivial, importer-invisible step.

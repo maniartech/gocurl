@@ -1,11 +1,51 @@
 # Changelog
 
 All notable changes to this project are documented here. The format is based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project aims to
-follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it reaches
-a tagged release.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project follows
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+**Versioning policy.** gocurl is released at **v0.x on purpose.** The engine is
+production-grade and gated by the evidence in [docs/v1-readiness.md](docs/v1-readiness.md),
+but under semver a `v0` major means *the public API may still change*. That freedom is
+deliberate: in Go, moving `v0.x → v1.0` costs importers nothing, while a later `v1 → v2`
+would force every user to rewrite their import path to `/v2`. We would rather absorb API
+feedback from real integrations now than lock the contract early and charge users for it
+later. Breaking changes within v0.x will be listed here and kept rare.
 
 ## [Unreleased]
+
+## [0.9.0] - 2026-08-19
+
+**First tagged release.** Everything below in this file up to this point ships in `v0.9.0`.
+
+gocurl is a curl-ergonomic HTTP client for Go built on `net/http`: paste a curl command
+from any API doc and execute it, with a production execution pipeline around it. This
+release is the culmination of Milestones 1–12 plus the July 2026 readiness hardening
+(`RH-00`…`RH-09`).
+
+Highlights, each backed by an un-skipped test you can run yourself:
+
+- **Reliability.** Two-tier fault-injection harness (RoundTripper-level and real
+  transport). An overall retry budget bounds the whole operation including backoff
+  (`TestFault_OverallRetryBudget`); HTTP/2 `GOAWAY`/`RST_STREAM` are retried
+  (`TestFault_H2ErrorsRetried`); graceful shutdown never truncates a live stream and is
+  never wedged by a panicking middleware
+  (`TestFaultT2_PanicMiddlewareDoesNotWedgeShutdown`).
+- **Security.** Opt-in SSRF guard with DNS-rebinding-safe dial pinning, fail-closed
+  plaintext auth, redaction on every failure path
+  (`TestFault_NoSecretLeakOnFailurePaths`), and untrusted-server memory bounds
+  (`TestFault_BufferingHelpersBoundedAgainstBomb`).
+- **curl fidelity.** Wire parity verified differentially against a real `curl` binary
+  (`TestCurlParity_DifferentialVsRealCurl`).
+- **Performance.** Latency parity with a well-tuned `net/http` client, and the lightest
+  per-request footprint of the full-featured Go clients measured (24 allocs / 2,489 B
+  versus pinned Resty and Req arms), gated by `TestAllocBudget_Do` / `TestByteBudget_Do`.
+- **Operability.** [docs/operations.md](docs/operations.md) ships a timeout taxonomy,
+  pool and retry tuning, and a per-`Kind` failure playbook.
+- **Honesty.** `TestDocHonestyLint` fails the build if any doc makes a performance or
+  reliability claim without citing a real, un-skipped test.
+
+Requires Go 1.25 or newer (see the security note above).
 
 ### Security — supported toolchain and HTTP stack
 
