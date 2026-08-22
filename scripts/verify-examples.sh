@@ -84,5 +84,14 @@ if [ "$RUN_VET" = true ]; then
     fi
 fi
 
+# Compiling proves the examples still match the API; it does not prove they RUN.
+# The harness executes every override-aware example against a local server and reports
+# how many remain network-bound.
+echo
+echo "→ go test (example run harness)"
+if ! go test -count=1 -run '^TestExamples' -v . 2>&1 | grep -E '^\s+--- (PASS|FAIL)|examples:'; then
+    fail "the example run harness failed."
+fi
+
 echo
 echo "${GREEN}${BOLD}OK${NC} all $example_count book examples compile against the local library."

@@ -10,6 +10,7 @@ import (
 	"log"
 
 	"github.com/maniartech/gocurl"
+	"github.com/maniartech/gocurl/book/internal/demo"
 )
 
 func main() {
@@ -17,7 +18,7 @@ func main() {
 
 	// Simple GET request - no authentication needed
 	body, resp, err := gocurl.CurlString(ctx,
-		"https://api.github.com/users/octocat")
+		demo.URL("https://api.github.com/users/octocat"))
 
 	if err != nil {
 		log.Fatalf("Request failed: %v", err)

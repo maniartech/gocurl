@@ -10,6 +10,7 @@ import (
 	"log"
 
 	"github.com/maniartech/gocurl"
+	"github.com/maniartech/gocurl/book/internal/demo"
 )
 
 // User represents a GitHub user
@@ -25,7 +26,7 @@ func main() {
 
 	var user User
 	resp, err := gocurl.CurlJSON(ctx, &user,
-		"https://api.github.com/users/octocat")
+		demo.URL("https://api.github.com/users/octocat"))
 
 	if err != nil {
 		log.Fatalf("Request failed: %v", err)

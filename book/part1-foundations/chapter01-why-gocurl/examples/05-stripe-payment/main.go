@@ -16,6 +16,7 @@ import (
 	"os"
 
 	"github.com/maniartech/gocurl"
+	"github.com/maniartech/gocurl/book/internal/demo"
 )
 
 // PaymentIntent represents a Stripe payment intent
@@ -46,7 +47,7 @@ func main() {
 		"-d", "currency=usd",
 		"-d", "payment_method_types[]=card",
 		"-d", "description=Order #12345",
-		"https://api.stripe.com/v1/payment_intents")
+		demo.URL("https://api.stripe.com/v1/payment_intents"))
 
 	if err != nil {
 		log.Fatalf("Payment creation failed: %v", err)

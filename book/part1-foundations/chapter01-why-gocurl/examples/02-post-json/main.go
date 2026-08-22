@@ -10,6 +10,7 @@ import (
 	"log"
 
 	"github.com/maniartech/gocurl"
+	"github.com/maniartech/gocurl/book/internal/demo"
 )
 
 func main() {
@@ -20,7 +21,7 @@ func main() {
 		"-X", "POST",
 		"-H", "Content-Type: application/json",
 		"-d", `{"title": "My Post", "body": "This is the content", "userId": 1}`,
-		"https://jsonplaceholder.typicode.com/posts")
+		demo.URL("https://jsonplaceholder.typicode.com/posts"))
 
 	if err != nil {
 		log.Fatalf("Request failed: %v", err)

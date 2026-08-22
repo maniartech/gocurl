@@ -15,6 +15,7 @@ import (
 	"os"
 
 	"github.com/maniartech/gocurl"
+	"github.com/maniartech/gocurl/book/internal/demo"
 )
 
 // ChatResponse represents OpenAI chat completion response
@@ -56,7 +57,7 @@ func main() {
 		"-H", "Authorization: Bearer "+apiKey,
 		"-H", "Content-Type: application/json",
 		"-d", payload,
-		"https://api.openai.com/v1/chat/completions")
+		demo.URL("https://api.openai.com/v1/chat/completions"))
 
 	if err != nil {
 		log.Fatalf("Request failed: %v", err)
