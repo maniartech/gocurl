@@ -190,12 +190,12 @@ so the ranking is stable and reproducible. Averaged over `-count=5 -benchtime=20
 
 | Arm | ns/op | B/op | allocs/op |
 |---|---|---|---|
-| net/http (raw transport, no resilience) | ~1,543 | 1,352 | 13 |
-| **gocurl prepared** | **~5,819** | **2,489** | **24** |
-| resty | ~9,880 | 3,684 | 28 |
-| req | ~10,955 | 3,956 | 39 |
+| net/http (raw transport, no resilience) | ~1,630 | 1,352 | 13 |
+| **gocurl prepared** | **~4,950** | **2,489** | **24** |
+| resty v2.16.5 | ~7,030 | 3,729 | 29 |
+| req v3.61.0 | ~8,080 | 4,069 | 40 |
 
-For the pinned Resty v2.16.5 and Req v3.50.0 arms, **gocurl has the lowest measured
+For the pinned Resty v2.16.5 and Req v3.61.0 arms, **gocurl has the lowest measured
 per-request overhead on all three metrics** (ns/op, B/op, allocs/op). This is a scoped
 comparison, not a claim about every Go HTTP client. The gocurl arm executes its normal
 prepared-request machinery with optional retry and observability features disabled; their
