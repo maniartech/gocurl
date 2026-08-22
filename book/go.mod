@@ -1,6 +1,6 @@
 // Separate module so the book's example programs (each `package main`) do not
 // pollute the library module's `go build/vet/test ./...` or its pkg.go.dev page.
-module github.com/maniartech/gocurl/book2
+module github.com/maniartech/gocurl/book
 
 go 1.25.0
 

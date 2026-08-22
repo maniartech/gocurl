@@ -6,13 +6,13 @@ published `gocurl` library. They are conveniences for development and CI.
 ## `verify-examples.sh` — compile-check the book examples
 
 ```bash
-./scripts/verify-examples.sh          # build-check every book2 example (default)
+./scripts/verify-examples.sh          # build-check every book example (default)
 ./scripts/verify-examples.sh --vet    # also run `go vet ./...`
 ./scripts/verify-examples.sh --help
 ```
 
-Builds the whole `book2/` module in one shot against the **local, in-tree** library
-(book2 pins it via `replace => ../`). This is the canonical guard that a public-API
+Builds the whole `book/` module in one shot against the **local, in-tree** library
+(book pins it via `replace => ../`). This is the canonical guard that a public-API
 change does not silently break the documented examples — exactly the regression that
 orphaned the `options` builder when `Execute` was removed.
 

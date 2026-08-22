@@ -56,7 +56,7 @@ grep -r "MiddlewareFunc" *_test.go
 
 ```bash
 # Example: Chapter 5 (Builder Pattern)
-cd book2/part2-api-approaches/chapter05-builder-pattern
+cd book/part2-api-approaches/chapter05-builder-pattern
 
 # Create initial files
 touch chapter.md           # Main chapter content
@@ -220,7 +220,7 @@ func TestBasicBuilder(t *testing.T) {
 gofmt -w .
 
 # Build examples
-cd book2
+cd book
 go build ./...
 
 # Run tests

@@ -350,7 +350,7 @@ body, resp, err := gocurl.CurlString(ctx, url)  // Body FIRST
 ### 6.2 Test File Organization
 
 ```
-book2/
+book/
   part1-foundations/
     chapter01-why-gocurl/
       examples/
@@ -917,7 +917,7 @@ echo "✓ All checks passed"
 ## 13. Example Repository Structure
 
 ```
-book2/
+book/
   examples/                 # All runnable examples
     chapter01/
       quick_start.go

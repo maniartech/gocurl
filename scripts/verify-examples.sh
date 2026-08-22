@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# verify-examples.sh — compile-check every book2 example against the LOCAL library.
+# verify-examples.sh — compile-check every book example against the LOCAL library.
 #
-# book2/ is a separate Go module that pins the library via `replace => ../`, so
+# book/ is a separate Go module that pins the library via `replace => ../`, so
 # building it exercises the real, in-tree gocurl. That makes this the canonical
 # guard that a public-API change (a removed/renamed export, a changed signature)
 # does not silently break the documented examples — exactly the regression that
@@ -21,14 +21,14 @@
 # no required args, color only on a TTY, and a clean non-zero exit on any failure.
 #
 # Usage:
-#   scripts/verify-examples.sh            # build-check all book2 examples (default)
+#   scripts/verify-examples.sh            # build-check all book examples (default)
 #   scripts/verify-examples.sh --vet      # also run `go vet ./...`
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-BOOK_DIR="$ROOT_DIR/book2"
+BOOK_DIR="$ROOT_DIR/book"
 
 RUN_VET=false
 for arg in "$@"; do
@@ -59,12 +59,12 @@ if ! command -v go >/dev/null 2>&1; then
     fail "Go toolchain not found on PATH."
 fi
 if [ ! -f "$BOOK_DIR/go.mod" ]; then
-    fail "book2 module not found at $BOOK_DIR (expected $BOOK_DIR/go.mod)."
+    fail "book module not found at $BOOK_DIR (expected $BOOK_DIR/go.mod)."
 fi
 
 example_count=$(find "$BOOK_DIR" -type f -name 'main.go' | wc -l | tr -d ' ')
 
-echo "${BOLD}Verifying book2 examples against the local library${NC}"
+echo "${BOLD}Verifying book examples against the local library${NC}"
 echo "  module:   $BOOK_DIR  (replace github.com/maniartech/gocurl => ../)"
 echo "  examples: $example_count main.go files"
 echo "  steps:    go build ./...$([ "$RUN_VET" = true ] && echo ' + go vet ./...')"
@@ -74,15 +74,15 @@ cd "$BOOK_DIR"
 
 echo "→ go build ./..."
 if ! go build ./...; then
-    fail "one or more book2 examples did not compile against the current API."
+    fail "one or more book examples did not compile against the current API."
 fi
 
 if [ "$RUN_VET" = true ]; then
     echo "→ go vet ./..."
     if ! go vet ./...; then
-        fail "go vet reported issues in the book2 examples."
+        fail "go vet reported issues in the book examples."
     fi
 fi
 
 echo
-echo "${GREEN}${BOLD}OK${NC} all $example_count book2 examples compile against the local library."
+echo "${GREEN}${BOLD}OK${NC} all $example_count book examples compile against the local library."

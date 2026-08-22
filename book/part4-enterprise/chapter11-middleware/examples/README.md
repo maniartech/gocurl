@@ -1,7 +1,7 @@
 # Middleware examples
 
 `01-production-composition` is a hermetic executable example of the managed production
-pipeline. Run it from `book2` with:
+pipeline. Run it from `book` with:
 
 ```bash
 go run ./part4-enterprise/chapter11-middleware/examples/01-production-composition

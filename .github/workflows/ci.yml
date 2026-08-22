@@ -27,7 +27,7 @@ jobs:
 
       - name: Verify gofmt
         run: |
-          unformatted=$(gofmt -l . | grep -v '^book2/' || true)
+          unformatted=$(gofmt -l . | grep -v '^book/' || true)
           if [ -n "$unformatted" ]; then
             echo "These files are not gofmt-clean:"
             echo "$unformatted"
@@ -70,7 +70,7 @@ jobs:
       - name: Verify formatting
         shell: pwsh
         run: |
-          $unformatted = gofmt -l . | Where-Object { $_ -notlike 'book2/*' -and $_ -notlike 'book2\*' }
+          $unformatted = gofmt -l . | Where-Object { $_ -notlike 'book/*' -and $_ -notlike 'book\*' }
           if ($unformatted) {
             $unformatted
             throw 'gofmt check failed'

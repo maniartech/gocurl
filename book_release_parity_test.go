@@ -16,7 +16,7 @@ import (
 func TestBookReleaseParity(t *testing.T) {
 	t.Parallel()
 
-	markdown := readBookMarkdown(t, "book", "book2")
+	markdown := readBookMarkdown(t, "book")
 	forbidden := []struct {
 		name    string
 		pattern string
@@ -48,7 +48,7 @@ func TestBookReleaseParity(t *testing.T) {
 		"Go 1.25", "gocurl.Retry", "gocurl.Observe", "gocurl.WithSSRFGuard",
 		"DNS rebinding", "Client.Prepare", "Client.Do",
 	})
-	requireBookStatements(t, markdown, "book2/API_REFERENCE.md", []string{
+	requireBookStatements(t, markdown, "book/API_REFERENCE.md", []string{
 		"Minimum Go:** 1.25", "gocurl.Retry", "gocurl.Observe",
 		"gocurl.WithSSRFGuard", "DNS-rebinding", "HandlerFromRoundTripper",
 	})
@@ -56,7 +56,7 @@ func TestBookReleaseParity(t *testing.T) {
 	// The manuscript's runnable examples are a separate module. Requiring the same
 	// directive in both modules prevents prose saying 1.25 while examples silently
 	// retain an older, vulnerable dependency graph.
-	for _, name := range []string{"go.mod", filepath.Join("book2", "go.mod")} {
+	for _, name := range []string{"go.mod", filepath.Join("book", "go.mod")} {
 		body, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
